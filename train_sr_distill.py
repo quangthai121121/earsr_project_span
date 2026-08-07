@@ -87,22 +87,25 @@ def _forward_step(student, teacher, recognition_model, lr_img, hr_img, device,
     if is_train:
         if scaler is not None:
             scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=5.0)
             scaler.step(optimizer)
             scaler.update()
         else:
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=5.0)
             optimizer.step()
 
     return loss.item(), parts
 
 
 def run_epoch(student, teacher, recognition_model, loader, device_mgr, cfg,
-              optimizer=None, scaler=None):
+              optimizer=None, scaler=None, logger=None):
     is_train = optimizer is not None
     student.train() if is_train else student.eval()
 
     totals = {"pixel": 0.0, "distill": 0.0, "identity": 0.0, "total": 0.0}
-    n = 0
+    n, nan_batches = 0, 0
     model_device = next(student.parameters()).device.type
 
     context = torch.enable_grad() if is_train else torch.no_grad()
@@ -129,11 +132,20 @@ def run_epoch(student, teacher, recognition_model, loader, device_mgr, cfg,
                     student, teacher, recognition_model, lr_img, hr_img, device,
                     cfg, optimizer, None, is_train)
 
+            if loss_val != loss_val or loss_val in (float("inf"), float("-inf")):
+                nan_batches += 1
+                continue
+
             for k, v in parts.items():
                 totals[k] += v
             totals["total"] += loss_val
             n += 1
 
+    if nan_batches > 0 and logger:
+        logger.info(f"  (lưu ý: {nan_batches} batch có loss NaN/Inf, đã bỏ qua khi tính trung bình)")
+
+    if n == 0:
+        return {k: float("nan") for k in totals}
     return {k: v / n for k, v in totals.items()}
 
 
@@ -216,7 +228,7 @@ def main():
         p.requires_grad = False
 
     optimizer = torch.optim.Adam(student.parameters(), lr=ci["lr"])
-    scaler = torch.cuda.amp.GradScaler(enabled=(device == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda"))
 
     max_epochs = ci["max_epochs"]
     patience = ci["patience"]
@@ -224,9 +236,9 @@ def main():
 
     for epoch in range(max_epochs):
         train_stats = run_epoch(student, teacher, recognition_model, train_loader,
-                                 device_mgr, cfg, optimizer=optimizer, scaler=scaler)
+                                 device_mgr, cfg, optimizer=optimizer, scaler=scaler, logger=logger)
         val_stats = run_epoch(student, teacher, recognition_model, val_loader,
-                               device_mgr, cfg, optimizer=None, scaler=None)
+                               device_mgr, cfg, optimizer=None, scaler=None, logger=logger)
 
         oom_note = f" | OOM fallback: {device_mgr.total_oom_events} lần" \
             if device_mgr.total_oom_events > 0 else ""

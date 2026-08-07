@@ -50,23 +50,26 @@ def _forward_step(model, imgs, id_labels, gender_labels, device, cfg,
     if is_train:
         if scaler is not None:
             scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             scaler.step(optimizer)
             scaler.update()
         else:
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
 
     return loss.item(), id_logits.detach(), gender_logits.detach(), id_labels, gender_labels
 
 
-def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None):
+def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None, logger=None):
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
 
     id_criterion = nn.CrossEntropyLoss()
     gender_criterion = nn.CrossEntropyLoss()
 
-    total_loss, id_acc_sum, gender_acc_sum, n_batches = 0.0, 0.0, 0.0, 0
+    total_loss, id_acc_sum, gender_acc_sum, n_batches, nan_batches = 0.0, 0.0, 0.0, 0, 0
     model_device = next(model.parameters()).device.type
 
     context = torch.enable_grad() if is_train else torch.no_grad()
@@ -99,11 +102,20 @@ def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None):
                     model, imgs, id_labels, gender_labels, device, cfg,
                     id_criterion, gender_criterion, optimizer, None, is_train)
 
+            if loss != loss or loss in (float("inf"), float("-inf")):
+                nan_batches += 1
+                continue
+
             total_loss += loss
             id_acc_sum += compute_accuracy(id_logits, id_l)
             gender_acc_sum += compute_accuracy(gender_logits, gender_l)
             n_batches += 1
 
+    if nan_batches > 0 and logger:
+        logger.info(f"  (lưu ý: {nan_batches} batch có loss NaN/Inf, đã bỏ qua khi tính trung bình)")
+
+    if n_batches == 0:
+        return float("nan"), 0.0, 0.0
     return (total_loss / n_batches, id_acc_sum / n_batches, gender_acc_sum / n_batches)
 
 
@@ -170,7 +182,7 @@ def main():
         lr=cfg["recognition"]["lr"],
         weight_decay=cfg["recognition"]["weight_decay"],
     )
-    scaler = torch.cuda.amp.GradScaler(enabled=(device_mgr.preferred == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=(device_mgr.preferred == "cuda"))
 
     max_epochs = cfg["recognition"]["max_epochs"]
     patience = cfg["recognition"]["patience"]
@@ -178,9 +190,9 @@ def main():
 
     for epoch in range(max_epochs):
         train_loss, train_id_acc, train_gender_acc = run_epoch(
-            model, train_loader, device_mgr, cfg, optimizer=optimizer, scaler=scaler)
+            model, train_loader, device_mgr, cfg, optimizer=optimizer, scaler=scaler, logger=logger)
         val_loss, val_id_acc, val_gender_acc = run_epoch(
-            model, val_loader, device_mgr, cfg, optimizer=None, scaler=None)
+            model, val_loader, device_mgr, cfg, optimizer=None, scaler=None, logger=logger)
 
         oom_note = f" | OOM fallback: {device_mgr.total_oom_events} lần" \
             if device_mgr.total_oom_events > 0 else ""

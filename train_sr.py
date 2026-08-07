@@ -39,20 +39,23 @@ def _forward_step(model, lr_img, hr_img, device, criterion, optimizer, scaler, i
     if is_train:
         if scaler is not None:
             scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             scaler.step(optimizer)
             scaler.update()
         else:
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
 
     return loss.item() * lr_img.size(0), lr_img.size(0)
 
 
-def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None):
+def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None, logger=None):
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
 
-    total_loss, total_n = 0.0, 0
+    total_loss, total_n, nan_batches = 0.0, 0, 0
     model_device = next(model.parameters()).device.type
 
     context = torch.enable_grad() if is_train else torch.no_grad()
@@ -82,10 +85,21 @@ def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None)
                 loss_sum, n = _forward_step(
                     model, lr_img, hr_img, device, criterion, optimizer, None, is_train)
 
+            # Bỏ qua batch có loss NaN/Inf khi tính trung bình hiển thị — do
+            # GradScaler đã tự bỏ qua bước cập nhật cho batch đó (không hỏng
+            # trọng số), chỉ cần không để nó làm "bẩn" số liệu trung bình epoch.
+            if loss_sum != loss_sum or loss_sum in (float("inf"), float("-inf")):
+                nan_batches += 1
+                continue
+
             total_loss += loss_sum
             total_n += n
 
-    return total_loss / total_n
+    if nan_batches > 0 and logger:
+        logger.info(f"  (lưu ý: {nan_batches} batch có loss NaN/Inf, đã bỏ qua khi tính trung bình "
+                     f"— GradScaler tự bỏ qua cập nhật cho các batch này, không ảnh hưởng trọng số)")
+
+    return total_loss / total_n if total_n > 0 else float("nan")
 
 
 def main():
@@ -127,7 +141,7 @@ def main():
 
     model = build_sr_model(arch, scale, pretrained_path=args.pretrained_path).to(device_mgr.preferred)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["sr"]["lr"])
-    scaler = torch.cuda.amp.GradScaler(enabled=(device_mgr.preferred == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=(device_mgr.preferred == "cuda"))
     criterion = nn.L1Loss()
 
     max_epochs = cfg["sr"]["max_epochs"]
@@ -136,9 +150,9 @@ def main():
 
     for epoch in range(max_epochs):
         train_loss = run_epoch(model, train_loader, device_mgr, criterion,
-                                optimizer=optimizer, scaler=scaler)
+                                optimizer=optimizer, scaler=scaler, logger=logger)
         val_loss = run_epoch(model, val_loader, device_mgr, criterion,
-                              optimizer=None, scaler=None)
+                              optimizer=None, scaler=None, logger=logger)
 
         oom_note = f" | OOM fallback: {device_mgr.total_oom_events} lần" \
             if device_mgr.total_oom_events > 0 else ""
