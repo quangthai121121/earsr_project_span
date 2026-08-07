@@ -14,6 +14,19 @@ from-scratch. Câu văn methodology tham khảo:
 *(Xem `scripts/setup_span_official.sh` và `models/span_official_wrapper.py`
 trong repo code — quy trình tải checkpoint và đối chiếu kiến trúc gốc)*
 
+### Lưu ý kỹ thuật đã phát hiện và vá khi tích hợp
+
+Sau khi đối chiếu trực tiếp với source code gốc (`span_arch.py`), phát hiện
+`forward()` của model chính thức biến đổi input theo
+`x = (x - mean) * img_range` (mean theo thang [0,1], img_range=255) nhưng
+**không có bước biến đổi ngược ở output** — output trả về nằm ở thang giá trị
+đã nhân `img_range`, không phải `[0,1]` như quy ước ảnh chuẩn hóa qua
+`ToTensor()` trong toàn bộ pipeline. Đây là loại lỗi tương thích "âm thầm"
+(không gây crash, chỉ làm loss/PSNR sai lệch hoàn toàn) — đã vá bằng cách bọc
+thêm lớp `SPANWithRescale` (`models/span_official_wrapper.py`) tự động thực
+hiện phép biến đổi ngược (`output / img_range + mean`) và `clamp(0, 1)` trước
+khi trả về, để tương thích với phần còn lại của pipeline.
+
 ## Động lực
 
 Kết quả Giai đoạn baseline (docs/02) cho thấy SPAN gốc — dù nhẹ và nhanh —
