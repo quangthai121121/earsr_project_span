@@ -23,12 +23,45 @@ Cách dùng sau khi đã setup xong:
     model = build_official_span(scale=4, pretrained_path="checkpoints/span_pretrained_x4.pth")
 """
 import sys
+import types
+import importlib.util
 from pathlib import Path
 
 import torch
 import torch.nn as nn
 
 _EXTERNAL_SPAN_PATH = Path(__file__).resolve().parents[1] / "external" / "SPAN"
+
+
+def _stub_basicsr_registry():
+    """
+    span_arch.py chỉ cần `from basicsr.utils.registry import ARCH_REGISTRY`
+    làm decorator (@ARCH_REGISTRY.register()) — không cần logic thật.
+    Đăng ký sẵn module giả trong sys.modules để tránh phải chạy
+    basicsr/__init__.py thật (vốn cascade import cả pipeline data augmentation
+    không liên quan, và bị lỗi do torchvision mới đã xóa
+    torchvision.transforms.functional_tensor mà basicsr/data/degradations.py
+    còn dùng — lỗi tương thích phổ biến của BasicSR cũ, không liên quan gì
+    đến kiến trúc SPAN mà ta thực sự cần).
+    """
+    if "basicsr" not in sys.modules:
+        sys.modules["basicsr"] = types.ModuleType("basicsr")
+    if "basicsr.utils" not in sys.modules:
+        sys.modules["basicsr.utils"] = types.ModuleType("basicsr.utils")
+    if "basicsr.utils.registry" not in sys.modules:
+        registry_module = types.ModuleType("basicsr.utils.registry")
+
+        class _DummyRegistry:
+            def register(self, cls=None, **kwargs):
+                if cls is not None:
+                    return cls
+
+                def decorator(c):
+                    return c
+                return decorator
+
+        registry_module.ARCH_REGISTRY = _DummyRegistry()
+        sys.modules["basicsr.utils.registry"] = registry_module
 
 
 def _import_official_span_class():
@@ -38,16 +71,20 @@ def _import_official_span_class():
             "bash scripts/setup_span_official.sh"
         )
 
-    sys.path.insert(0, str(_EXTERNAL_SPAN_PATH))
+    arch_file = _EXTERNAL_SPAN_PATH / "basicsr" / "archs" / "span_arch.py"
+    if not arch_file.exists():
+        raise FileNotFoundError(f"Không tìm thấy {arch_file}")
 
-    try:
-        from basicsr.archs.span_arch import SPAN as OfficialSPAN  # noqa: E402
-        return OfficialSPAN
-    except ImportError as e:
-        raise ImportError(
-            "Không import được class SPAN từ external/SPAN/basicsr/archs/span_arch.py. "
-            f"Lỗi gốc: {e}"
-        )
+    _stub_basicsr_registry()
+
+    # Load trực tiếp file span_arch.py, KHÔNG đi qua basicsr/__init__.py hay
+    # basicsr/archs/__init__.py thật (cả 2 đều có thể cascade import các file
+    # khác không liên quan và bị lỗi, như đã giải thích ở trên).
+    spec = importlib.util.spec_from_file_location("span_arch_official", arch_file)
+    span_arch_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(span_arch_module)
+
+    return span_arch_module.SPAN
 
 
 class SPANWithRescale(nn.Module):
