@@ -1,0 +1,259 @@
+"""
+Giai đoạn 3 — cải tiến SPAN: train SPAN (student, nhẹ) với loss tổng hợp gồm
+3 thành phần, dùng 2 "giám khảo" đã train sẵn và đóng băng:
+  - Teacher SR nặng (ví dụ EDSR) — cung cấp distillation loss
+  - Recognition model đã train trên domain HR — cung cấp identity-aware loss
+
+QUAN TRỌNG: chỉ backprop qua Student SPAN. Teacher SR và recognition model
+CHỈ dùng để forward (torch.no_grad), không cập nhật trọng số của chúng.
+
+Kiến trúc/tốc độ của SPAN không đổi so với bản baseline — chỉ cách TRAIN thay
+đổi. Lúc triển khai thực tế chỉ dùng riêng Student, không cần 2 giám khảo này
+nữa, nên KHÔNG ảnh hưởng đến latency/params lúc inference.
+
+Chạy:
+    python train_sr_distill.py --config configs/config.yaml
+
+Chạy với lambda tùy chỉnh (dùng cho ablation, xem pipeline/run_ablation.sh):
+    python train_sr_distill.py --config configs/config.yaml \
+        --lambda_pixel 1.0 --lambda_distill 0.5 --lambda_identity 0.0 \
+        --run_suffix _ablation_pixel_distill
+"""
+import argparse
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import yaml
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+from datasets.hrlr_pair_dataset import HRLRPairDataset
+from models.sr_models import build_sr_model
+from models.recognition_model import EarRecognitionNet
+from utils.device_manager import DeviceManager, move_optimizer_state
+from utils.early_stopping import EarlyStopping
+from utils.logger import setup_logger
+from utils.seed import set_seed
+
+
+def compute_total_loss(student_out, hr_img, teacher_out, recognition_model, cfg):
+    l1 = nn.L1Loss()
+
+    loss_pixel = l1(student_out, hr_img)
+    loss_distill = l1(student_out, teacher_out)
+
+    with torch.no_grad():
+        hr_emb = recognition_model.embed(hr_img)
+    student_emb = recognition_model.embed(student_out)
+    loss_identity = 1 - F.cosine_similarity(student_emb, hr_emb, dim=1).mean()
+
+    ci = cfg["sr_improve"]
+    total = (ci["lambda_pixel"] * loss_pixel +
+             ci["lambda_distill"] * loss_distill +
+             ci["lambda_identity"] * loss_identity)
+
+    return total, {
+        "pixel": loss_pixel.item(),
+        "distill": loss_distill.item(),
+        "identity": loss_identity.item(),
+    }
+
+
+def _move_all_to(device, student, teacher, recognition_model, optimizer):
+    student.to(device)
+    teacher.to(device)
+    recognition_model.to(device)
+    move_optimizer_state(optimizer, device)
+
+
+def _forward_step(student, teacher, recognition_model, lr_img, hr_img, device,
+                   cfg, optimizer, scaler, is_train):
+    lr_img = lr_img.to(device, non_blocking=True)
+    hr_img = hr_img.to(device, non_blocking=True)
+
+    if is_train:
+        optimizer.zero_grad(set_to_none=True)
+
+    with torch.autocast(device_type="cuda" if device == "cuda" else "cpu",
+                         enabled=(device == "cuda")):
+        student_out = student(lr_img)
+        with torch.no_grad():
+            teacher_out = teacher(lr_img)
+        loss, parts = compute_total_loss(student_out, hr_img, teacher_out,
+                                          recognition_model, cfg)
+
+    if is_train:
+        if scaler is not None:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
+
+    return loss.item(), parts
+
+
+def run_epoch(student, teacher, recognition_model, loader, device_mgr, cfg,
+              optimizer=None, scaler=None):
+    is_train = optimizer is not None
+    student.train() if is_train else student.eval()
+
+    totals = {"pixel": 0.0, "distill": 0.0, "identity": 0.0, "total": 0.0}
+    n = 0
+    model_device = next(student.parameters()).device.type
+
+    context = torch.enable_grad() if is_train else torch.no_grad()
+    with context:
+        for lr_img, hr_img in tqdm(loader, leave=False):
+            device = device_mgr.current_device()
+
+            if device != model_device:
+                _move_all_to(device, student, teacher, recognition_model, optimizer)
+                model_device = device
+
+            try:
+                loss_val, parts = _forward_step(
+                    student, teacher, recognition_model, lr_img, hr_img, device,
+                    cfg, optimizer, scaler if device == "cuda" else None, is_train)
+            except RuntimeError as e:
+                if device != "cuda" or "out of memory" not in str(e).lower():
+                    raise
+                device_mgr.report_oom()
+                device = "cpu"
+                _move_all_to(device, student, teacher, recognition_model, optimizer)
+                model_device = device
+                loss_val, parts = _forward_step(
+                    student, teacher, recognition_model, lr_img, hr_img, device,
+                    cfg, optimizer, None, is_train)
+
+            for k, v in parts.items():
+                totals[k] += v
+            totals["total"] += loss_val
+            n += 1
+
+    return {k: v / n for k, v in totals.items()}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", required=True)
+    ap.add_argument("--lambda_pixel", type=float, default=None,
+                     help="ghi đè sr_improve.lambda_pixel trong config (dùng cho ablation)")
+    ap.add_argument("--lambda_distill", type=float, default=None,
+                     help="ghi đè sr_improve.lambda_distill trong config (dùng cho ablation)")
+    ap.add_argument("--lambda_identity", type=float, default=None,
+                     help="ghi đè sr_improve.lambda_identity trong config (dùng cho ablation)")
+    ap.add_argument("--run_suffix", default="",
+                     help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè checkpoint "
+                          "khi chạy nhiều cấu hình ablation khác nhau")
+    args = ap.parse_args()
+
+    with open(args.config, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+
+    set_seed(cfg["split"]["seed"])
+    ci = cfg["sr_improve"]
+
+    if args.lambda_pixel is not None:
+        ci["lambda_pixel"] = args.lambda_pixel
+    if args.lambda_distill is not None:
+        ci["lambda_distill"] = args.lambda_distill
+    if args.lambda_identity is not None:
+        ci["lambda_identity"] = args.lambda_identity
+
+    scale = cfg["image"]["scale"]
+    splits_root = cfg["paths"]["splits_root"]
+
+    train_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "train")
+    val_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "val")
+    loader_kwargs = dict(num_workers=4, pin_memory=torch.cuda.is_available(),
+                          persistent_workers=True)
+    train_loader = DataLoader(train_set, batch_size=ci["batch_size"], shuffle=True, **loader_kwargs)
+    val_loader = DataLoader(val_set, batch_size=ci["batch_size"], shuffle=False, **loader_kwargs)
+
+    run_dir = Path(cfg["paths"]["runs_root"]) / f"sr_improved_{cfg['sr']['arch']}{args.run_suffix}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    logger = setup_logger(run_dir, name="train")
+    logger.info(f"Lambda dùng cho lần chạy này: pixel={ci['lambda_pixel']} "
+                f"distill={ci['lambda_distill']} identity={ci['lambda_identity']}")
+    device_mgr = DeviceManager(logger=logger)
+    device = device_mgr.preferred
+    logger.info(f"=== Bắt đầu cải tiến SPAN (distillation + identity-aware loss) ===")
+    logger.info(f"Device ưu tiên: {device}")
+    logger.info(f"Teacher: {ci['teacher_arch']} | Recognition giám khảo: {ci['frozen_recognition_ckpt']}")
+    logger.info(f"Train: {len(train_set)} cặp ảnh | Val: {len(val_set)} cặp ảnh")
+
+    # --- Student: SPAN, khởi tạo từ checkpoint chính thức nếu có (khuyến nghị), ---
+    # --- đây là model sẽ được deploy cuối cùng ---
+    student = build_sr_model(
+        cfg["sr"]["arch"], scale,
+        pretrained_path=cfg["sr"].get("pretrained_path"),
+    ).to(device)
+
+    # --- Teacher: SR nặng, đã train sẵn (Giai đoạn 1), ĐÓNG BĂNG ---
+    teacher = build_sr_model(ci["teacher_arch"], scale).to(device)
+    teacher.load_state_dict(torch.load(ci["teacher_ckpt"], map_location=device))
+    teacher.eval()
+    for p in teacher.parameters():
+        p.requires_grad = False
+
+    # --- Recognition model train trên domain HR, ĐÓNG BĂNG, dùng làm giám khảo ---
+    recognition_model = EarRecognitionNet(
+        num_identities=cfg["num_identities"],
+        num_genders=cfg["num_genders"],
+        embedding_dim=cfg["recognition"]["embedding_dim"],
+        backbone="mobilenet_v2",   # backbone dùng làm giám khảo, có thể đổi tùy checkpoint đã có
+        pretrained=False,
+    ).to(device)
+    recognition_model.load_state_dict(
+        torch.load(ci["frozen_recognition_ckpt"], map_location=device))
+    recognition_model.eval()
+    for p in recognition_model.parameters():
+        p.requires_grad = False
+
+    optimizer = torch.optim.Adam(student.parameters(), lr=ci["lr"])
+    scaler = torch.cuda.amp.GradScaler(enabled=(device == "cuda"))
+
+    max_epochs = ci["max_epochs"]
+    patience = ci["patience"]
+    stopper = EarlyStopping(patience=patience, mode="min")  # total loss: càng thấp càng tốt
+
+    for epoch in range(max_epochs):
+        train_stats = run_epoch(student, teacher, recognition_model, train_loader,
+                                 device_mgr, cfg, optimizer=optimizer, scaler=scaler)
+        val_stats = run_epoch(student, teacher, recognition_model, val_loader,
+                               device_mgr, cfg, optimizer=None, scaler=None)
+
+        oom_note = f" | OOM fallback: {device_mgr.total_oom_events} lần" \
+            if device_mgr.total_oom_events > 0 else ""
+        logger.info(
+            f"[sr_improved] epoch {epoch + 1}/{max_epochs} "
+            f"(early-stop counter: {stopper.counter}/{patience}){oom_note} | "
+            f"train_total={train_stats['total']:.4f} pixel={train_stats['pixel']:.4f} "
+            f"distill={train_stats['distill']:.4f} identity={train_stats['identity']:.4f} | "
+            f"VAL_TOTAL={val_stats['total']:.4f}"
+        )
+
+        is_best = stopper.step(val_stats["total"])
+        if is_best:
+            torch.save({k: v.cpu() for k, v in student.state_dict().items()}, run_dir / "best.pt")
+            logger.info(f"  -> checkpoint tốt nhất mới (val_total={val_stats['total']:.4f}), đã lưu.")
+
+        if stopper.should_stop:
+            logger.info(
+                f"EARLY STOPPING tại epoch {epoch + 1}: val_total không cải thiện "
+                f"sau {patience} epoch liên tiếp. Best val_total={stopper.best:.4f}"
+            )
+            break
+
+    logger.info(f"=== Hoàn tất cải tiến SPAN. Best val_total={stopper.best:.4f}. "
+                f"Tổng số lần fallback CPU do OOM: {device_mgr.total_oom_events}. "
+                f"Checkpoint: {run_dir / 'best.pt'} ===")
+
+
+if __name__ == "__main__":
+    main()

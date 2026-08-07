@@ -1,0 +1,8 @@
+hr_source_min=41
+hr_size=80
+too_small_max=20
+n_hr_source=22972
+n_too_small=173
+n_train=15730
+n_val=3237
+n_test=4005

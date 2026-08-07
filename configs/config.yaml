@@ -1,0 +1,77 @@
+# ===== Đường dẫn dữ liệu =====
+paths:
+  raw_images: "raw_data/images"
+  splits_root: "splits"          # sẽ chứa splits/hr, splits/lr, splits/sr_baseline, splits/sr_improved + splits.json
+  runs_root: "runs"
+  results_root: "results"
+
+# ===== Phân nhóm theo kích thước (data/prepare_splits.py) =====
+# Ngưỡng dưới đây đã được chọn dựa trên khảo sát THẬT trên toàn bộ 28.412 ảnh
+# EarVN1.0 (không phải số đoán): p20=41px, p50=77px, min=13px, max=472px.
+# hr_source_min=41 giữ được 80.9% dữ liệu (22.972/28.412 ảnh), đủ 164/164 identity
+# (không identity nào bị mất trắng — đã kiểm chứng bằng check_identity_coverage()).
+grouping:
+  hr_source_min: 41              # cạnh ngắn >= ngưỡng này -> đủ tin cậy làm HR
+  too_small_max: 20              # cạnh ngắn < ngưỡng này -> gác riêng làm LR thật (real_lr_holdout, ~173 ảnh)
+
+# ===== Chia dữ liệu =====
+split:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  seed: 42
+
+# ===== Cấu hình ảnh =====
+# hr_size=80 được chọn để tỷ lệ phóng đại tối đa (từ ảnh HR-source nhỏ nhất,
+# 41px, lên hr_size) chỉ ~1.95x — trong ngưỡng an toàn, tránh tạo chi tiết giả
+# do letterbox phóng đại quá mức. scale=4 -> LR=20x20.
+image:
+  hr_size: 80
+  scale: 4                       # hệ số downsample HR -> LR, PHẢI khớp với scale của model SR
+
+# ===== Mô hình SR nền — SPAN =====
+# arch: "span" = bản tự viết lại (nhẹ, train from-scratch, dùng để debug nhanh)
+#       "span_official" = bản CHÍNH THỨC (cần chạy scripts/setup_span_official.sh
+#       trước), khuyến nghị dùng bản này để fine-tune từ pretrained thật
+sr:
+  arch: "span_official"
+  pretrained_path: "checkpoints/span_pretrained_x4.pth"  # chỉ dùng khi arch=span_official
+  max_epochs: 100
+  patience: 10                   # dừng sớm nếu val loss không cải thiện sau 10 epoch
+  batch_size: 64
+  lr: 1.0e-3
+
+# ===== Cải tiến SR (train_sr_distill.py) =====
+sr_improve:
+  max_epochs: 100
+  patience: 10                   # dừng sớm nếu val total loss không cải thiện sau 10 epoch
+  batch_size: 64
+  lr: 5.0e-4
+  # trọng số 3 thành phần loss: pixel + distillation (từ teacher nặng) + identity-aware
+  lambda_pixel: 1.0
+  lambda_distill: 0.5
+  lambda_identity: 0.5
+  teacher_arch: "edsr"           # SR nặng dùng làm teacher (train riêng, xem docs/03_span_improvement.md)
+  teacher_ckpt: "runs/sr_edsr/best.pt"    # khớp với run_dir thật của train_sr.py --sr_arch edsr
+  frozen_recognition_ckpt: "runs/recognition_hr_mobilenet_v2/best.pt"  # "giám khảo" cho identity loss
+
+# ===== Mô hình recognition — benchmark đa backbone =====
+recognition:
+  backbones:                     # danh sách backbone chạy benchmark (models/recognition_model.py)
+    - "mobilenet_v2"
+    - "mobilenet_v3_small"
+    - "resnet18"
+    - "efficientnet_b0"
+    - "ghostnet_100"
+  embedding_dim: 256
+  max_epochs: 100
+  patience: 7                    # dừng sớm nếu val_id_acc không cải thiện sau 7 epoch
+  batch_size: 64
+  lr: 3.0e-4
+  weight_decay: 5.0e-4
+  identity_loss_weight: 1.0
+  gender_loss_weight: 0.5
+
+# ===== Số lớp =====
+num_identities: 164
+num_genders: 2

@@ -1,0 +1,105 @@
+"""
+Backbone dùng chung, tách thành 2 head: identity + gender.
+
+Hỗ trợ nhiều backbone để chạy BENCHMARK đa mô hình (Bước benchmark baseline
+trong lộ trình) — mục đích: kiểm chứng SPAN cải tiến có giúp ích nhất quán
+trên NHIỀU kiến trúc recognition khác nhau, không chỉ ăn may với 1 model.
+
+Backbone có sẵn (đều load được qua torchvision/timm, không cần cài đặt tay):
+  - mobilenet_v2      : nhẹ, đã dùng làm mặc định ban đầu
+  - mobilenet_v3_small: nhẹ hơn V2, kiến trúc mới hơn (2019, NAS-based)
+  - resnet18          : chuẩn tham chiếu kinh điển, không quá nhẹ
+  - efficientnet_b0   : cân bằng tốt accuracy/hiệu năng, phổ biến trong benchmark biometric
+  - ghostnet_100      : dòng kiến trúc chuyên cho lightweight face recognition
+                        (nền tảng của GhostFaceNet) — cần cài `timm`
+"""
+import torch
+import torch.nn as nn
+import torchvision.models as tv_models
+
+try:
+    import timm
+    _HAS_TIMM = True
+except ImportError:
+    _HAS_TIMM = False
+
+
+SUPPORTED_BACKBONES = [
+    "mobilenet_v2",
+    "mobilenet_v3_small",
+    "resnet18",
+    "efficientnet_b0",
+    "ghostnet_100",
+]
+
+
+def _build_backbone(name: str, pretrained: bool):
+    """Trả về (feature_extractor, feat_dim). feature_extractor nhận ảnh, trả về
+    feature map 4D (B, C, H, W) trước global pooling."""
+
+    if name == "mobilenet_v2":
+        base = tv_models.mobilenet_v2(
+            weights=tv_models.MobileNet_V2_Weights.DEFAULT if pretrained else None)
+        return base.features, base.last_channel
+
+    if name == "mobilenet_v3_small":
+        base = tv_models.mobilenet_v3_small(
+            weights=tv_models.MobileNet_V3_Small_Weights.DEFAULT if pretrained else None)
+        feat_dim = base.classifier[0].in_features
+        return base.features, feat_dim
+
+    if name == "resnet18":
+        base = tv_models.resnet18(
+            weights=tv_models.ResNet18_Weights.DEFAULT if pretrained else None)
+        feat_dim = base.fc.in_features
+        return nn.Sequential(*list(base.children())[:-2]), feat_dim
+
+    if name == "efficientnet_b0":
+        base = tv_models.efficientnet_b0(
+            weights=tv_models.EfficientNet_B0_Weights.DEFAULT if pretrained else None)
+        feat_dim = base.classifier[1].in_features
+        return base.features, feat_dim
+
+    if name == "ghostnet_100":
+        if not _HAS_TIMM:
+            raise ImportError(
+                "Backbone 'ghostnet_100' cần thư viện timm. Cài: "
+                "pip install timm --break-system-packages")
+        base = timm.create_model("ghostnet_100", pretrained=pretrained, num_classes=0,
+                                  global_pool="")
+        feat_dim = base.num_features
+        return base, feat_dim
+
+    raise ValueError(f"Backbone không hỗ trợ: {name}. Chọn trong {SUPPORTED_BACKBONES}")
+
+
+class EarRecognitionNet(nn.Module):
+    def __init__(self, num_identities: int, num_genders: int = 2,
+                 embedding_dim: int = 256, backbone: str = "mobilenet_v2",
+                 pretrained: bool = True):
+        super().__init__()
+        self.backbone_name = backbone
+        self.features, feat_dim = _build_backbone(backbone, pretrained)
+
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.embedding = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(feat_dim, embedding_dim),
+            nn.BatchNorm1d(embedding_dim),
+        )
+        self.identity_head = nn.Linear(embedding_dim, num_identities)
+        self.gender_head = nn.Linear(embedding_dim, num_genders)
+
+    def forward(self, x):
+        feat = self.features(x)
+        feat = self.pool(feat)
+        emb = self.embedding(feat)
+        identity_logits = self.identity_head(emb)
+        gender_logits = self.gender_head(emb)
+        return identity_logits, gender_logits, emb
+
+    def embed(self, x):
+        """Chỉ trích embedding — dùng làm 'giám khảo' cho identity-aware loss khi train SR."""
+        feat = self.features(x)
+        feat = self.pool(feat)
+        return self.embedding(feat)

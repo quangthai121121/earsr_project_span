@@ -1,0 +1,1213 @@
+[
+  {
+    "path": "raw_data/EarVN1.0_raw/001.ALI_HD/001 (6).jpg",
+    "person_id": "001",
+    "gender": 0,
+    "width": 17,
+    "height": 18
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (84).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 17,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (29).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 15,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (78).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (32).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 17,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (94).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 16,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (97).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 18,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (25).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (105).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 18,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (19).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (160).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 19,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (50).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (102).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (34).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 19,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (7).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (95).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (6).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 19,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/011.Cong_To/011 (70).jpg",
+    "person_id": "011",
+    "gender": 0,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/018.De_C/018 (34).jpg",
+    "person_id": "018",
+    "gender": 0,
+    "width": 15,
+    "height": 55
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/021.Dustin_Phuc_Ng/021 (148).jpg",
+    "person_id": "021",
+    "gender": 0,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/039.KhacVi/039 (13).jpg",
+    "person_id": "039",
+    "gender": 0,
+    "width": 18,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/039.KhacVi/039 (11).jpg",
+    "person_id": "039",
+    "gender": 0,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/040.Khuong_Ng/040 (77).jpg",
+    "person_id": "040",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/044.Lam_Canh_T/044 (30).jpg",
+    "person_id": "044",
+    "gender": 0,
+    "width": 19,
+    "height": 30
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/045.Lam_Hu/045 (108).jpg",
+    "person_id": "045",
+    "gender": 0,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/045.Lam_Hu/045 (83).jpg",
+    "person_id": "045",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/045.Lam_Hu/045 (84).jpg",
+    "person_id": "045",
+    "gender": 0,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/045.Lam_Hu/045 (9).jpg",
+    "person_id": "045",
+    "gender": 0,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/045.Lam_Hu/045 (124).jpg",
+    "person_id": "045",
+    "gender": 0,
+    "width": 19,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/047.Lam_Vinh_H/047 (89).jpg",
+    "person_id": "047",
+    "gender": 0,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/050.Long_Nh/050 (104).jpg",
+    "person_id": "050",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/050.Long_Nh/050 (156).jpg",
+    "person_id": "050",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/050.Long_Nh/050 (141).jpg",
+    "person_id": "050",
+    "gender": 0,
+    "width": 16,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/050.Long_Nh/050 (62).jpg",
+    "person_id": "050",
+    "gender": 0,
+    "width": 16,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/052.Luong_Bang_Q/052 (72).jpg",
+    "person_id": "052",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/053.Luong_Manh_H/052 (1).jpg",
+    "person_id": "053",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/053.Luong_Manh_H/052 (124).jpg",
+    "person_id": "053",
+    "gender": 0,
+    "width": 16,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/053.Luong_Manh_H/052 (2).jpg",
+    "person_id": "053",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/056.Mai_Tai_Ph/056 (2).jpg",
+    "person_id": "056",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/060.Nguyen_Khang/060 (155).jpg",
+    "person_id": "060",
+    "gender": 0,
+    "width": 18,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/060.Nguyen_Khang/060 (80).jpg",
+    "person_id": "060",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/060.Nguyen_Khang/060 (150).jpg",
+    "person_id": "060",
+    "gender": 0,
+    "width": 19,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/060.Nguyen_Khang/060 (10).jpg",
+    "person_id": "060",
+    "gender": 0,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/061.Nguyen_Phi_Hu/061 (138).jpg",
+    "person_id": "061",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/063.Nhan_Phuc_V/9.jpg",
+    "person_id": "063",
+    "gender": 0,
+    "width": 18,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/063.Nhan_Phuc_V/7.jpg",
+    "person_id": "063",
+    "gender": 0,
+    "width": 19,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/064.Noo_Phuoc_Th/064 (15).jpg",
+    "person_id": "064",
+    "gender": 0,
+    "width": 18,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/064.Noo_Phuoc_Th/064 (6).jpg",
+    "person_id": "064",
+    "gender": 0,
+    "width": 17,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/064.Noo_Phuoc_Th/064 (16).jpg",
+    "person_id": "064",
+    "gender": 0,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/064.Noo_Phuoc_Th/064 (68).jpg",
+    "person_id": "064",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/066.OnlyC/066 (128).jpg",
+    "person_id": "066",
+    "gender": 0,
+    "width": 17,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/066.OnlyC/066 (25).jpg",
+    "person_id": "066",
+    "gender": 0,
+    "width": 18,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/067.Pham_Hong_Ph/067 (74).jpg",
+    "person_id": "067",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/069.Phan_A/069 (152).jpg",
+    "person_id": "069",
+    "gender": 0,
+    "width": 19,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/069.Phan_A/069 (33).jpg",
+    "person_id": "069",
+    "gender": 0,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/070.Phan_M_Quy/070 (126).jpg",
+    "person_id": "070",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/070.Phan_M_Quy/070 (87).jpg",
+    "person_id": "070",
+    "gender": 0,
+    "width": 16,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/072.Quang_Ha/072 (168).jpg",
+    "person_id": "072",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/073.Quang_Tr/073 (145).jpg",
+    "person_id": "073",
+    "gender": 0,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/073.Quang_Tr/073 (137).jpg",
+    "person_id": "073",
+    "gender": 0,
+    "width": 14,
+    "height": 19
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/073.Quang_Tr/073 (159).jpg",
+    "person_id": "073",
+    "gender": 0,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/073.Quang_Tr/073 (133).jpg",
+    "person_id": "073",
+    "gender": 0,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/073.Quang_Tr/073 (139).jpg",
+    "person_id": "073",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/073.Quang_Tr/073 (144).jpg",
+    "person_id": "073",
+    "gender": 0,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/074.Quy_B/074 (28).jpg",
+    "person_id": "074",
+    "gender": 0,
+    "width": 19,
+    "height": 33
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/075.Rym/075 (56).jpg",
+    "person_id": "075",
+    "gender": 0,
+    "width": 16,
+    "height": 20
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/083.ThanhTr/083 (48).jpg",
+    "person_id": "083",
+    "gender": 0,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/083.ThanhTr/083 (78).jpg",
+    "person_id": "083",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/083.ThanhTr/083 (66).jpg",
+    "person_id": "083",
+    "gender": 0,
+    "width": 17,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/083.ThanhTr/083 (94).jpg",
+    "person_id": "083",
+    "gender": 0,
+    "width": 17,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/083.ThanhTr/083 (26).jpg",
+    "person_id": "083",
+    "gender": 0,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/084.TIM/084 (30).jpg",
+    "person_id": "084",
+    "gender": 0,
+    "width": 19,
+    "height": 35
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/084.TIM/084 (14).jpg",
+    "person_id": "084",
+    "gender": 0,
+    "width": 18,
+    "height": 46
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/085.Toulive/085 (145).jpg",
+    "person_id": "085",
+    "gender": 0,
+    "width": 18,
+    "height": 28
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/088.Trinh_Thang_B/088 (143).jpg",
+    "person_id": "088",
+    "gender": 0,
+    "width": 18,
+    "height": 31
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/088.Trinh_Thang_B/088 (65).jpg",
+    "person_id": "088",
+    "gender": 0,
+    "width": 18,
+    "height": 29
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/088.Trinh_Thang_B/088 (78).jpg",
+    "person_id": "088",
+    "gender": 0,
+    "width": 18,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/088.Trinh_Thang_B/088 (152).jpg",
+    "person_id": "088",
+    "gender": 0,
+    "width": 19,
+    "height": 31
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/088.Trinh_Thang_B/088 (59).jpg",
+    "person_id": "088",
+    "gender": 0,
+    "width": 16,
+    "height": 31
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/088.Trinh_Thang_B/088 (99).jpg",
+    "person_id": "088",
+    "gender": 0,
+    "width": 18,
+    "height": 35
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/088.Trinh_Thang_B/088 (132).jpg",
+    "person_id": "088",
+    "gender": 0,
+    "width": 18,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/089.Trong_Hie/089 (115).jpg",
+    "person_id": "089",
+    "gender": 0,
+    "width": 18,
+    "height": 33
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/089.Trong_Hie/089 (48).jpg",
+    "person_id": "089",
+    "gender": 0,
+    "width": 19,
+    "height": 29
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/089.Trong_Hie/089 (148).jpg",
+    "person_id": "089",
+    "gender": 0,
+    "width": 19,
+    "height": 30
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/089.Trong_Hie/089 (49).jpg",
+    "person_id": "089",
+    "gender": 0,
+    "width": 18,
+    "height": 36
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/090.Truc_nh/090 (140).jpg",
+    "person_id": "090",
+    "gender": 0,
+    "width": 18,
+    "height": 30
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/090.Truc_nh/090 (15).jpg",
+    "person_id": "090",
+    "gender": 0,
+    "width": 18,
+    "height": 33
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/091.TrungQua/091 (60).jpg",
+    "person_id": "091",
+    "gender": 0,
+    "width": 19,
+    "height": 49
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (129).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 17,
+    "height": 31
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (127).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 18,
+    "height": 29
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (40).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 18,
+    "height": 33
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (53).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 19,
+    "height": 37
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (41).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 19,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (37).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 14,
+    "height": 32
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (111).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (59).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 19,
+    "height": 33
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/092.TruonGNam_th/092 (75).jpg",
+    "person_id": "092",
+    "gender": 0,
+    "width": 18,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/093.TruongThe_V/093 (23).jpg",
+    "person_id": "093",
+    "gender": 0,
+    "width": 17,
+    "height": 38
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/093.TruongThe_V/093 (65).jpg",
+    "person_id": "093",
+    "gender": 0,
+    "width": 17,
+    "height": 32
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/094.Tuan_Hu/094 (19).jpg",
+    "person_id": "094",
+    "gender": 0,
+    "width": 18,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/095.Tung_Dg/095 (8).jpg",
+    "person_id": "095",
+    "gender": 0,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/095.Tung_Dg/095 (126).jpg",
+    "person_id": "095",
+    "gender": 0,
+    "width": 16,
+    "height": 18
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/095.Tung_Dg/095 (37).jpg",
+    "person_id": "095",
+    "gender": 0,
+    "width": 18,
+    "height": 43
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/108.Gil_L/108 (14).jpg",
+    "person_id": "108",
+    "gender": 1,
+    "width": 16,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/108.Gil_L/108 (104).jpg",
+    "person_id": "108",
+    "gender": 1,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/108.Gil_L/108 (72).jpg",
+    "person_id": "108",
+    "gender": 1,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/108.Gil_L/108 (49).jpg",
+    "person_id": "108",
+    "gender": 1,
+    "width": 19,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/109.Go_Joon_H/109 (54).jpg",
+    "person_id": "109",
+    "gender": 1,
+    "width": 19,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/109.Go_Joon_H/109 (56).jpg",
+    "person_id": "109",
+    "gender": 1,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/109.Go_Joon_H/109 (55).jpg",
+    "person_id": "109",
+    "gender": 1,
+    "width": 19,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/121.Kim_Yoo_J/121 (1).jpg",
+    "person_id": "121",
+    "gender": 1,
+    "width": 19,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/122.La_Thanh_H/122 (154).jpg",
+    "person_id": "122",
+    "gender": 1,
+    "width": 16,
+    "height": 20
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/122.La_Thanh_H/122 (25).jpg",
+    "person_id": "122",
+    "gender": 1,
+    "width": 18,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/124.Le_Cat_Trong_L/124 (13).jpg",
+    "person_id": "124",
+    "gender": 1,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/124.Le_Cat_Trong_L/124 (81).jpg",
+    "person_id": "124",
+    "gender": 1,
+    "width": 16,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/124.Le_Cat_Trong_L/124 (27).jpg",
+    "person_id": "124",
+    "gender": 1,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/124.Le_Cat_Trong_L/124 (33).jpg",
+    "person_id": "124",
+    "gender": 1,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/124.Le_Cat_Trong_L/124 (92).jpg",
+    "person_id": "124",
+    "gender": 1,
+    "width": 17,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/124.Le_Cat_Trong_L/124 (85).jpg",
+    "person_id": "124",
+    "gender": 1,
+    "width": 16,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/138.Ngo_Thanh_V/138 (79).jpg",
+    "person_id": "138",
+    "gender": 1,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/138.Ngo_Thanh_V/138 (154).jpg",
+    "person_id": "138",
+    "gender": 1,
+    "width": 19,
+    "height": 28
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/138.Ngo_Thanh_V/138 (98).jpg",
+    "person_id": "138",
+    "gender": 1,
+    "width": 16,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (83).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (20).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (75).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 17,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (47).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (30).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (29).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 18,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (11).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/139.Ngoc_Qu/139 (25).jpg",
+    "person_id": "139",
+    "gender": 1,
+    "width": 19,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/141.Pham_H/141 (127).jpg",
+    "person_id": "141",
+    "gender": 1,
+    "width": 17,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/141.Pham_H/141 (47).jpg",
+    "person_id": "141",
+    "gender": 1,
+    "width": 17,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/141.Pham_H/141 (68).jpg",
+    "person_id": "141",
+    "gender": 1,
+    "width": 19,
+    "height": 28
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/141.Pham_H/141 (125).jpg",
+    "person_id": "141",
+    "gender": 1,
+    "width": 18,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/141.Pham_H/141 (43).jpg",
+    "person_id": "141",
+    "gender": 1,
+    "width": 17,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/141.Pham_H/141 (44).jpg",
+    "person_id": "141",
+    "gender": 1,
+    "width": 18,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/142.Pham_My_L/142 (160).jpg",
+    "person_id": "142",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/142.Pham_My_L/142 (1).jpg",
+    "person_id": "142",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/142.Pham_My_L/142 (104).jpg",
+    "person_id": "142",
+    "gender": 1,
+    "width": 19,
+    "height": 29
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/142.Pham_My_L/142 (46).jpg",
+    "person_id": "142",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/146.Tam_T/146 (69).jpg",
+    "person_id": "146",
+    "gender": 1,
+    "width": 16,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/147.Thu_M/147 (52).jpg",
+    "person_id": "147",
+    "gender": 1,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/147.Thu_M/147 (140).jpg",
+    "person_id": "147",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/147.Thu_M/147 (139).jpg",
+    "person_id": "147",
+    "gender": 1,
+    "width": 16,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/147.Thu_M/147 (53).jpg",
+    "person_id": "147",
+    "gender": 1,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/147.Thu_M/147 (154).jpg",
+    "person_id": "147",
+    "gender": 1,
+    "width": 17,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/149.Thuy_H/149 (51).jpg",
+    "person_id": "149",
+    "gender": 1,
+    "width": 19,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/149.Thuy_H/149 (85).jpg",
+    "person_id": "149",
+    "gender": 1,
+    "width": 19,
+    "height": 27
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/150.Toc_T/150 (57).jpg",
+    "person_id": "150",
+    "gender": 1,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/150.Toc_T/150 (69).jpg",
+    "person_id": "150",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (121).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 18,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (114).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 15,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (147).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 18,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (89).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 16,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (131).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (123).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 18,
+    "height": 22
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (9).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 13,
+    "height": 17
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (60).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 16,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/152.Trang_K/152 (134).jpg",
+    "person_id": "152",
+    "gender": 1,
+    "width": 19,
+    "height": 26
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/155.Truong_Quynh_A/155 (100).jpg",
+    "person_id": "155",
+    "gender": 1,
+    "width": 19,
+    "height": 28
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/155.Truong_Quynh_A/155 (24).jpg",
+    "person_id": "155",
+    "gender": 1,
+    "width": 19,
+    "height": 28
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/155.Truong_Quynh_A/155 (60).jpg",
+    "person_id": "155",
+    "gender": 1,
+    "width": 17,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/155.Truong_Quynh_A/155 (85).jpg",
+    "person_id": "155",
+    "gender": 1,
+    "width": 15,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/157.Uyen_L/157 (65).jpg",
+    "person_id": "157",
+    "gender": 1,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/158.Van_h/158 (158).jpg",
+    "person_id": "158",
+    "gender": 1,
+    "width": 16,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/158.Van_h/158 (147).jpg",
+    "person_id": "158",
+    "gender": 1,
+    "width": 18,
+    "height": 21
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/159.Van_Mai_H/159 (69).jpg",
+    "person_id": "159",
+    "gender": 1,
+    "width": 17,
+    "height": 23
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/160.Viet_H/160 (141).jpg",
+    "person_id": "160",
+    "gender": 1,
+    "width": 18,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/162.Vu_Cat_T/162 (30).jpg",
+    "person_id": "162",
+    "gender": 1,
+    "width": 19,
+    "height": 25
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/162.Vu_Cat_T/162 (11).jpg",
+    "person_id": "162",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/162.Vu_Cat_T/162 (87).jpg",
+    "person_id": "162",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/162.Vu_Cat_T/162 (53).jpg",
+    "person_id": "162",
+    "gender": 1,
+    "width": 18,
+    "height": 24
+  },
+  {
+    "path": "raw_data/EarVN1.0_raw/162.Vu_Cat_T/162 (35).jpg",
+    "person_id": "162",
+    "gender": 1,
+    "width": 17,
+    "height": 25
+  }
+]
