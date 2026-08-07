@@ -167,30 +167,56 @@ def auto_select_threshold(records, percentiles, pct_fn, too_small_max: int,
 
 
 def split_by_identity(records, train_ratio, val_ratio, seed):
-    person_ids = sorted({pid for _, pid, _, _ in records})
+    """
+    QUAN TRỌNG: chia theo ẢNH của TỪNG người (stratified per-identity), KHÔNG
+    chia nguyên người vào 1 split duy nhất.
+
+    Lý do: bài toán ở đây là closed-set classification (softmax cố định N=164
+    lớp, CrossEntropyLoss). Nếu một người chỉ xuất hiện ở val/test mà KHÔNG
+    có ảnh nào ở train, neuron output ứng với người đó không bao giờ được học
+    (gradient chỉ liên tục dìm nó xuống vì không bao giờ là target đúng) ->
+    model KHÔNG THỂ đoán đúng người đó, VAL_ID_ACC sẽ luôn ~0% bất kể train
+    bao lâu — đây là giới hạn toán học, không phải model kém. Phải đảm bảo
+    MỌI người đều xuất hiện ở cả train/val/test, chỉ khác nhau ở ảnh nào.
+    """
+    from collections import defaultdict
+
+    by_person = defaultdict(list)
+    for r in records:
+        by_person[r[1]].append(r)
+
     rng = random.Random(seed)
-    rng.shuffle(person_ids)
-
-    n = len(person_ids)
-    n_train = int(n * train_ratio)
-    n_val = int(n * val_ratio)
-
-    train_ids = set(person_ids[:n_train])
-    val_ids = set(person_ids[n_train:n_train + n_val])
-    test_ids = set(person_ids[n_train + n_val:])
-
-    print(f"Số identity: train={len(train_ids)} val={len(val_ids)} test={len(test_ids)}")
-
     splits = {"train": [], "val": [], "test": []}
-    for path, pid, w, h in records:
-        gender = gender_from_person_id(pid)
-        entry = {"path": path, "person_id": pid, "gender": gender, "width": w, "height": h}
-        if pid in train_ids:
-            splits["train"].append(entry)
-        elif pid in val_ids:
-            splits["val"].append(entry)
-        else:
-            splits["test"].append(entry)
+    empty_split_warning = []
+
+    for pid, imgs in by_person.items():
+        imgs = imgs.copy()
+        rng.shuffle(imgs)
+        n = len(imgs)
+
+        n_train = max(1, round(n * train_ratio))
+        n_val = max(1, round(n * val_ratio)) if n - n_train >= 2 else max(0, n - n_train - 1)
+        n_train = min(n_train, n - 2) if n >= 3 else n  # chừa chỗ cho val/test nếu đủ ảnh
+
+        train_imgs = imgs[:n_train]
+        val_imgs = imgs[n_train:n_train + n_val]
+        test_imgs = imgs[n_train + n_val:]
+
+        if n >= 3 and (len(train_imgs) == 0 or len(val_imgs) == 0 or len(test_imgs) == 0):
+            empty_split_warning.append(pid)
+
+        for split_name, img_list in [("train", train_imgs), ("val", val_imgs), ("test", test_imgs)]:
+            for path, _, w, h in img_list:
+                gender = gender_from_person_id(pid)
+                splits[split_name].append(
+                    {"path": path, "person_id": pid, "gender": gender, "width": w, "height": h})
+
+    print(f"Số identity (giống nhau ở cả 3 split): {len(by_person)}")
+    print(f"Số ảnh: train={len(splits['train'])} val={len(splits['val'])} test={len(splits['test'])}")
+    if empty_split_warning:
+        print(f"!!! CẢNH BÁO: {len(empty_split_warning)} identity có split rỗng "
+              f"(quá ít ảnh để chia đủ 3 phần): {empty_split_warning}")
+
     return splits
 
 
