@@ -44,10 +44,18 @@ def compute_total_loss(student_out, hr_img, teacher_out, recognition_model, cfg)
     loss_pixel = l1(student_out, hr_img)
     loss_distill = l1(student_out, teacher_out)
 
-    with torch.no_grad():
-        hr_emb = recognition_model.embed(hr_img)
-    student_emb = recognition_model.embed(student_out)
-    loss_identity = 1 - F.cosine_similarity(student_emb, hr_emb, dim=1).mean()
+    # Tính identity loss (cosine_similarity qua model giám khảo) ở fp32 TƯỜNG
+    # MINH, không để dưới autocast fp16 của khối bên ngoài — cosine_similarity
+    # kém ổn định số học ở fp16 (dễ chia gần-0/gần-0 ra NaN), đặc biệt khi
+    # chuỗi qua nhiều model liên tiếp. Đã quan sát thấy gây NaN gần như toàn
+    # bộ batch khi để dưới autocast — ép fp32 riêng phần này để khắc phục.
+    with torch.autocast(device_type=student_out.device.type, enabled=False):
+        student_out_f32 = student_out.float()
+        hr_img_f32 = hr_img.float()
+        with torch.no_grad():
+            hr_emb = recognition_model.embed(hr_img_f32)
+        student_emb = recognition_model.embed(student_out_f32)
+        loss_identity = 1 - F.cosine_similarity(student_emb, hr_emb, dim=1, eps=1e-4).mean()
 
     ci = cfg["sr_improve"]
     total = (ci["lambda_pixel"] * loss_pixel +
