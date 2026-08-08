@@ -83,16 +83,45 @@ def count_flops(model: torch.nn.Module, input_size, device: str = "cpu") -> floa
     return flops / 1e9  # GFLOPs
 
 
+def freeze_reparam_modules(model: torch.nn.Module) -> int:
+    """
+    SPAN chính thức dùng kỹ thuật 'structural reparameterization' (module
+    Conv3XC): nhiều nhánh conv lúc train, hợp nhất thành 1 conv duy nhất lúc
+    suy luận. ĐÚNG cách dùng chuẩn: hợp nhất 1 LẦN DUY NHẤT trước khi triển
+    khai/đo tốc độ. Nhưng forward() của code gốc lại gọi update_params() (tính
+    lại phép hợp nhất) MỖI LẦN forward, kể cả ở eval mode — với 100 lần gọi
+    lặp lại trong measure_latency(), điều này làm SPAN baseline bị đo CHẬM GIẢ
+    TẠO (tính dư thừa 100 lần cho cùng 1 kết quả), không phản ánh đúng tốc độ
+    suy luận thật. Hàm này gọi update_params() một lần duy nhất rồi vô hiệu
+    hóa việc tính lại — cho kết quả đo latency công bằng, đúng cách deploy
+    chuẩn của các kiến trúc reparameterization (RepVGG-style).
+
+    Trả về số module đã được "đóng băng" (0 nếu model không dùng kỹ thuật này,
+    ví dụ span_tiny — khi đó hàm này không làm gì cả, an toàn để gọi luôn).
+    """
+    count = 0
+    for module in model.modules():
+        if hasattr(module, "update_params") and hasattr(module, "eval_conv"):
+            module.update_params()          # tính hợp nhất lần cuối, đúng trọng số hiện tại
+            module.update_params = lambda: None   # từ giờ không tính lại nữa
+            count += 1
+    return count
+
+
 @torch.no_grad()
 def measure_latency(model: torch.nn.Module, input_size, device: str,
                      n_warmup: int = 10, n_iters: int = 100) -> float:
     """
     Đo latency trung bình (ms/ảnh) trên thiết bị chỉ định.
     input_size: ví dụ (1, 3, 32, 32) cho SR, hoặc (1, 3, 128, 128) cho recognition.
+    Tự động "đóng băng" các module reparameterization (nếu có, ví dụ Conv3XC
+    của SPAN chính thức) để đo công bằng — xem freeze_reparam_modules().
     Lưu ý: để đo latency thực tế trên thiết bị edge (Jetson/mobile), hãy chạy
     script này trực tiếp trên thiết bị đó, không chỉ trên máy train.
     """
     model.eval().to(device)
+    n_frozen = freeze_reparam_modules(model)
+
     dummy = torch.randn(*input_size).to(device)
 
     for _ in range(n_warmup):
