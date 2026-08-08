@@ -100,7 +100,7 @@ def _forward_step(student, teacher, recognition_model, lr_img, hr_img, device,
 
     if is_train:
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=5.0)
+        torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=1.0)
         optimizer.step()
 
     return loss.item(), parts
