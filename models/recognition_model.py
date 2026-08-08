@@ -35,42 +35,56 @@ SUPPORTED_BACKBONES = [
 
 def _build_backbone(name: str, pretrained: bool):
     """Trả về (feature_extractor, feat_dim). feature_extractor nhận ảnh, trả về
-    feature map 4D (B, C, H, W) trước global pooling."""
+    feature map 4D (B, C, H, W) trước global pooling.
+
+    feat_dim được ĐO THẬT bằng 1 lần forward giả (dummy input), KHÔNG tin vào
+    metadata như base.num_features/last_channel/classifier[...].in_features —
+    các giá trị này có thể KHÔNG khớp thực tế tùy kiến trúc/phiên bản thư viện
+    (đã xảy ra với ghostnet_100 qua timm: num_features báo 960 nhưng output
+    thật khi global_pool="" là 1280 kênh, gây lỗi RuntimeError shape mismatch)."""
 
     if name == "mobilenet_v2":
         base = tv_models.mobilenet_v2(
             weights=tv_models.MobileNet_V2_Weights.DEFAULT if pretrained else None)
-        return base.features, base.last_channel
+        feature_extractor = base.features
 
-    if name == "mobilenet_v3_small":
+    elif name == "mobilenet_v3_small":
         base = tv_models.mobilenet_v3_small(
             weights=tv_models.MobileNet_V3_Small_Weights.DEFAULT if pretrained else None)
-        feat_dim = base.classifier[0].in_features
-        return base.features, feat_dim
+        feature_extractor = base.features
 
-    if name == "resnet18":
+    elif name == "resnet18":
         base = tv_models.resnet18(
             weights=tv_models.ResNet18_Weights.DEFAULT if pretrained else None)
-        feat_dim = base.fc.in_features
-        return nn.Sequential(*list(base.children())[:-2]), feat_dim
+        feature_extractor = nn.Sequential(*list(base.children())[:-2])
 
-    if name == "efficientnet_b0":
+    elif name == "efficientnet_b0":
         base = tv_models.efficientnet_b0(
             weights=tv_models.EfficientNet_B0_Weights.DEFAULT if pretrained else None)
-        feat_dim = base.classifier[1].in_features
-        return base.features, feat_dim
+        feature_extractor = base.features
 
-    if name == "ghostnet_100":
+    elif name == "ghostnet_100":
         if not _HAS_TIMM:
             raise ImportError(
                 "Backbone 'ghostnet_100' cần thư viện timm. Cài: "
                 "pip install timm --break-system-packages")
-        base = timm.create_model("ghostnet_100", pretrained=pretrained, num_classes=0,
-                                  global_pool="")
-        feat_dim = base.num_features
-        return base, feat_dim
+        feature_extractor = timm.create_model("ghostnet_100", pretrained=pretrained,
+                                               num_classes=0, global_pool="")
 
-    raise ValueError(f"Backbone không hỗ trợ: {name}. Chọn trong {SUPPORTED_BACKBONES}")
+    else:
+        raise ValueError(f"Backbone không hỗ trợ: {name}. Chọn trong {SUPPORTED_BACKBONES}")
+
+    # Đo feat_dim thật — dùng ảnh 128x128 (đủ lớn để tránh mọi rủi ro co lại
+    # về 0 chiều không gian ở tầng cuối, kênh output không phụ thuộc kích
+    # thước không gian đầu vào với các kiến trúc dùng global pooling này).
+    feature_extractor.eval()
+    with torch.no_grad():
+        dummy = torch.zeros(1, 3, 128, 128)
+        dummy_out = feature_extractor(dummy)
+    feat_dim = dummy_out.shape[1]
+    feature_extractor.train()
+
+    return feature_extractor, feat_dim
 
 
 class EarRecognitionNet(nn.Module):
