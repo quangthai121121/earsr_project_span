@@ -13,9 +13,9 @@ from pathlib import Path
 
 LAMBDA_MAP = {
     "pixel_only": (1.0, 0.0, 0.0),
-    "pixel_distill": (1.0, 0.5, 0.0),
-    "pixel_identity": (1.0, 0.0, 0.5),
-    "full": (1.0, 0.5, 0.5),
+    "pixel_distill": (1.0, 1.0, 0.0),
+    "pixel_identity": (1.0, 0.0, 0.1),
+    "full": (1.0, 1.0, 0.1),
 }
 
 

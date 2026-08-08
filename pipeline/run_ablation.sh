@@ -19,9 +19,9 @@ SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['
 
 declare -A CONFIGS=(
     [pixel_only]="1.0 0.0 0.0"
-    [pixel_distill]="1.0 0.5 0.0"
-    [pixel_identity]="1.0 0.0 0.5"
-    [full]="1.0 0.5 0.5"
+    [pixel_distill]="1.0 1.0 0.0"
+    [pixel_identity]="1.0 0.0 0.1"
+    [full]="1.0 1.0 0.1"
 )
 
 for NAME in pixel_only pixel_distill pixel_identity full; do
