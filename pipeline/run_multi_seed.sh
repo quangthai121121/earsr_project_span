@@ -1,10 +1,10 @@
 #!/bin/bash
 # Chạy lại 3 domain chính (lr, sr_baseline, sr_improved) với NHIỀU SEED khác
-# nhau, cùng khởi tạo từ 1 checkpoint HR chung (không train lại HR, tiết kiệm
-# thời gian) — để đo độ ổn định của kết luận "sr_improved > lr" và
-# "sr_baseline > sr_improved", tránh kết luận vội từ 1 lần chạy có thể chỉ là
-# nhiễu ngẫu nhiên (đã phát hiện: cùng 1 cấu hình, 2 lần chạy có thể lệch
-# ~0.8 điểm % chỉ do random seed).
+# nhau — ĐÚNG THEO CHUỖI fine-tune như pipeline chính (hr -> lr -> sr_baseline,
+# hr -> lr -> sr_improved), chỉ khác là lặp lại với nhiều seed để đo độ ổn
+# định. Quan trọng: sr_baseline/sr_improved phải fine-tune từ checkpoint LR
+# CỦA CHÍNH SEED ĐÓ (không dùng chung 1 checkpoint hr cho cả 3 domain — làm
+# vậy là THÍ NGHIỆM KHÁC, không so sánh công bằng được với kết quả chính).
 #
 # Dùng 1 backbone duy nhất (mobilenet_v2) để tiết kiệm thời gian.
 
@@ -17,13 +17,27 @@ SEEDS=(42 123 2024)
 mkdir -p "$RESULTS_DIR"
 
 for SEED in "${SEEDS[@]}"; do
-    for DOMAIN in lr sr_baseline sr_improved; do
+    echo "################################################################"
+    echo "# seed=$SEED | domain=lr | backbone=$BACKBONE"
+    echo "################################################################"
+    python train_recognition.py --config "$CONFIG" --domain lr --backbone "$BACKBONE" \
+        --init_ckpt "runs/recognition_hr_${BACKBONE}/best.pt" \
+        --seed "$SEED" --run_suffix "_seed${SEED}"
+
+    python eval_recognition.py --config "$CONFIG" \
+        --ckpt "runs/recognition_lr_${BACKBONE}_seed${SEED}/best.pt" \
+        --backbone "$BACKBONE" --train_domain lr --test_domain lr \
+        --out_json "$RESULTS_DIR/lr_seed${SEED}.json"
+
+    for DOMAIN in sr_baseline sr_improved; do
         echo "################################################################"
         echo "# seed=$SEED | domain=$DOMAIN | backbone=$BACKBONE"
         echo "################################################################"
 
+        # QUAN TRỌNG: fine-tune từ checkpoint LR CỦA CHÍNH SEED NÀY, đúng
+        # chuỗi như pipeline chính — không dùng chung checkpoint hr.
         python train_recognition.py --config "$CONFIG" --domain "$DOMAIN" --backbone "$BACKBONE" \
-            --init_ckpt "runs/recognition_hr_${BACKBONE}/best.pt" \
+            --init_ckpt "runs/recognition_lr_${BACKBONE}_seed${SEED}/best.pt" \
             --seed "$SEED" --run_suffix "_seed${SEED}"
 
         python eval_recognition.py --config "$CONFIG" \
