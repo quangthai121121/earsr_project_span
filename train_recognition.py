@@ -127,11 +127,18 @@ def main():
     ap.add_argument("--backbone", required=True, choices=SUPPORTED_BACKBONES)
     ap.add_argument("--init_ckpt", default=None,
                      help="checkpoint khởi tạo để fine-tune thay vì train from-scratch")
+    ap.add_argument("--seed", type=int, default=None,
+                     help="ghi đè seed trong config — dùng để chạy multi-seed, đo độ ổn định")
+    ap.add_argument("--run_suffix", default="",
+                     help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè khi chạy nhiều seed")
     args = ap.parse_args()
 
     import yaml
     with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    if args.seed is not None:
+        cfg["split"]["seed"] = args.seed
 
     set_seed(cfg["split"]["seed"])
 
@@ -153,7 +160,7 @@ def main():
     val_loader = DataLoader(val_set, batch_size=cfg["recognition"]["batch_size"],
                              shuffle=False, **loader_kwargs)
 
-    run_name = f"recognition_{args.domain}_{args.backbone}"
+    run_name = f"recognition_{args.domain}_{args.backbone}{args.run_suffix}"
     run_dir = Path(cfg["paths"]["runs_root"]) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
