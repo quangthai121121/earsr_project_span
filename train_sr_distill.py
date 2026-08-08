@@ -193,11 +193,14 @@ def main():
     train_loader = DataLoader(train_set, batch_size=ci["batch_size"], shuffle=True, **loader_kwargs)
     val_loader = DataLoader(val_set, batch_size=ci["batch_size"], shuffle=False, **loader_kwargs)
 
-    run_dir = Path(cfg["paths"]["runs_root"]) / f"sr_improved_{cfg['sr']['arch']}{args.run_suffix}"
+    student_arch = ci.get("student_arch", cfg["sr"]["arch"])
+    student_pretrained = ci.get("student_pretrained_path")
+
+    run_dir = Path(cfg["paths"]["runs_root"]) / f"sr_improved_{student_arch}{args.run_suffix}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     logger = setup_logger(run_dir, name="train")
-    logger.info(f"Lambda dùng cho lần chạy này: pixel={ci['lambda_pixel']} "
+    logger.info(f"Student architecture: {student_arch} | Lambda: pixel={ci['lambda_pixel']} "
                 f"distill={ci['lambda_distill']} identity={ci['lambda_identity']}")
     device_mgr = DeviceManager(logger=logger)
     device = device_mgr.preferred
@@ -206,14 +209,10 @@ def main():
     logger.info(f"Teacher: {ci['teacher_arch']} | Recognition giám khảo: {ci['frozen_recognition_ckpt']}")
     logger.info(f"Train: {len(train_set)} cặp ảnh | Val: {len(val_set)} cặp ảnh")
 
-    # --- Student: SPAN, khởi tạo từ checkpoint chính thức nếu có (khuyến nghị), ---
-    # --- đây là model sẽ được deploy cuối cùng ---
-    student = build_sr_model(
-        cfg["sr"]["arch"], scale,
-        pretrained_path=cfg["sr"].get("pretrained_path"),
-    ).to(device)
+    # --- Student: kiến trúc NÉN (student_arch, ví dụ span_tiny) — model sẽ được deploy ---
+    student = build_sr_model(student_arch, scale, pretrained_path=student_pretrained).to(device)
 
-    # --- Teacher: SR nặng, đã train sẵn (Giai đoạn 1), ĐÓNG BĂNG ---
+    # --- Teacher: SPAN baseline (đã chứng minh chất lượng tốt), ĐÓNG BĂNG ---
     teacher = build_sr_model(ci["teacher_arch"], scale).to(device)
     teacher.load_state_dict(torch.load(ci["teacher_ckpt"], map_location=device))
     teacher.eval()

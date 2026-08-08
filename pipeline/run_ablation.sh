@@ -14,7 +14,7 @@ RESULTS_DIR="results"
 BACKBONE="mobilenet_v2"
 mkdir -p "$RESULTS_DIR"
 
-ARCH=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['sr']['arch'])")
+ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")
 
 declare -A CONFIGS=(

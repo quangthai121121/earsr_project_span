@@ -47,13 +47,15 @@ sr_improve:
   patience: 10                   # dừng sớm nếu val total loss không cải thiện sau 10 epoch
   batch_size: 64
   lr: 1.0e-4
-  # trọng số 3 thành phần loss: pixel + distillation (từ teacher nặng) + identity-aware
+  
+  student_arch: "span_tiny"       # kiến trúc NÉN (nhẹ hơn SPAN baseline) — model thực sự triển khai
+  student_pretrained_path: null   # span_tiny chưa có checkpoint chính thức -> train từ đầu
   lambda_pixel: 1.0
-  lambda_distill: 0.5
-  lambda_identity: 0.5
-  teacher_arch: "edsr"           # SR nặng dùng làm teacher (train riêng, xem docs/03_span_improvement.md)
-  teacher_ckpt: "runs/sr_edsr/best.pt"    # khớp với run_dir thật của train_sr.py --sr_arch edsr
-  frozen_recognition_ckpt: "runs/recognition_hr_mobilenet_v2/best.pt"  # "giám khảo" cho identity loss
+  lambda_distill: 1.0             # ưu tiên bám sát chất lượng teacher
+  lambda_identity: 0.1            # hạ mạnh — có bằng chứng trọng số cao gây hại chất lượng
+  teacher_arch: "span_official"   # học từ SPAN baseline (đã chứng minh chất lượng tốt)
+  teacher_ckpt: "runs/sr_span_official/best.pt"
+  frozen_recognition_ckpt: "runs/recognition_hr_mobilenet_v2/best.pt"
 
 # ===== Mô hình recognition — benchmark đa backbone =====
 recognition:

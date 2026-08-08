@@ -120,9 +120,16 @@ class EDSR(nn.Module):
 def build_sr_model(arch: str, scale: int, pretrained_path: str = None) -> nn.Module:
     """
     arch:
-      - "span"          : bản tự viết lại (reimplementation) trong file này —
-                           dùng khi KHÔNG cần khớp checkpoint chính thức,
-                           train from-scratch, đơn giản/nhẹ để debug nhanh.
+      - "span"          : bản tự viết lại (reimplementation), feat=28, n_blocks=4 —
+                           dùng khi KHÔNG cần khớp checkpoint chính thức.
+      - "span_tiny"      : bản NÉN, feat=96, n_blocks=3 -> ~0.875M tham số
+                           (~39% kích thước SPAN baseline 2.237M, tính chính
+                           xác theo công thức kiến trúc, xem cách tính trong
+                           docs/03_span_improvement.md). Dùng làm student để
+                           distill từ SPAN baseline (đã chứng minh chất lượng
+                           tốt), mục tiêu: giảm kích thước/tăng tốc so với
+                           SPAN baseline, chấp nhận đánh đổi accuracy nhẹ,
+                           miễn còn hơn no-SR.
       - "span_official"  : bản CHÍNH THỨC, import trực tiếp từ repo đã clone
                            qua scripts/setup_span_official.sh — dùng khi cần
                            load checkpoint pretrained thật để fine-tune.
@@ -132,6 +139,8 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None) -> nn.Mod
     arch = arch.lower()
     if arch == "span":
         return SPAN(scale=scale)
+    if arch == "span_tiny":
+        return SPAN(scale=scale, feat=96, n_blocks=3)
     if arch == "span_large":
         # biến thể lớn hơn — chỉ dùng để so sánh/khảo sát, KHÔNG phải mục tiêu triển khai
         return SPAN(scale=scale, feat=48, n_blocks=6)

@@ -12,6 +12,7 @@ BACKBONES=("mobilenet_v2" "mobilenet_v3_small" "resnet18" "efficientnet_b0" "gho
 DOMAINS=("hr" "lr" "sr_baseline" "sr_improved")
 SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")
 SR_ARCH=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['sr']['arch'])")
+STUDENT_ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 
 echo "################################################################"
 echo "# BƯỚC 8/8: Test + tổng hợp kết quả                            #"
@@ -48,15 +49,15 @@ python eval_sr_quality.py --config "$CONFIG" --arch edsr \
 python eval_sr_quality.py --config "$CONFIG" --arch "$SR_ARCH" \
     --ckpt "runs/sr_${SR_ARCH}/best.pt" --label span_baseline \
     --out_csv "$RESULTS_DIR/sr_quality.csv"
-python eval_sr_quality.py --config "$CONFIG" --arch "$SR_ARCH" \
-    --ckpt "runs/sr_improved_${SR_ARCH}/best.pt" --label span_improved \
+python eval_sr_quality.py --config "$CONFIG" --arch "$STUDENT_ARCH" \
+    --ckpt "runs/sr_improved_${STUDENT_ARCH}/best.pt" --label span_improved_tiny \
     --out_csv "$RESULTS_DIR/sr_quality.csv"
 
 echo ""
 echo ">>> [4/4] Eval trên real_lr_holdout (LR thật, dùng backbone mobilenet_v2)..."
 python eval_real_lr_holdout.py --config "$CONFIG" --backbone mobilenet_v2 \
     --sr_baseline_ckpt "runs/sr_${SR_ARCH}/best.pt" --sr_baseline_arch "$SR_ARCH" \
-    --sr_improved_ckpt "runs/sr_improved_${SR_ARCH}/best.pt" --sr_improved_arch "$SR_ARCH" \
+    --sr_improved_ckpt "runs/sr_improved_${STUDENT_ARCH}/best.pt" --sr_improved_arch "$STUDENT_ARCH" \
     --out_csv "$RESULTS_DIR/real_lr_holdout.csv"
 
 echo ""
