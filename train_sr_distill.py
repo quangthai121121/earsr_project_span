@@ -84,25 +84,24 @@ def _forward_step(student, teacher, recognition_model, lr_img, hr_img, device,
     if is_train:
         optimizer.zero_grad(set_to_none=True)
 
-    with torch.autocast(device_type="cuda" if device == "cuda" else "cpu",
-                         enabled=(device == "cuda")):
-        student_out = student(lr_img)
-        with torch.no_grad():
-            teacher_out = teacher(lr_img)
-        loss, parts = compute_total_loss(student_out, hr_img, teacher_out,
-                                          recognition_model, cfg)
+    # LƯU Ý: KHÔNG dùng AMP/autocast ở đây (khác với train_sr.py/
+    # train_recognition.py). SPAN chính thức nhân giá trị nội bộ lên tới
+    # img_range=255 (xem span_arch.py: x = (x-mean)*img_range), biên độ hoạt
+    # động lớn dễ tràn số dưới fp16 — càng dễ tràn hơn khi chuỗi qua 3 model
+    # liên tiếp (student->teacher->recognition) trong cùng 1 lần forward.
+    # Đã quan sát thực tế: bật AMP ở đây làm ~100% batch NaN kể cả lúc
+    # validation (không qua backward/GradScaler) -> lỗi tràn số ở forward,
+    # không phải lỗi gradient. fp32 chậm hơn nhưng ổn định tuyệt đối.
+    student_out = student(lr_img)
+    with torch.no_grad():
+        teacher_out = teacher(lr_img)
+    loss, parts = compute_total_loss(student_out, hr_img, teacher_out,
+                                      recognition_model, cfg)
 
     if is_train:
-        if scaler is not None:
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=5.0)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=5.0)
-            optimizer.step()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=5.0)
+        optimizer.step()
 
     return loss.item(), parts
 
@@ -236,7 +235,8 @@ def main():
         p.requires_grad = False
 
     optimizer = torch.optim.Adam(student.parameters(), lr=ci["lr"])
-    scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda"))
+    # KHÔNG dùng GradScaler/AMP cho script này (xem ghi chú trong _forward_step
+    # về lý do img_range=255 của SPAN dễ tràn số dưới fp16 khi chuỗi 3 model).
 
     max_epochs = ci["max_epochs"]
     patience = ci["patience"]
@@ -244,7 +244,7 @@ def main():
 
     for epoch in range(max_epochs):
         train_stats = run_epoch(student, teacher, recognition_model, train_loader,
-                                 device_mgr, cfg, optimizer=optimizer, scaler=scaler, logger=logger)
+                                 device_mgr, cfg, optimizer=optimizer, scaler=None, logger=logger)
         val_stats = run_epoch(student, teacher, recognition_model, val_loader,
                                device_mgr, cfg, optimizer=None, scaler=None, logger=logger)
 
