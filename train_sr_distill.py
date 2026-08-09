@@ -168,10 +168,15 @@ def main():
     ap.add_argument("--run_suffix", default="",
                      help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè checkpoint "
                           "khi chạy nhiều cấu hình ablation khác nhau")
+    ap.add_argument("--seed", type=int, default=None,
+                     help="ghi đè seed trong config — dùng để chạy multi-seed, đo độ ổn định")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    if args.seed is not None:
+        cfg["split"]["seed"] = args.seed
 
     set_seed(cfg["split"]["seed"])
     ci = cfg["sr_improve"]
