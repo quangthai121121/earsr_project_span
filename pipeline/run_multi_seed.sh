@@ -12,7 +12,11 @@ set -e
 
 CONFIG="configs/config.yaml"
 RESULTS_DIR="results/multi_seed"
-BACKBONE="mobilenet_v2"
+BACKBONE="efficientnet_b0"    # ĐỔI từ mobilenet_v2 -> efficientnet_b0: đây là
+                                # backbone duy nhất THUA "không dùng SR" ở lần
+                                # chạy đơn lẻ với kiến trúc v2 (feat=48) — cần
+                                # xác nhận bằng multi-seed xem có phải nhiễu
+                                # ngẫu nhiên hay là hiệu ứng thật trước khi kết luận
 SEEDS=(42 123 2024)
 mkdir -p "$RESULTS_DIR"
 
