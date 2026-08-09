@@ -117,36 +117,52 @@ class EDSR(nn.Module):
         return torch.clamp(out, 0.0, 1.0)
 
 
-def build_sr_model(arch: str, scale: int, pretrained_path: str = None) -> nn.Module:
+def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
+                    feature_channels: int = None) -> nn.Module:
     """
     arch:
       - "span"          : bản tự viết lại (reimplementation), feat=28, n_blocks=4 —
                            dùng khi KHÔNG cần khớp checkpoint chính thức.
-      - "span_tiny"      : bản NÉN, feat=96, n_blocks=3 -> ~0.875M tham số
-                           (~39% kích thước SPAN baseline 2.237M, tính chính
-                           xác theo công thức kiến trúc, xem cách tính trong
-                           docs/03_span_improvement.md). Dùng làm student để
-                           distill từ SPAN baseline (đã chứng minh chất lượng
-                           tốt), mục tiêu: giảm kích thước/tăng tốc so với
-                           SPAN baseline, chấp nhận đánh đổi accuracy nhẹ,
-                           miễn còn hơn no-SR.
+      - "span_tiny"      : bản NÉN (THIẾT KẾ LẠI), feat=48, n_blocks=3 ->
+                           0.230M tham số. Cùng số kênh (48) với SPAN baseline
+                           nhưng chỉ 3/6 khối SPAB, KHÔNG dùng reparameterization
+                           (Conv3XC) -> giảm 46.1% so với SPAN baseline đo ở
+                           chế độ DEPLOY (0.4263M, đã kiểm chứng bằng
+                           count_params_deploy_mode() trên checkpoint thật) —
+                           so sánh CÔNG BẰNG, không phải so với tổng params
+                           bao gồm nhánh train dư thừa (2.237M, cách so sánh
+                           CŨ đã phát hiện không công bằng, xem
+                           docs/03_span_improvement.md).
       - "span_official"  : bản CHÍNH THỨC, import trực tiếp từ repo đã clone
                            qua scripts/setup_span_official.sh — dùng khi cần
-                           load checkpoint pretrained thật để fine-tune.
+                           load checkpoint pretrained thật để fine-tune, HOẶC
+                           train from-scratch ở kích thước tùy ý qua
+                           feature_channels (ví dụ =26 để tái tạo đúng biến
+                           thể "SPAN-Tiny" mà chính tác giả công bố trong
+                           NTIRE 2025 — dùng so sánh công bằng với span_tiny
+                           của ta, cùng dữ liệu/máy/quy trình đo).
                            Xem models/span_official_wrapper.py.
       - "span_large", "edsr": như cũ.
+
+    feature_channels: chỉ áp dụng cho arch="span_official". None -> dùng mặc
+    định 48 (khớp checkpoint pretrained chuẩn). Đặt khác 48 (ví dụ 26) sẽ
+    KHÔNG load được checkpoint pretrained (shape mismatch) -> phải train
+    from-scratch, không truyền pretrained_path khi dùng feature_channels khác 48.
     """
     arch = arch.lower()
     if arch == "span":
         return SPAN(scale=scale)
     if arch == "span_tiny":
-        return SPAN(scale=scale, feat=96, n_blocks=3)
+        return SPAN(scale=scale, feat=48, n_blocks=3)
     if arch == "span_large":
         # biến thể lớn hơn — chỉ dùng để so sánh/khảo sát, KHÔNG phải mục tiêu triển khai
         return SPAN(scale=scale, feat=48, n_blocks=6)
     if arch == "span_official":
         from models.span_official_wrapper import build_official_span
-        return build_official_span(scale=scale, pretrained_path=pretrained_path)
+        kwargs = {"scale": scale, "pretrained_path": pretrained_path}
+        if feature_channels is not None:
+            kwargs["feature_channels"] = feature_channels
+        return build_official_span(**kwargs)
     if arch == "edsr":
         return EDSR(scale=scale)  # teacher nặng, Giai đoạn 1 + Giai đoạn 3
     raise ValueError(f"Kiến trúc SR không hỗ trợ: {arch}")
