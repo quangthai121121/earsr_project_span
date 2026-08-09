@@ -108,6 +108,37 @@ def freeze_reparam_modules(model: torch.nn.Module) -> int:
     return count
 
 
+def count_params_deploy_mode(model: torch.nn.Module) -> float:
+    """
+    Đo số tham số Ở CHẾ ĐỘ DEPLOY (đã hợp nhất reparameterization) — chỉ tính
+    nhánh eval_conv của mỗi Conv3XC, BỎ QUA nhánh train (self.conv, self.sk)
+    vì nhánh đó KHÔNG được dùng khi suy luận thực tế, chỉ tồn tại để hỗ trợ
+    học trong lúc train.
+
+    QUAN TRỌNG: đây RẤT CÓ THỂ là cách các bài báo SR gốc (bao gồm SPAN, và
+    nhiều kiến trúc dùng structural reparameterization khác) báo cáo số tham
+    số trong bảng kết quả — KHÁC với count_params() thông thường (tính cả 2
+    nhánh, tổng luôn LỚN HƠN). Dùng hàm này để so sánh công bằng với số liệu
+    tác giả công bố, tránh nhầm lẫn "model của mình nặng hơn" trong khi thực
+    ra chỉ là khác quy ước đếm.
+
+    Cách làm: đệ quy qua cây module. Khi gặp Conv3XC (nhận diện qua có cả
+    thuộc tính eval_conv lẫn update_params), CHỈ đếm tham số của eval_conv,
+    KHÔNG đệ quy tiếp vào các con khác của nó (self.conv, self.sk — nhánh
+    train). Với module thường, đếm tham số riêng rồi đệ quy tiếp vào con.
+    """
+    def recurse(module):
+        if hasattr(module, "eval_conv") and hasattr(module, "update_params"):
+            # Đây là Conv3XC: chỉ đếm eval_conv, KHÔNG đệ quy vào self.conv/self.sk
+            return sum(p.numel() for p in module.eval_conv.parameters())
+        total = sum(p.numel() for p in module.parameters(recurse=False))
+        for child in module.children():
+            total += recurse(child)
+        return total
+
+    return recurse(model) / 1e6
+
+
 @torch.no_grad()
 def measure_latency(model: torch.nn.Module, input_size, device: str,
                      n_warmup: int = 10, n_iters: int = 100) -> float:

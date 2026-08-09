@@ -27,7 +27,8 @@ from torch.utils.data import DataLoader
 
 from datasets.hrlr_pair_dataset import HRLRPairDataset
 from models.sr_models import build_sr_model
-from utils.metrics import compute_psnr, compute_ssim, count_params, count_flops, measure_latency
+from utils.metrics import (compute_psnr, compute_ssim, count_params,
+                            count_params_deploy_mode, count_flops, measure_latency)
 
 
 def main():
@@ -71,6 +72,7 @@ def main():
     avg_ssim = ssim_sum / n
 
     params_m = count_params(model)
+    params_deploy_m = count_params_deploy_mode(model)
     try:
         flops_g = count_flops(model, (1, 3, lr_size, lr_size), device=device)
     except ImportError as e:
@@ -84,6 +86,7 @@ def main():
         "psnr_db": round(avg_psnr, 3),
         "ssim": round(avg_ssim, 4),
         "params_M": round(params_m, 3),
+        "params_deploy_M": round(params_deploy_m, 4),
         "flops_G": round(flops_g, 4) if flops_g is not None else "NA",
         "latency_ms": round(latency_ms, 3),
         "n_test_images": n,
@@ -93,6 +96,10 @@ def main():
     print(f"CHẤT LƯỢNG SR | label={args.label} | arch={args.arch}")
     print(f"{'=' * 60}")
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(f"params_M = tổng CẢ 2 nhánh (train+eval) nếu model dùng reparameterization "
+          f"(ví dụ span_official) — dùng để so sánh NỘI BỘ giữa các model trong project này.")
+    print(f"params_deploy_M = CHỈ nhánh đã hợp nhất (deploy/inference thật) — dùng để so "
+          f"sánh với số liệu TÁC GIẢ CÔNG BỐ trong bài báo gốc (thường báo cáo theo kiểu này).")
     print(f"{'=' * 60}\n")
 
     out_path = Path(args.out_csv)
