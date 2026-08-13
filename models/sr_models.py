@@ -1,34 +1,42 @@
 """
-SPAN — Swift Parameter-free Attention Network (Wan et al., CVPR 2024 NTIRE Workshop).
-Vô địch NTIRE 2024 Efficient SR Challenge, sau đó trở thành baseline chính thức
-của NTIRE 2026 Efficient SR Challenge — hiện là chuẩn tham chiếu mới nhất trong
-dòng SR nhẹ/real-time. Đây là model NỀN mà luận án sẽ cải tiến (Giai đoạn 3).
+SPAN — Swift Parameter-free Attention Network (Wan et al., 2023,
+arXiv:2311.12770) — đoạt giải Nhất NTIRE 2024 Efficient SR Challenge.
 
 Ý tưởng cốt lõi: "parameter-free attention" — dùng hàm kích hoạt đối xứng
-(symmetric activation, ví dụ sigmoid dịch tâm) áp trực tiếp lên feature map để
-tạo attention map, KHÔNG cần thêm tham số học được (không có conv/linear layer
+(symmetric activation: sigmoid(x) - 0.5) áp trực tiếp lên feature map để tạo
+attention map, KHÔNG cần thêm tham số học được (không có conv/linear layer
 riêng cho attention như SE-block hay CBAM) — vừa tăng chất lượng vừa giữ nhẹ.
 
-Cài đặt này là bản rút gọn, trung thành với ý tưởng gốc (SPAB - Swift
-Parameter-free Attention Block), đủ để làm nền tảng thực nghiệm cho luận án.
+Công thức SPAB gốc (đã đối chiếu trực tiếp với bài báo + source code chính
+thức github.com/hongyuanyu/SPAN, xác nhận khớp):
+    H_i = conv_layers(O_{i-1})           # đặc trưng thô qua các lớp conv
+    U_i = O_{i-1} + H_i                  # residual CỘNG TRƯỚC
+    V_i = sigmoid(H_i) - 0.5             # attention map tính từ H_i thô
+    O_i = U_i * V_i                      # NHÂN SAU CÙNG (nhân U_i đã cộng residual)
+
+Cài đặt này là bản tự viết lại (reimplementation), dùng conv 3x3 thường
+(KHÔNG dùng kỹ thuật reparameterization Conv3XC của bản chính thức) — đúng
+với thiết kế span_tiny của luận án (xem build_sr_model() bên dưới).
 """
 import torch
 import torch.nn as nn
 
 
 class SymmetricAttention(nn.Module):
-    """Attention không tham số: dùng hàm kích hoạt đối xứng quanh gốc tọa độ
-    (ví dụ sigmoid dịch tâm) áp trực tiếp lên feature map làm attention map."""
+    """Attention không tham số: sigmoid(x) - 0.5, đối xứng qua gốc tọa độ,
+    không có tham số học. Chỉ trả về attention map — việc nhân với U_i (đã
+    cộng residual) được thực hiện ở SPAB.forward(), không phải ở đây, để
+    đúng đúng thứ tự phép tính của công thức gốc (residual cộng trước khi
+    nhân attention, không phải nhân H_i thô rồi mới cộng residual)."""
 
-    def forward(self, x):
-        # sigmoid dịch tâm: 2*sigmoid(x) - 1, đối xứng qua gốc, không có tham số học
-        attn = 2 * torch.sigmoid(x) - 1
-        return x * attn
+    def forward(self, h):
+        return torch.sigmoid(h) - 0.5
 
 
 class SPAB(nn.Module):
     """Swift Parameter-free Attention Block — khối cơ bản của SPAN.
-    3 lớp conv 3x3 + parameter-free attention + residual connection."""
+    3 lớp conv 3x3 + parameter-free attention + residual connection, ĐÚNG
+    thứ tự công thức gốc: cộng residual TRƯỚC, nhân attention SAU."""
 
     def __init__(self, channels: int):
         super().__init__()
@@ -39,20 +47,17 @@ class SPAB(nn.Module):
         self.attn = SymmetricAttention()
 
     def forward(self, x):
-        identity = x
-        out = self.act(self.conv1(x))
-        out = self.act(self.conv2(out))
-        out = self.conv3(out)
-        out = self.attn(out)
-        return identity + out
+        h = self.act(self.conv1(x))
+        h = self.act(self.conv2(h))
+        h = self.conv3(h)              # H_i — đặc trưng thô, CHƯA cộng residual
+        u = x + h                      # U_i = O_{i-1} + H_i — cộng residual TRƯỚC
+        v = self.attn(h)               # V_i = attn(H_i) — tính từ H_i thô, riêng biệt
+        return u * v                   # O_i = U_i * V_i — NHÂN SAU CÙNG
 
 
 class SPAN(nn.Module):
     """
     SPAN rút gọn: feature extraction -> N khối SPAB xếp chồng -> pixel shuffle upsample.
-    n_blocks/channels mặc định theo tinh thần "cực nhẹ" của bản NTIRE 2026 baseline
-    (~0.15M tham số cho ảnh 3 kênh, scale=4); có thể tăng n_blocks nếu cần thêm sức
-    biểu diễn, đổi lại nặng hơn.
     """
 
     def __init__(self, scale: int = 4, channels_in: int = 3, feat: int = 28, n_blocks: int = 4):
@@ -92,11 +97,9 @@ class ResBlock(nn.Module):
 
 class EDSR(nn.Module):
     """
-    EDSR rút gọn — dùng làm TEACHER nặng (Giai đoạn 1: xác lập trần lý thuyết,
-    và Giai đoạn 3: distillation). KHÔNG phải model dùng để triển khai.
-    n_resblocks/feat mặc định nhỏ hơn bản gốc trong paper (vốn 32 block/256 kênh)
-    để việc train giáo viên trên EarVN1.0 (dataset không quá lớn) khả thi về
-    thời gian; tăng lên nếu tài nguyên cho phép và muốn trần lý thuyết cao hơn.
+    EDSR rút gọn — dùng làm TEACHER nặng (tham chiếu chất lượng, không dùng
+    làm teacher cho span_tiny — xem sr_improve.teacher_arch trong config.yaml,
+    dùng span_official). KHÔNG phải model dùng để triển khai.
     """
 
     def __init__(self, scale: int = 4, channels_in: int = 3, feat: int = 128,
@@ -126,28 +129,22 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
       - "span_tiny"      : bản NÉN (THIẾT KẾ LẠI), feat=48, n_blocks=3 ->
                            0.230M tham số. Cùng số kênh (48) với SPAN baseline
                            nhưng chỉ 3/6 khối SPAB, KHÔNG dùng reparameterization
-                           (Conv3XC) -> giảm 46.1% so với SPAN baseline đo ở
-                           chế độ DEPLOY (0.4263M, đã kiểm chứng bằng
-                           count_params_deploy_mode() trên checkpoint thật) —
-                           so sánh CÔNG BẰNG, không phải so với tổng params
-                           bao gồm nhánh train dư thừa (2.237M, cách so sánh
-                           CŨ đã phát hiện không công bằng, xem
-                           docs/03_span_improvement.md).
+                           (Conv3XC) -> giảm 46.0% so với SPAN baseline đo ở
+                           chế độ DEPLOY (0.4263M, đã kiểm chứng khớp 99.93%
+                           với số liệu SPAN-S tác giả gốc công bố trong
+                           arXiv:2311.12770 Table 1) — so sánh CÔNG BẰNG,
+                           không phải so với tổng params bao gồm nhánh train
+                           dư thừa (2.237M).
       - "span_official"  : bản CHÍNH THỨC, import trực tiếp từ repo đã clone
                            qua scripts/setup_span_official.sh — dùng khi cần
                            load checkpoint pretrained thật để fine-tune, HOẶC
                            train from-scratch ở kích thước tùy ý qua
-                           feature_channels (ví dụ =26 để tái tạo đúng biến
-                           thể "SPAN-Tiny" mà chính tác giả công bố trong
-                           NTIRE 2025 — dùng so sánh công bằng với span_tiny
-                           của ta, cùng dữ liệu/máy/quy trình đo).
-                           Xem models/span_official_wrapper.py.
+                           feature_channels. Xem models/span_official_wrapper.py.
       - "span_large", "edsr": như cũ.
 
     feature_channels: chỉ áp dụng cho arch="span_official". None -> dùng mặc
-    định 48 (khớp checkpoint pretrained chuẩn). Đặt khác 48 (ví dụ 26) sẽ
-    KHÔNG load được checkpoint pretrained (shape mismatch) -> phải train
-    from-scratch, không truyền pretrained_path khi dùng feature_channels khác 48.
+    định 48 (khớp checkpoint pretrained chuẩn). Đặt khác 48 sẽ KHÔNG load
+    được checkpoint pretrained (shape mismatch) -> phải train from-scratch.
     """
     arch = arch.lower()
     if arch == "span":
@@ -164,5 +161,5 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
             kwargs["feature_channels"] = feature_channels
         return build_official_span(**kwargs)
     if arch == "edsr":
-        return EDSR(scale=scale)  # teacher nặng, Giai đoạn 1 + Giai đoạn 3
+        return EDSR(scale=scale)
     raise ValueError(f"Kiến trúc SR không hỗ trợ: {arch}")
