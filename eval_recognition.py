@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 
 from datasets.ear_dataset import EarDataset, build_label_map
 from models.recognition_model import EarRecognitionNet, SUPPORTED_BACKBONES
-from utils.metrics import compute_accuracy, count_params, measure_latency
+from utils.metrics import compute_accuracy, compute_topk_accuracy, count_params, measure_latency
 
 
 def main():
@@ -59,7 +59,7 @@ def main():
     model.load_state_dict(torch.load(args.ckpt, map_location=device))
     model.eval()
 
-    id_acc_sum, gender_acc_sum, n_batches = 0.0, 0.0, 0
+    id_acc_sum, id_rank5_sum, gender_acc_sum, n_batches = 0.0, 0.0, 0.0, 0
     with torch.no_grad():
         for imgs, id_labels, gender_labels in test_loader:
             imgs = imgs.to(device)
@@ -68,10 +68,12 @@ def main():
 
             id_logits, gender_logits, _ = model(imgs)
             id_acc_sum += compute_accuracy(id_logits, id_labels)
+            id_rank5_sum += compute_topk_accuracy(id_logits, id_labels, k=5)
             gender_acc_sum += compute_accuracy(gender_logits, gender_labels)
             n_batches += 1
 
     id_acc = id_acc_sum / n_batches
+    id_rank5_acc = id_rank5_sum / n_batches
     gender_acc = gender_acc_sum / n_batches
     params_m = count_params(model)
     latency_ms = measure_latency(model, (1, 3, image_size, image_size), device)
@@ -82,6 +84,7 @@ def main():
         "test_domain": args.test_domain,
         "config_name": f"{args.backbone}__{args.train_domain}_{args.test_domain}",
         "identity_accuracy": round(id_acc, 4),
+        "identity_accuracy_rank5": round(id_rank5_acc, 4),
         "gender_accuracy": round(gender_acc, 4),
         "params_M": round(params_m, 3),
         "latency_ms": round(latency_ms, 3),
@@ -92,6 +95,7 @@ def main():
           f"train_domain={args.train_domain} | test_domain={args.test_domain}")
     print(f"{'=' * 60}")
     print(f"  IDENTITY ACCURACY : {id_acc:.4f}")
+    print(f"  IDENTITY RANK-5   : {id_rank5_acc:.4f}")
     print(f"  GENDER ACCURACY   : {gender_acc:.4f}")
     print(f"  Params (M)        : {params_m:.3f}")
     print(f"  Latency (ms)      : {latency_ms:.3f}")

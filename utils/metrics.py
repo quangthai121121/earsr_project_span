@@ -18,6 +18,16 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
 
 
 @torch.no_grad()
+def compute_topk_accuracy(logits: torch.Tensor, labels: torch.Tensor, k: int = 5) -> float:
+    """Top-k accuracy — chuẩn Rank-N/CMC trong biometrics: tỷ lệ mẫu có nhãn
+    đúng nằm trong k giá trị logit cao nhất (không nhất thiết đứng #1)."""
+    k = min(k, logits.size(1))  # phòng trường hợp num_identities < k (an toàn, không xảy ra ở đây)
+    topk_preds = logits.topk(k, dim=1).indices
+    correct = (topk_preds == labels.unsqueeze(1)).any(dim=1).sum().item()
+    return correct / labels.size(0)
+
+
+@torch.no_grad()
 def compute_psnr(img1: torch.Tensor, img2: torch.Tensor, max_val: float = 1.0) -> float:
     """img1, img2: tensor cùng shape, giá trị trong [0, max_val]."""
     mse = torch.mean((img1 - img2) ** 2).item()

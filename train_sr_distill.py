@@ -18,6 +18,11 @@ Chạy với lambda tùy chỉnh (dùng cho ablation, xem pipeline/run_ablation.
     python train_sr_distill.py --config configs/config.yaml \
         --lambda_pixel 1.0 --lambda_distill 0.5 --lambda_identity 0.0 \
         --run_suffix _ablation_pixel_distill
+
+Chạy với kiến trúc student khác (dùng cho ablation kiến trúc, ví dụ
+span_large — xem pipeline/run_span_large_ablation.sh):
+    python train_sr_distill.py --config configs/config.yaml \
+        --student_arch span_large
 """
 import argparse
 from pathlib import Path
@@ -165,6 +170,9 @@ def main():
                      help="ghi đè sr_improve.lambda_distill trong config (dùng cho ablation)")
     ap.add_argument("--lambda_identity", type=float, default=None,
                      help="ghi đè sr_improve.lambda_identity trong config (dùng cho ablation)")
+    ap.add_argument("--student_arch", default=None,
+                     help="ghi đè sr_improve.student_arch trong config (dùng cho ablation kiến "
+                          "trúc, ví dụ --student_arch span_large)")
     ap.add_argument("--run_suffix", default="",
                      help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè checkpoint "
                           "khi chạy nhiều cấu hình ablation khác nhau")
@@ -187,6 +195,8 @@ def main():
         ci["lambda_distill"] = args.lambda_distill
     if args.lambda_identity is not None:
         ci["lambda_identity"] = args.lambda_identity
+    if args.student_arch is not None:
+        ci["student_arch"] = args.student_arch
 
     scale = cfg["image"]["scale"]
     splits_root = cfg["paths"]["splits_root"]
