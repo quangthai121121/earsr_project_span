@@ -11,6 +11,27 @@ Tối ưu GPU:
 Chạy ví dụ:
     python train_recognition.py --config configs/config.yaml --domain hr --backbone mobilenet_v2
     python train_recognition.py --config configs/config.yaml --domain sr_improved --backbone resnet18
+
+--init_ckpt (đã có từ trước): fine-tune/resume TRONG CÙNG 1 dataset (num_identities
+GIỐNG NHAU giữa checkpoint và model hiện tại) — ví dụ domain sr_baseline fine-tune
+từ chính checkpoint domain lr của CÙNG dataset đó (xem pipeline/run_multi_seed.sh).
+Nạp state_dict TOÀN BỘ, strict=True — sẽ LỖI nếu num_identities khác nhau.
+
+--init_ckpt_transfer ([MỚI]): TRANSFER LEARNING XUYÊN DATASET — ví dụ khởi tạo
+từ checkpoint đã train trên EarVN1.0 (164 identity) để fine-tune trên AWE (100
+identity). Vì đầu phân loại identity_head có kích thước PHỤ THUỘC num_identities
+(khác nhau giữa 2 dataset), KHÔNG thể nạp strict=True toàn bộ như --init_ckpt.
+Cờ này chỉ nạp các tensor CÙNG SHAPE (backbone features + embedding + gender_head
+nếu num_genders giống nhau), tự động BỎ QUA và giữ nguyên khởi tạo ngẫu nhiên cho
+identity_head (vì số lớp đầu ra khác nhau, không có cách nào "chuyển" trọng số
+của 164 người sang đúng 100 người khác hoàn toàn) — xem hàm
+load_transfer_checkpoint() bên dưới, có log rõ tensor nào được nạp/bỏ qua.
+
+Chạy ví dụ fine-tune xuyên dataset (xem scripts/run_transfer_learning.sh):
+    python train_recognition.py --config configs/config_awe_finetune.yaml \
+        --domain sr_improved --backbone mobilenet_v2 \
+        --init_ckpt_transfer runs/recognition_sr_improved_mobilenet_v2_seed42/best.pt \
+        --seed 42 --run_suffix _finetuned_from_earvn1_seed42
 """
 import argparse
 from pathlib import Path
@@ -27,6 +48,37 @@ from utils.early_stopping import EarlyStopping
 from utils.logger import setup_logger
 from utils.metrics import compute_accuracy
 from utils.seed import set_seed
+
+
+def load_transfer_checkpoint(model, ckpt_path, device, logger=None):
+    """[MỚI] Nạp checkpoint TRANSFER LEARNING xuyên dataset — chỉ nạp các tensor
+    CÙNG SHAPE với model hiện tại (backbone features, embedding, gender_head nếu
+    num_genders khớp), BỎ QUA (giữ khởi tạo ngẫu nhiên/pretrained mặc định) các
+    tensor lệch shape — thường chỉ là identity_head.weight/identity_head.bias vì
+    num_identities khác nhau giữa 2 dataset. In rõ danh sách đã nạp/bỏ qua để
+    kiểm chứng đúng những gì mong đợi (chỉ identity_head bị bỏ qua, không hơn)."""
+    ckpt_state = torch.load(ckpt_path, map_location=device)
+    model_state = model.state_dict()
+
+    loaded_keys, skipped_keys = [], []
+    for k, v in ckpt_state.items():
+        if k in model_state and model_state[k].shape == v.shape:
+            model_state[k] = v
+            loaded_keys.append(k)
+        else:
+            skipped_keys.append(k)
+
+    model.load_state_dict(model_state)
+
+    msg = (f"[TRANSFER LEARNING] Khởi tạo từ checkpoint {ckpt_path}: "
+           f"nạp {len(loaded_keys)}/{len(ckpt_state)} tensor khớp shape; "
+           f"BỎ QUA {len(skipped_keys)} tensor lệch shape (giữ khởi tạo mới): {skipped_keys}")
+    if logger:
+        logger.info(msg)
+    else:
+        print(msg)
+
+    return loaded_keys, skipped_keys
 
 
 def _forward_step(model, imgs, id_labels, gender_labels, device, cfg,
@@ -126,12 +178,23 @@ def main():
                      help="hr | lr | sr_baseline | sr_improved | sr_ablation_<tên> (tùy ablation)")
     ap.add_argument("--backbone", required=True, choices=SUPPORTED_BACKBONES)
     ap.add_argument("--init_ckpt", default=None,
-                     help="checkpoint khởi tạo để fine-tune thay vì train from-scratch")
+                     help="checkpoint khởi tạo để fine-tune/resume TRONG CÙNG dataset "
+                          "(num_identities phải giống nhau — nạp strict=True). KHÔNG dùng "
+                          "cờ này để chuyển dataset khác, dùng --init_ckpt_transfer.")
+    ap.add_argument("--init_ckpt_transfer", default=None,
+                     help="[MỚI] checkpoint khởi tạo để TRANSFER LEARNING XUYÊN DATASET "
+                          "(num_identities có thể khác nhau, ví dụ EarVN1.0 (164) -> AWE (100)) "
+                          "— chỉ nạp tensor cùng shape, tự bỏ qua/khởi tạo lại identity_head. "
+                          "Xem load_transfer_checkpoint().")
     ap.add_argument("--seed", type=int, default=None,
                      help="ghi đè seed trong config — dùng để chạy multi-seed, đo độ ổn định")
     ap.add_argument("--run_suffix", default="",
                      help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè khi chạy nhiều seed")
     args = ap.parse_args()
+
+    if args.init_ckpt and args.init_ckpt_transfer:
+        raise ValueError("Chỉ dùng MỘT trong hai: --init_ckpt (cùng dataset) hoặc "
+                          "--init_ckpt_transfer (xuyên dataset), không dùng cả hai cùng lúc.")
 
     import yaml
     with open(args.config, "r", encoding="utf-8") as f:
@@ -172,17 +235,24 @@ def main():
     logger.info(f"Domain: {args.domain} | Backbone: {args.backbone} | "
                 f"Train: {len(train_set)} ảnh | Val: {len(val_set)} ảnh")
 
+    # pretrained=True (ImageNet) CHỈ khi không khởi tạo từ checkpoint nào khác —
+    # nếu dùng init_ckpt hoặc init_ckpt_transfer thì trọng số sẽ bị ghi đè ngay
+    # sau đó, tải ImageNet weight lúc này chỉ tốn thời gian vô ích.
+    use_pretrained_imagenet = (args.init_ckpt is None and args.init_ckpt_transfer is None)
     model = EarRecognitionNet(
         num_identities=cfg["num_identities"],
         num_genders=cfg["num_genders"],
         embedding_dim=cfg["recognition"]["embedding_dim"],
         backbone=args.backbone,
-        pretrained=(args.init_ckpt is None),
+        pretrained=use_pretrained_imagenet,
     ).to(device_mgr.preferred)
 
     if args.init_ckpt:
         model.load_state_dict(torch.load(args.init_ckpt, map_location=device_mgr.preferred))
-        logger.info(f"Khởi tạo từ checkpoint có sẵn để fine-tune: {args.init_ckpt}")
+        logger.info(f"Khởi tạo từ checkpoint có sẵn để fine-tune (cùng dataset): {args.init_ckpt}")
+
+    if args.init_ckpt_transfer:
+        load_transfer_checkpoint(model, args.init_ckpt_transfer, device_mgr.preferred, logger=logger)
 
     optimizer = torch.optim.Adam(
         model.parameters(),

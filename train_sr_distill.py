@@ -23,6 +23,16 @@ Chạy với kiến trúc student khác (dùng cho ablation kiến trúc, ví d�
 span_large — xem pipeline/run_span_large_ablation.sh):
     python train_sr_distill.py --config configs/config.yaml \
         --student_arch span_large
+
+Chạy FINE-TUNE / TRANSFER LEARNING xuyên dataset (ví dụ: khởi tạo từ
+checkpoint span_tiny đã train trên EarVN1.0, fine-tune tiếp trên AWE — xem
+scripts/run_transfer_learning.sh):
+    python train_sr_distill.py --config configs/config_awe_finetune.yaml \
+        --init_ckpt runs/sr_improved_span_tiny/best.pt \
+        --run_suffix _finetuned_from_earvn1
+    (an toàn dùng strict=True vì model SR không có tầng phụ thuộc số lượng
+    identity — kiến trúc giống hệt nhau giữa mọi dataset, không có rủi ro
+    lệch shape như bên recognition.)
 """
 import argparse
 from pathlib import Path
@@ -173,9 +183,15 @@ def main():
     ap.add_argument("--student_arch", default=None,
                      help="ghi đè sr_improve.student_arch trong config (dùng cho ablation kiến "
                           "trúc, ví dụ --student_arch span_large)")
+    ap.add_argument("--init_ckpt", default=None,
+                     help="[MỚI] checkpoint SPAN student có sẵn để khởi tạo trọng số trước khi "
+                          "train — dùng cho FINE-TUNE/TRANSFER LEARNING xuyên dataset (ví dụ "
+                          "khởi tạo từ span_tiny đã train trên EarVN1.0 rồi fine-tune trên AWE). "
+                          "Nạp strict=True (an toàn: model SR không có tầng phụ thuộc số lượng "
+                          "identity/dataset, kiến trúc giống hệt nhau mọi dataset).")
     ap.add_argument("--run_suffix", default="",
                      help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè checkpoint "
-                          "khi chạy nhiều cấu hình ablation khác nhau")
+                          "khi chạy nhiều cấu hình ablation/fine-tune khác nhau")
     ap.add_argument("--seed", type=int, default=None,
                      help="ghi đè seed trong config — dùng để chạy multi-seed, đo độ ổn định")
     args = ap.parse_args()
@@ -226,6 +242,15 @@ def main():
 
     # --- Student: kiến trúc NÉN (student_arch, ví dụ span_tiny) — model sẽ được deploy ---
     student = build_sr_model(student_arch, scale, pretrained_path=student_pretrained).to(device)
+
+    # [MỚI] Khởi tạo student từ checkpoint có sẵn — dùng cho fine-tune/transfer learning.
+    # An toàn strict=True vì SPAN/span_tiny/span_large không có tầng nào phụ thuộc
+    # num_identities hay bất kỳ thông tin riêng của dataset — kiến trúc giống hệt
+    # nhau dù train trên dataset nào, nên không có rủi ro lệch shape.
+    if args.init_ckpt:
+        student.load_state_dict(torch.load(args.init_ckpt, map_location=device))
+        logger.info(f"[TRANSFER LEARNING] Khởi tạo student từ checkpoint có sẵn: {args.init_ckpt} "
+                    f"(nạp toàn bộ trọng số, strict=True — an toàn vì không có tầng phụ thuộc dataset)")
 
     # --- Teacher: SPAN baseline (đã chứng minh chất lượng tốt), ĐÓNG BĂNG ---
     teacher = build_sr_model(ci["teacher_arch"], scale).to(device)
