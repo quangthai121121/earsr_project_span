@@ -6,6 +6,26 @@ model đã train ở cấu hình hr_hr) để biến nó thành SR "task-driven"
 
 Chạy:
     python train_sr.py --config configs/config.yaml --sr_arch fsrcnn
+
+Fine-tune span_official (SR baseline) từ checkpoint chính thức tác giả (dùng
+lúc thiết lập ban đầu, xem pipeline/04_train_teacher_and_span_baseline.sh):
+    python train_sr.py --config configs/config.yaml --sr_arch span_official \
+        --pretrained_path checkpoints/span_pretrained_x4.pth
+
+[MỚI] Fine-tune span_official/edsr TRANSFER LEARNING xuyên dataset (ví dụ
+khởi tạo từ checkpoint span_baseline ĐÃ fine-tune trên EarVN1.0, fine-tune
+tiếp trên AWE — để so sánh CÔNG BẰNG với span_tiny cũng được transfer learning,
+xem scripts/run_transfer_learning.sh). BẮT BUỘC dùng --run_suffix trong
+trường hợp này để KHÔNG ghi đè checkpoint "runs_<đích>/sr_span_official/best.pt"
+gốc (checkpoint đó vẫn đang được dùng làm teacher_ckpt cho span_tiny, và làm
+nguồn sinh ảnh domain sr_baseline hiện có — ghi đè sẽ làm hỏng khả năng tái
+lập các kết quả trước đó):
+    python train_sr.py --config configs/config_awe_finetune.yaml --sr_arch span_official \
+        --pretrained_path runs/sr_span_official/best.pt \
+        --run_suffix _finetuned_from_earvn1
+    (--pretrained_path ở đây trỏ tới checkpoint ĐÃ train của dataset NGUỒN,
+    không phải checkpoint pretrained gốc của tác giả — build_official_span()
+    tự nhận diện đúng định dạng, xem models/span_official_wrapper.py)
 """
 import argparse
 from pathlib import Path
@@ -107,8 +127,15 @@ def main():
     ap.add_argument("--config", required=True)
     ap.add_argument("--sr_arch", default=None, help="ghi đè arch trong config nếu cần")
     ap.add_argument("--pretrained_path", default=None,
-                     help="checkpoint pretrained chính thức để fine-tune (dùng với "
-                          "--sr_arch span_official, xem scripts/setup_span_official.sh)")
+                     help="checkpoint pretrained chính thức HOẶC checkpoint đã train của dataset "
+                          "khác (transfer learning) để fine-tune (dùng với --sr_arch span_official, "
+                          "xem scripts/setup_span_official.sh và scripts/run_transfer_learning.sh)")
+    ap.add_argument("--run_suffix", default="",
+                     help="[MỚI] hậu tố thêm vào tên thư mục runs/sr_<arch>, tránh ghi đè checkpoint "
+                          "gốc khi fine-tune/transfer learning (ví dụ _finetuned_from_earvn1). "
+                          "QUAN TRỌNG: không truyền cờ này khi chạy pipeline chính bình thường "
+                          "(pipeline/04_train_teacher_and_span_baseline.sh) — chỉ dùng khi cố ý "
+                          "muốn lưu checkpoint riêng, không đè bản gốc.")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -130,7 +157,7 @@ def main():
     val_loader = DataLoader(val_set, batch_size=cfg["sr"]["batch_size"],
                              shuffle=False, **loader_kwargs)
 
-    run_dir = Path(cfg["paths"]["runs_root"]) / f"sr_{arch}"
+    run_dir = Path(cfg["paths"]["runs_root"]) / f"sr_{arch}{args.run_suffix}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     logger = setup_logger(run_dir, name="train")
@@ -138,6 +165,8 @@ def main():
     logger.info(f"=== Bắt đầu train SR '{arch}' (scale={scale}) ===")
     logger.info(f"Device ưu tiên: {device_mgr.preferred}")
     logger.info(f"Train: {len(train_set)} cặp ảnh | Val: {len(val_set)} cặp ảnh")
+    if args.pretrained_path:
+        logger.info(f"Khởi tạo từ checkpoint có sẵn: {args.pretrained_path}")
 
     model = build_sr_model(arch, scale, pretrained_path=args.pretrained_path).to(device_mgr.preferred)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["sr"]["lr"])
