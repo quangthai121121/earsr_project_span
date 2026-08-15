@@ -32,6 +32,16 @@ SUPPORTED_BACKBONES = [
     "ghostnet_100",
 ]
 
+# [MỚI — đợt 7, sửa lỗi phát hiện qua code review] Cả 5 backbone trên đều
+# dùng pretrained=True (trọng số ImageNet) nhưng toàn bộ pipeline hiện tại
+# (datasets/ear_dataset.py) chỉ ToTensor() ảnh về [0,1], KHÔNG chuẩn hoá theo
+# mean/std ImageNet — ảnh đưa vào model bị lệch phân phối so với dữ liệu
+# ImageNet gốc mà các trọng số pretrained này được học trên đó, làm giảm
+# hiệu quả transfer learning từ pretrained (không gây lỗi runtime nào, chỉ
+# âm thầm làm kém hơn — dạng lỗi khó phát hiện nếu không rà soát kỹ).
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
+
 
 def _build_backbone(name: str, pretrained: bool):
     """Trả về (feature_extractor, feat_dim). feature_extractor nhận ảnh, trả về
@@ -104,7 +114,28 @@ class EarRecognitionNet(nn.Module):
         self.identity_head = nn.Linear(embedding_dim, num_identities)
         self.gender_head = nn.Linear(embedding_dim, num_genders)
 
+        # [MỚI — đợt 7] Chuẩn hoá ImageNet đặt NGAY TRONG model (buffer, không
+        # phải tham số học) thay vì trong Dataset transform — CỐ Ý: đảm bảo
+        # MỌI đường vào model (forward() qua EarDataset [0,1], LẪN embed() gọi
+        # trực tiếp từ train_sr_distill.py với ảnh SR/HR thô [0,1] từ
+        # HRLRPairDataset) đều được chuẩn hoá NHẤT QUÁN qua đúng 1 chỗ duy
+        # nhất — tránh đúng kiểu lỗi "sửa 1 nơi, quên nơi khác" đã từng gặp
+        # trong project này (ví dụ scripts/make_finetune_config.py quên mục
+        # "sr", xem CHANGELOG). Nếu chuẩn hoá trong Dataset thay vì ở đây,
+        # ảnh HR/SR đưa vào recognition_model.embed() lúc train span_tiny sẽ
+        # KHÔNG được chuẩn hoá (HRLRPairDataset chỉ ToTensor()), gây lệch
+        # phân phối input so với lúc train recognition — sai mà không có lỗi
+        # runtime nào báo hiệu.
+        self.register_buffer("_imagenet_mean", torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1))
+        self.register_buffer("_imagenet_std", torch.tensor(IMAGENET_STD).view(1, 3, 1, 1))
+
+    def _normalize(self, x):
+        mean = self._imagenet_mean.to(dtype=x.dtype)
+        std = self._imagenet_std.to(dtype=x.dtype)
+        return (x - mean) / std
+
     def forward(self, x):
+        x = self._normalize(x)
         feat = self.features(x)
         feat = self.pool(feat)
         emb = self.embedding(feat)
@@ -114,6 +145,7 @@ class EarRecognitionNet(nn.Module):
 
     def embed(self, x):
         """Chỉ trích embedding — dùng làm 'giám khảo' cho identity-aware loss khi train SR."""
+        x = self._normalize(x)
         feat = self.features(x)
         feat = self.pool(feat)
         return self.embedding(feat)

@@ -9,6 +9,7 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
+from torchvision.transforms import InterpolationMode
 
 
 def build_label_map(splits_json: str):
@@ -34,15 +35,29 @@ class EarDataset(Dataset):
         self.domain_root = Path(domain_root) / split_name
         self.label_map = label_map
 
+        # [SỬA — đợt 7] Chỉ định TƯỜNG MINH interpolation=BICUBIC, khớp với
+        # data/build_lr.py (hr_img.resize(..., Image.BICUBIC)) và
+        # utils/letterbox.py (letterbox_resize dùng Image.BICUBIC) — sửa lỗi
+        # phát hiện qua code review: trước đây Resize() không truyền
+        # interpolation, mặc định của torchvision.transforms.Resize là
+        # BILINEAR (không phải BICUBIC), khiến domain "lr" (ảnh 20x20 phóng
+        # ngược lên hr_size=80 để đưa vào recognition network) dùng kernel
+        # nội suy KHÁC với mọi nơi khác tạo ảnh trong toàn bộ pipeline —
+        # không nhất quán, dù không gây lỗi runtime nào.
+        # LƯU Ý: với domain hr/sr_baseline/sr_improved, ảnh lưu trên đĩa đã
+        # SẴN đúng kích thước image_size x image_size (letterbox/SR model đã
+        # xuất đúng kích thước), nên Resize() ở đây thực chất là NO-OP (không
+        # đổi gì) bất kể kernel nào — bản sửa này chỉ THỰC SỰ ảnh hưởng domain
+        # "lr" (20x20 -> 80x80).
         if train:
             self.transform = transforms.Compose([
-                transforms.Resize((image_size, image_size)),
+                transforms.Resize((image_size, image_size), interpolation=InterpolationMode.BICUBIC),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.ToTensor(),
             ])
         else:
             self.transform = transforms.Compose([
-                transforms.Resize((image_size, image_size)),
+                transforms.Resize((image_size, image_size), interpolation=InterpolationMode.BICUBIC),
                 transforms.ToTensor(),
             ])
 

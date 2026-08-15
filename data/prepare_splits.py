@@ -29,7 +29,18 @@ def extract_person_id(folder_name: str) -> str:
 
 
 def gender_from_person_id(person_id: str) -> int:
-    """001-098 = nam (0), 099-164 = nữ (1). Kiểm tra lại quy ước này với bản dataset bạn tải."""
+    """001-098 = nam (0), 099-164 = nữ (1).
+
+    [ĐÃ XÁC MINH — đợt 7, trước đây ghi "kiểm tra lại quy ước này", giờ đã
+    kiểm tra xong]: khớp ĐÚNG với mô tả chính thức của bài báo gốc công bố
+    dataset EarVN1.0 — Hoang, V.N. "EarVN1.0: A new large-scale ear images
+    dataset in the wild", Data in Brief, 2019 (PMC6831707/ScienceDirect
+    S2352340919309850): "98 males and 66 females... the first 98 folders
+    (from 01 to 98) belong to male class and the rest (from 99 to 164) are
+    female." Số lượng khớp chính xác (98 nam + 66 nữ = 164), không phải suy
+    đoán. Chỉ ảnh hưởng cột gender_accuracy (KHÔNG ảnh hưởng identity_accuracy
+    — độc lập hoàn toàn với hàm này, xem build_label_map() trong
+    datasets/ear_dataset.py)."""
     idx = int(person_id)
     return 0 if idx <= 98 else 1
 

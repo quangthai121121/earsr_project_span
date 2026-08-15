@@ -55,11 +55,16 @@ leakage khi đánh giá recognition). Tỷ lệ mặc định 70/15/15 theo số
 
 ### 5. Nhãn giới tính
 
-Suy ra tự động từ số thứ tự thư mục người (001–098 = nam, 099–164 = nữ) theo
-mô tả gốc của EarVN1.0. **Phát hiện khi kiểm tra dữ liệu thật**: tên thư mục
-không phải chỉ số (`001`) như giả định ban đầu, mà có định dạng `NNN.Tên`
-(ví dụ `001.ALI_HD`) — `data/prepare_splits.py::extract_person_id()` đã xử lý
-việc tách số thứ tự từ định dạng này.
+Suy ra tự động từ số thứ tự thư mục người (001–098 = nam, 099–164 = nữ).
+**[ĐÃ XÁC MINH — đợt 7]**: khớp đúng mô tả chính thức trong bài báo gốc công
+bố dataset (Hoang, V.N., *"EarVN1.0: A new large-scale ear images dataset in
+the wild"*, Data in Brief, 2019 — "98 males and 66 females... the first 98
+folders (from 01 to 98) belong to male class and the rest (from 99 to 164)
+are female") — không phải suy đoán chưa kiểm chứng như ghi chú ở bản trước.
+**Phát hiện khi kiểm tra dữ liệu thật**: tên thư mục không phải chỉ số
+(`001`) như giả định ban đầu, mà có định dạng `NNN.Tên` (ví dụ `001.ALI_HD`)
+— `data/prepare_splits.py::extract_person_id()` đã xử lý việc tách số thứ tự
+từ định dạng này.
 
 ## Tham số đã dùng (số liệu thật, khảo sát trên toàn bộ 28.412 ảnh EarVN1.0)
 

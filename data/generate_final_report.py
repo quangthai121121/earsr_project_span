@@ -84,6 +84,13 @@ def main():
                 "backbone": r.get("backbone", ""),
                 "domain": train_d,
                 "identity_accuracy": r.get("identity_accuracy", ""),
+                # [MỚI — bổ sung journal Q1] rank-5, AUC/EER (verification-setting)
+                # đã có sẵn trong summary.csv (xem data/aggregate_results.py) nhưng
+                # trước đây KHÔNG được đưa vào REPORT.md — chỉ có identity_accuracy
+                # top-1 + gender_accuracy, khá mỏng cho phần Results của bài báo.
+                "identity_accuracy_rank5": r.get("identity_accuracy_rank5", ""),
+                "identity_auc": r.get("identity_auc", ""),
+                "identity_eer": r.get("identity_eer", ""),
                 "gender_accuracy": r.get("gender_accuracy", ""),
             })
     # sắp theo backbone rồi theo thứ tự domain hr->lr->sr_baseline->sr_improved
@@ -102,9 +109,9 @@ def main():
                          f"Lambda: pixel={lambda_pixel}, distill={lambda_distill}, "
                          f"identity={lambda_identity}\n")
 
-    report_lines.append("## 1. Chất lượng ảnh SR (PSNR/SSIM/Params/FLOPs/Latency)\n")
+    report_lines.append("## 1. Chất lượng ảnh SR (PSNR/SSIM/LPIPS/Params/FLOPs/Latency)\n")
     report_lines.append(md_table(sr_quality_dedup,
-                                  columns=["label", "arch", "psnr_db", "ssim", "params_M",
+                                  columns=["label", "arch", "psnr_db", "ssim", "lpips", "params_M",
                                            "params_deploy_M", "flops_G", "latency_ms"]))
 
     report_lines.append("\n## 2. Độ chính xác nhận diện — theo backbone x domain\n")

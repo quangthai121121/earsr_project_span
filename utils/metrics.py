@@ -1,11 +1,14 @@
 """
 Chỉ số cho cả 2 trục đánh giá: accuracy (identity/gender) và hiệu năng tính toán
 (params, FLOPs, latency) — dùng để vẽ Pareto frontier ở Giai đoạn 4. Ngoài ra
-có PSNR/SSIM để đánh giá chất lượng ảnh SR (độc lập với accuracy downstream).
+có PSNR/SSIM/LPIPS để đánh giá chất lượng ảnh SR (độc lập với accuracy
+downstream), và ROC/AUC/EER + confusion matrix cho phía nhận diện (bổ sung
+đợt review journal Q1 — xem CHANGELOG_v7.md mục D).
 """
 import math
 import time
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -69,6 +72,250 @@ def compute_ssim(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11,
                ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
 
     return ssim_map.mean().item()
+
+
+@torch.no_grad()
+def compute_psnr_roi(img1: torch.Tensor, img2: torch.Tensor, bbox, max_val: float = 1.0) -> float:
+    """[MỚI — đợt 7] PSNR chỉ tính trên vùng ROI thật (không phải viền đệm
+    đen do letterbox), sửa lỗi phát hiện qua code review: đo PSNR/SSIM trên
+    CẢ canvas (bao gồm viền đen) làm số liệu bị THỔI PHỒNG (viền đen giống hệt
+    nhau giữa SR/HR nên luôn "đoán đúng" ở đó, không phản ánh chất lượng phục
+    hồi chi tiết tai thật) — không so sánh được với benchmark SR chuẩn trong
+    literature. bbox = (x0, y0, w, h) từ
+    utils/letterbox.py::compute_letterbox_geometry(), suy từ (width, height)
+    ảnh gốc lưu sẵn trong splits.json — KHÔNG cần sinh lại ảnh nào."""
+    x0, y0, w, h = bbox
+    return compute_psnr(img1[:, :, y0:y0 + h, x0:x0 + w], img2[:, :, y0:y0 + h, x0:x0 + w], max_val)
+
+
+@torch.no_grad()
+def compute_ssim_roi(img1: torch.Tensor, img2: torch.Tensor, bbox, window_size: int = 11,
+                      sigma: float = 1.5, max_val: float = 1.0) -> float:
+    """[MỚI — đợt 7] SSIM chỉ tính trên vùng ROI thật, xem compute_psnr_roi().
+    Tự thu nhỏ window_size nếu ROI nhỏ hơn 11px (có thể xảy ra với ảnh gốc tỷ
+    lệ khung hình rất lệch — ví dụ ảnh 41x300px sau letterbox về 80x80 chỉ
+    còn ROI cao ~11px) — tránh lỗi kích thước conv window > kích thước ảnh."""
+    x0, y0, w, h = bbox
+    c1 = img1[:, :, y0:y0 + h, x0:x0 + w]
+    c2 = img2[:, :, y0:y0 + h, x0:x0 + w]
+    ws = min(window_size, c1.shape[-1], c1.shape[-2])
+    if ws % 2 == 0:
+        ws -= 1
+    ws = max(ws, 1)
+    return compute_ssim(c1, c2, window_size=ws, sigma=sigma, max_val=max_val)
+
+
+_LPIPS_MODEL_CACHE = {}
+
+
+def load_lpips_model(device: str = "cpu", net: str = "alex"):
+    """
+    [MỚI — bổ sung journal Q1] Tải model LPIPS (Learned Perceptual Image Patch
+    Similarity — Zhang et al., CVPR 2018, "The Unreasonable Effectiveness of
+    Deep Features as a Perceptual Metric") — thước đo tương đồng cảm nhận,
+    tương quan với đánh giá của con người TỐT HƠN PSNR/SSIM (PSNR/SSIM chỉ so
+    khớp pixel/cấu trúc cục bộ, không phản ánh chất lượng cảm nhận thật).
+    Phần lớn reviewer SR hiện nay mặc định hỏi LPIPS bên cạnh PSNR/SSIM.
+
+    Dùng backbone AlexNet (net="alex") — chuẩn phổ biến nhất trong literature
+    SR để so sánh (nhẹ hơn VGG, là lựa chọn mặc định trong hầu hết bài SR
+    dùng LPIPS, bao gồm chính bài gốc).
+
+    QUAN TRỌNG: gọi hàm này 1 LẦN DUY NHẤT trước vòng lặp đánh giá (giống
+    cách build_sr_model() chỉ gọi 1 lần) — KHÔNG gọi lại trong loop, vì tải
+    trọng số AlexNet mỗi lần rất tốn thời gian. Cache theo (device, net) để
+    an toàn nếu lỡ gọi nhiều lần.
+
+    Cần cài: pip install lpips --break-system-packages (xem requirements.txt).
+
+    GIỚI HẠN MINH BẠCH: sandbox phát triển code này KHÔNG có quyền cài package
+    mới (chặn qua proxy) nên KHÔNG thể chạy thực nghiệm để tự kiểm tra hàm
+    này — cài đặt dựa trên API ổn định, được ghi trong tài liệu chính thức
+    của package `lpips` (ổn định nhiều năm nay, không đổi signature). Người
+    dùng cần tự chạy thử (ví dụ qua test_new_sr_archs.py hoặc 1 lần chạy
+    eval_sr_quality.py nhỏ) trước khi tin tưởng số liệu LPIPS đầu ra.
+    """
+    key = (device, net)
+    if key in _LPIPS_MODEL_CACHE:
+        return _LPIPS_MODEL_CACHE[key]
+    try:
+        import lpips
+    except ImportError:
+        raise ImportError(
+            "Cần cài package `lpips` để tính LPIPS: pip install lpips --break-system-packages"
+        )
+    model = lpips.LPIPS(net=net).to(device)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad_(False)
+    _LPIPS_MODEL_CACHE[key] = model
+    return model
+
+
+@torch.no_grad()
+def compute_lpips(lpips_model, img1: torch.Tensor, img2: torch.Tensor,
+                   min_size: int = 64) -> float:
+    """
+    [MỚI — bổ sung journal Q1] Tính LPIPS giữa 2 ảnh (B,3,H,W), giá trị trong
+    [0,1] (dùng normalize=True của package `lpips` — nhận thẳng ảnh [0,1],
+    KHÔNG cần tự scale về [-1,1], tránh lỗi quên scale). LPIPS CÀNG THẤP CÀNG
+    TỐT (ngược hướng với PSNR/SSIM) — 0 = giống hệt.
+
+    min_size: LPIPS dùng mạng CNN sâu (AlexNet) bên trong — nếu ảnh đầu vào
+    quá nhỏ (ví dụ crop ROI vài chục px với ảnh gốc tỷ lệ khung hình rất lệch,
+    xem compute_ssim_roi()), các tầng stride/pool liên tiếp có thể làm feature
+    map co về kích thước 0, gây lỗi runtime. Cách xử lý: nếu min(H,W) <
+    min_size, resize (bilinear) ảnh lên min_size trước khi đưa vào LPIPS —
+    giống cách compute_ssim_roi() tự thu nhỏ window_size, nhưng theo hướng
+    ngược lại (phóng to thay vì thu nhỏ), vì LPIPS không có tham số kiểu
+    window_size để tự co giãn theo input. Đây là cách xử lý phổ biến trong
+    literature khi dùng LPIPS trên ảnh/crop rất nhỏ — có làm mờ nhẹ chi tiết,
+    nhưng LPIPS là thước đo TƯƠNG ĐỒNG chứ không phải phép đo pixel-chính-xác
+    nên chấp nhận được, và áp dụng ĐỒNG NHẤT cho mọi model so sánh (không
+    thiên vị model nào).
+    """
+    h, w = img1.shape[-2], img1.shape[-1]
+    if min(h, w) < min_size:
+        img1 = F.interpolate(img1, size=(min_size, min_size), mode="bilinear", align_corners=False)
+        img2 = F.interpolate(img2, size=(min_size, min_size), mode="bilinear", align_corners=False)
+    device = next(lpips_model.parameters()).device
+    d = lpips_model(img1.to(device), img2.to(device), normalize=True)
+    return d.mean().item()
+
+
+@torch.no_grad()
+def compute_pairwise_genuine_impostor_scores(embeddings: torch.Tensor, labels: torch.Tensor):
+    """
+    [MỚI — bổ sung journal Q1] Từ tập embedding (N, D) + nhãn identity (N,)
+    của TOÀN BỘ test set, tính cosine similarity cho MỌI cặp (i<j, không lặp,
+    không tự so với chính mình), tách thành 2 nhóm:
+      - genuine: cặp CÙNG identity (đúng phải giống nhau — bài toán verification)
+      - impostor: cặp KHÁC identity (đúng phải khác nhau)
+    Đây là cách chuẩn trong biometrics để đánh giá ở "verification setting"
+    (khác với "identification setting" của identity_accuracy/rank-k — đo khả
+    năng phân biệt CẶP ảnh có cùng người hay không, không phụ thuộc số lượng
+    identity cố định trong tập train, thường được review yêu cầu bên cạnh
+    accuracy khi bài báo có đóng góp chính ở phía recognition).
+
+    Trả về (genuine_scores, impostor_scores) — 2 tensor 1D trên cùng device
+    với embeddings.
+
+    LƯU Ý: số cặp genuine phụ thuộc số ảnh/identity trong test set — nếu quá
+    ít (ví dụ nhiều identity chỉ có 1 ảnh test), EER/AUC ước lượng sẽ kém tin
+    cậy. Hàm gọi (eval_recognition.py) in cảnh báo nếu n_genuine_pairs quá nhỏ.
+    """
+    emb_norm = F.normalize(embeddings, p=2, dim=1)
+    sim_matrix = emb_norm @ emb_norm.t()  # (N, N) cosine similarity
+    n = labels.size(0)
+    same_id = labels.unsqueeze(0) == labels.unsqueeze(1)  # (N, N) bool
+    # chỉ lấy tam giác trên, KHÔNG gồm đường chéo (i!=j)
+    upper_mask = torch.triu(torch.ones(n, n, dtype=torch.bool, device=labels.device), diagonal=1)
+    genuine_mask = same_id & upper_mask
+    impostor_mask = (~same_id) & upper_mask
+    genuine_scores = sim_matrix[genuine_mask]
+    impostor_scores = sim_matrix[impostor_mask]
+    return genuine_scores, impostor_scores
+
+
+def compute_roc_auc_eer(genuine_scores, impostor_scores, n_thresholds: int = 1000) -> dict:
+    """
+    [MỚI — bổ sung journal Q1] AUC (Area Under ROC Curve) + EER (Equal Error
+    Rate — điểm mà FPR = FNR, thước đo chuẩn trong verification/biometrics,
+    độc lập với việc chọn ngưỡng quyết định) từ 2 tập điểm số genuine/impostor.
+    Chấp nhận torch.Tensor hoặc array-like (tự chuyển numpy nội bộ).
+
+    Cách làm:
+    - AUC: tính qua thống kê hạng (rank-based, tương đương Mann-Whitney U) —
+      CHÍNH XÁC (không xấp xỉ qua lưới ngưỡng), xử lý đúng trường hợp có giá
+      trị trùng (tie) bằng rank trung bình.
+    - EER: quét lưới `n_thresholds` ngưỡng từ cao xuống thấp, tính FPR/FNR
+      tại mỗi ngưỡng, tìm giao điểm đường FPR và FNR bằng nội suy tuyến tính
+      giữa 2 điểm lưới liền kề đổi dấu hiệu (dấu của FNR-FPR).
+
+    Đã kiểm tra bằng test số học tổng hợp (numpy, ngoài project, xem quá
+    trình review): 2 phân phối tách biệt hoàn toàn -> AUC=1.0, EER~0; 2 phân
+    phối trùng hoàn toàn -> AUC~0.5, EER~0.5; 2 Gaussian chồng lấn 1 phần ->
+    AUC khớp công thức lý thuyết Phi(d'/sqrt(2)) trong khoảng sai số < 0.02.
+
+    Trả về dict {"auc", "eer", "eer_threshold", "n_genuine_pairs", "n_impostor_pairs"}.
+    """
+    def _to_numpy(x):
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu().numpy().astype(np.float64)
+        return np.asarray(x, dtype=np.float64)
+
+    genuine = _to_numpy(genuine_scores)
+    impostor = _to_numpy(impostor_scores)
+    n_g, n_i = len(genuine), len(impostor)
+    if n_g == 0 or n_i == 0:
+        return {"auc": float("nan"), "eer": float("nan"), "eer_threshold": float("nan"),
+                "n_genuine_pairs": n_g, "n_impostor_pairs": n_i}
+
+    # --- AUC qua rank-based (Mann-Whitney U), chính xác, không cần chọn ngưỡng ---
+    all_scores = np.concatenate([genuine, impostor])
+    order = np.argsort(all_scores, kind="mergesort")
+    sorted_scores = all_scores[order]
+    sorted_ranks = np.arange(1, len(all_scores) + 1, dtype=np.float64)
+    i = 0
+    while i < len(sorted_scores):
+        j = i
+        while j + 1 < len(sorted_scores) and sorted_scores[j + 1] == sorted_scores[i]:
+            j += 1
+        sorted_ranks[i:j + 1] = (sorted_ranks[i] + sorted_ranks[j]) / 2.0  # rank trung bình cho tie
+        i = j + 1
+    ranks = np.empty(len(all_scores), dtype=np.float64)
+    ranks[order] = sorted_ranks
+    genuine_ranks_sum = ranks[:n_g].sum()
+    auc = (genuine_ranks_sum - n_g * (n_g + 1) / 2.0) / (n_g * n_i)
+
+    # --- EER qua quét ngưỡng + nội suy giao điểm FPR/FNR ---
+    lo = min(genuine.min(), impostor.min())
+    hi = max(genuine.max(), impostor.max())
+    thresholds = np.linspace(hi, lo, n_thresholds)  # giảm dần
+    tpr = np.array([(genuine >= t).mean() for t in thresholds])
+    fpr = np.array([(impostor >= t).mean() for t in thresholds])
+    fnr = 1.0 - tpr
+    diff = fnr - fpr
+    idx = np.where(np.diff(np.sign(diff)))[0]
+    if len(idx) == 0:
+        eer_idx = int(np.argmin(np.abs(diff)))
+        eer = (fpr[eer_idx] + fnr[eer_idx]) / 2.0
+        eer_threshold = thresholds[eer_idx]
+    else:
+        k = idx[0]
+        x0, x1 = fpr[k], fpr[k + 1]
+        y0, y1 = fnr[k], fnr[k + 1]
+        t0, t1 = thresholds[k], thresholds[k + 1]
+        if (y0 - x0) == (y1 - x1):
+            eer, eer_threshold = (x0 + y0) / 2.0, t0
+        else:
+            alpha = (y0 - x0) / ((y0 - x0) - (y1 - x1))
+            eer = x0 + alpha * (x1 - x0)
+            eer_threshold = t0 + alpha * (t1 - t0)
+
+    return {"auc": float(auc), "eer": float(eer), "eer_threshold": float(eer_threshold),
+            "n_genuine_pairs": n_g, "n_impostor_pairs": n_i}
+
+
+@torch.no_grad()
+def compute_confusion_matrix(preds: torch.Tensor, labels: torch.Tensor, num_classes: int) -> np.ndarray:
+    """
+    [MỚI — bổ sung journal Q1] Ma trận nhầm lẫn (confusion matrix) NxN cho
+    bài toán identity classification — hàng = nhãn thật, cột = nhãn dự đoán.
+    Dùng để phân tích lỗi theo lớp (identity nào hay bị nhầm với identity
+    nào) — bổ sung cho identity_accuracy tổng, vốn không cho biết lỗi có dồn
+    vào 1 số ít identity (ví dụ trùng nhau về góc chụp/ánh sáng) hay dàn đều.
+
+    Cách làm: mã hoá mỗi cặp (label, pred) thành 1 số nguyên duy nhất
+    label*num_classes+pred rồi đếm tần suất bằng bincount — nhanh, không cần
+    vòng lặp Python, không cần sklearn (giữ đúng tinh thần dependency tối
+    thiểu của project — chỉ numpy/torch sẵn có).
+    """
+    preds = preds.detach().cpu()
+    labels = labels.detach().cpu()
+    idx = labels * num_classes + preds
+    cm = torch.bincount(idx, minlength=num_classes * num_classes)
+    return cm.reshape(num_classes, num_classes).numpy()
 
 
 def count_params(model: torch.nn.Module) -> float:

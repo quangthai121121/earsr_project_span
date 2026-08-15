@@ -4,6 +4,7 @@ timm>=0.9          # cần cho backbone ghostnet_100 trong benchmark recognition
 gdown>=5.0         # tải checkpoint SPAN chính thức từ Google Drive
 thop>=0.1.1        # tính FLOPs cho model SR/recognition
 scipy>=1.10        # paired t-test khi kiểm định thống kê (aggregate_lambda_sweep.py)
+lpips>=0.1.4       # [MỚI] chỉ số cảm nhận LPIPS cho eval_sr_quality.py (bổ sung journal Q1)
 Pillow
 numpy
 pyyaml
