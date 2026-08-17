@@ -44,15 +44,23 @@ from utils.logger import setup_logger
 from utils.seed import set_seed
 
 
-def _forward_step(model, lr_img, hr_img, device, criterion, optimizer, scaler, is_train):
+def _forward_step(model, lr_img, hr_img, device, criterion, optimizer, scaler, is_train,
+                   use_amp=True):
     lr_img = lr_img.to(device, non_blocking=True)
     hr_img = hr_img.to(device, non_blocking=True)
 
     if is_train:
         optimizer.zero_grad(set_to_none=True)
 
+    # [MỚI — sửa lỗi NaN loss phát hiện trên AWEx] span_official dùng phép scale nội
+    # bộ img_range=255 ngay ở lớp đầu (models/span_official_wrapper.py) — kết hợp với
+    # autocast FP16 có thể tràn số (FP16 tối đa ~65504) qua nhiều lớp conv, gây NaN
+    # loss NGAY TỪ epoch 1 (đã tái lập 2 lần trên cùng dữ liệu AWEx, không phải may rủi
+    # ngẫu nhiên theo seed). Các kiến trúc khác không dùng scale 255 nội bộ nên không
+    # gặp vấn đề này -> chỉ tắt autocast cho riêng span_official (use_amp=False truyền
+    # từ main()), giữ nguyên FP16 cho mọi kiến trúc khác (không đổi hành vi cũ của chúng).
     with torch.autocast(device_type="cuda" if device == "cuda" else "cpu",
-                         enabled=(device == "cuda")):
+                         enabled=(device == "cuda" and use_amp)):
         sr_img = model(lr_img)
         loss = criterion(sr_img, hr_img)
 
@@ -71,7 +79,8 @@ def _forward_step(model, lr_img, hr_img, device, criterion, optimizer, scaler, i
     return loss.item() * lr_img.size(0), lr_img.size(0)
 
 
-def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None, logger=None):
+def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None, logger=None,
+              use_amp=True):
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
 
@@ -92,7 +101,7 @@ def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None,
             try:
                 loss_sum, n = _forward_step(
                     model, lr_img, hr_img, device, criterion, optimizer,
-                    scaler if device == "cuda" else None, is_train)
+                    scaler if device == "cuda" else None, is_train, use_amp=use_amp)
             except RuntimeError as e:
                 if device != "cuda" or "out of memory" not in str(e).lower():
                     raise
@@ -103,7 +112,8 @@ def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None,
                     move_optimizer_state(optimizer, device)
                 model_device = device
                 loss_sum, n = _forward_step(
-                    model, lr_img, hr_img, device, criterion, optimizer, None, is_train)
+                    model, lr_img, hr_img, device, criterion, optimizer, None, is_train,
+                    use_amp=use_amp)
 
             # Bỏ qua batch có loss NaN/Inf khi tính trung bình hiển thị — do
             # GradScaler đã tự bỏ qua bước cập nhật cho batch đó (không hỏng
@@ -170,7 +180,16 @@ def main():
 
     model = build_sr_model(arch, scale, pretrained_path=args.pretrained_path).to(device_mgr.preferred)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["sr"]["lr"])
-    scaler = torch.amp.GradScaler("cuda", enabled=(device_mgr.preferred == "cuda"))
+
+    # [MỚI — sửa lỗi NaN loss trên AWEx] span_official dùng img_range=255 nội bộ,
+    # dễ tràn số FP16 khi bật autocast -> tắt AMP riêng cho kiến trúc này (train FP32,
+    # chậm hơn chút nhưng ổn định số học). Mọi kiến trúc khác giữ nguyên AMP như cũ.
+    use_amp = (arch != "span_official") and (device_mgr.preferred == "cuda")
+    if arch == "span_official":
+        logger.info("[FP32] Tắt mixed-precision (AMP) cho span_official — kiến trúc này "
+                     "dùng img_range=255 nội bộ, dễ tràn số FP16 (đã tái lập NaN loss "
+                     "reproducible trên AWEx trước khi vá). Train chậm hơn nhưng ổn định.")
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
     criterion = nn.L1Loss()
 
     max_epochs = cfg["sr"]["max_epochs"]
@@ -179,9 +198,9 @@ def main():
 
     for epoch in range(max_epochs):
         train_loss = run_epoch(model, train_loader, device_mgr, criterion,
-                                optimizer=optimizer, scaler=scaler, logger=logger)
+                                optimizer=optimizer, scaler=scaler, logger=logger, use_amp=use_amp)
         val_loss = run_epoch(model, val_loader, device_mgr, criterion,
-                              optimizer=None, scaler=None, logger=logger)
+                              optimizer=None, scaler=None, logger=logger, use_amp=use_amp)
 
         oom_note = f" | OOM fallback: {device_mgr.total_oom_events} lần" \
             if device_mgr.total_oom_events > 0 else ""
