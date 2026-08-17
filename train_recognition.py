@@ -32,6 +32,12 @@ Chạy ví dụ fine-tune xuyên dataset (xem scripts/run_transfer_learning.sh):
         --domain sr_improved --backbone mobilenet_v2 \
         --init_ckpt_transfer runs/recognition_sr_improved_mobilenet_v2_seed42/best.pt \
         --seed 42 --run_suffix _finetuned_from_earvn1_seed42
+
+--freeze_backbone ([MỚI]): dùng CÙNG --init_ckpt_transfer khi dataset đích quá ít dữ liệu
+(ví dụ AWE, ~5.7 ảnh train/người) — đóng băng toàn bộ model.features (backbone đã học đặc
+trưng từ dataset nguồn), chỉ train embedding + identity_head + gender_head. Giảm mạnh số
+tham số phải học từ ít dữ liệu -> kỳ vọng giảm phương sai kết quả giữa các seed. Xem
+scripts/run_transfer_learning_frozen.sh (chạy riêng, không đè kết quả transfer thường).
 """
 import argparse
 from pathlib import Path
@@ -114,9 +120,17 @@ def _forward_step(model, imgs, id_labels, gender_labels, device, cfg,
     return loss.item(), id_logits.detach(), gender_logits.detach(), id_labels, gender_labels
 
 
-def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None, logger=None):
+def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None, logger=None,
+              freeze_backbone_bn=False):
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
+    # [MỚI — freeze_backbone] Nếu backbone bị đóng băng (requires_grad=False), vẫn phải
+    # ép model.features.eval() ngay sau model.train() — nếu không, các lớp BatchNorm
+    # trong backbone (dù không cập nhật affine weight/bias) vẫn tiếp tục cập nhật
+    # running_mean/running_var theo minibatch nhỏ của dataset đích, làm trôi thống kê
+    # BN học được từ dataset nguồn một cách âm thầm (không lỗi runtime, chỉ kém đi).
+    if is_train and freeze_backbone_bn:
+        model.features.eval()
 
     id_criterion = nn.CrossEntropyLoss()
     gender_criterion = nn.CrossEntropyLoss()
@@ -134,6 +148,8 @@ def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None, logge
                 if optimizer is not None:
                     move_optimizer_state(optimizer, device)
                 model_device = device
+                if is_train and freeze_backbone_bn:
+                    model.features.eval()
 
             try:
                 loss, id_logits, gender_logits, id_l, gender_l = _forward_step(
@@ -149,6 +165,8 @@ def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None, logge
                 if optimizer is not None:
                     move_optimizer_state(optimizer, device)
                 model_device = device
+                if is_train and freeze_backbone_bn:
+                    model.features.eval()
                 # thử lại CHÍNH batch đó trên CPU, không bỏ qua dữ liệu
                 loss, id_logits, gender_logits, id_l, gender_l = _forward_step(
                     model, imgs, id_labels, gender_labels, device, cfg,
@@ -190,6 +208,15 @@ def main():
                      help="ghi đè seed trong config — dùng để chạy multi-seed, đo độ ổn định")
     ap.add_argument("--run_suffix", default="",
                      help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè khi chạy nhiều seed")
+    ap.add_argument("--freeze_backbone", action="store_true",
+                     help="[MỚI] Đóng băng TOÀN BỘ model.features (backbone trích đặc trưng) — "
+                          "chỉ train embedding + identity_head + gender_head ('linear probe'). "
+                          "Dùng cho fine-tune xuyên dataset khi dữ liệu đích rất ít (ví dụ AWE), "
+                          "để giảm số tham số học từ ít dữ liệu -> giảm phương sai giữa seed. "
+                          "Có ý nghĩa nhất khi dùng CÙNG --init_ckpt_transfer (backbone đã học "
+                          "đặc trưng tốt từ dataset nguồn); dùng riêng --freeze_backbone không có "
+                          "--init_ckpt_transfer sẽ đóng băng backbone ở trạng thái khởi tạo ngẫu "
+                          "nhiên/ImageNet thô, không hợp lý cho identity ear recognition.")
     args = ap.parse_args()
 
     if args.init_ckpt and args.init_ckpt_transfer:
@@ -254,8 +281,29 @@ def main():
     if args.init_ckpt_transfer:
         load_transfer_checkpoint(model, args.init_ckpt_transfer, device_mgr.preferred, logger=logger)
 
+    if args.freeze_backbone:
+        if not args.init_ckpt_transfer:
+            logger.info(
+                "[CẢNH BÁO] --freeze_backbone dùng mà KHÔNG có --init_ckpt_transfer — backbone "
+                "bị đóng băng ở trạng thái khởi tạo ngẫu nhiên/ImageNet thô (chưa học đặc trưng "
+                "ear-specific nào), nhiều khả năng học rất kém. Cờ này được thiết kế để dùng "
+                "CÙNG --init_ckpt_transfer.")
+        n_frozen = sum(p.numel() for p in model.features.parameters())
+        n_total = sum(p.numel() for p in model.parameters())
+        for p in model.features.parameters():
+            p.requires_grad = False
+        logger.info(
+            f"[FREEZE BACKBONE] Đóng băng toàn bộ model.features: "
+            f"{n_frozen:,}/{n_total:,} tham số ({100 * n_frozen / n_total:.1f}%) KHÔNG cập nhật. "
+            f"Chỉ train: embedding + identity_head + gender_head "
+            f"({n_total - n_frozen:,} tham số, {100 * (n_total - n_frozen) / n_total:.1f}%).")
+
+    # filter(requires_grad) -> vô hại khi không freeze gì (trả về y hệt model.parameters()),
+    # nhưng BẮT BUỘC khi có freeze_backbone: đưa param đã requires_grad=False vào Adam vẫn
+    # chạy được (không lỗi) nhưng tốn bộ nhớ lưu trạng thái optimizer (m, v) vô ích cho những
+    # tham số không bao giờ có gradient để cập nhật.
     optimizer = torch.optim.Adam(
-        model.parameters(),
+        filter(lambda p: p.requires_grad, model.parameters()),
         lr=cfg["recognition"]["lr"],
         weight_decay=cfg["recognition"]["weight_decay"],
     )
@@ -267,9 +315,11 @@ def main():
 
     for epoch in range(max_epochs):
         train_loss, train_id_acc, train_gender_acc = run_epoch(
-            model, train_loader, device_mgr, cfg, optimizer=optimizer, scaler=scaler, logger=logger)
+            model, train_loader, device_mgr, cfg, optimizer=optimizer, scaler=scaler, logger=logger,
+            freeze_backbone_bn=args.freeze_backbone)
         val_loss, val_id_acc, val_gender_acc = run_epoch(
-            model, val_loader, device_mgr, cfg, optimizer=None, scaler=None, logger=logger)
+            model, val_loader, device_mgr, cfg, optimizer=None, scaler=None, logger=logger,
+            freeze_backbone_bn=args.freeze_backbone)
 
         oom_note = f" | OOM fallback: {device_mgr.total_oom_events} lần" \
             if device_mgr.total_oom_events > 0 else ""

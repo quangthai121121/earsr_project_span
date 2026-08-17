@@ -852,3 +852,78 @@ AWE) — không phải lỗi.
 `data/generate_final_report.py` đều khai báo `--results_dir`/`--out_csv`/
 `--out_dir` với `required=True` (không có giá trị mặc định ngầm) — không có
 đường lùi nào âm thầm trỏ về `results/` nếu người gọi quên truyền tham số.
+
+---
+
+## Phần J — Freeze-backbone fine-tune cho AWE (giảm phương sai giữa seed, vẫn giữ đúng protocol)
+
+**Bối cảnh**: kết quả `results_awe.zip` (n=5, transfer learning) cho thấy toàn bộ
+15 phép so sánh lr/sr_baseline_transfer/sr_improved_transfer (5 backbone) đều
+KHÔNG có ý nghĩa thống kê (p_bonferroni >= 0.13, hầu hết ~1.0) — độ lệch chuẩn
+giữa seed gần bằng chênh lệch trung bình, do dữ liệu AWE quá ít
+(~5.7 ảnh train/người). Cần một cách giảm nhiễu mà KHÔNG đổi ngưỡng lọc dữ
+liệu (`hr_source_min`), KHÔNG đổi split, KHÔNG đổi augmentation riêng cho AWE
+— tức không phá protocol nhất quán với EarVN1.0.
+
+**Giải pháp**: thêm cờ `--freeze_backbone` vào `train_recognition.py` — chỉ có
+tác dụng khi dùng CÙNG `--init_ckpt_transfer` (fine-tune xuyên dataset). Đóng
+băng toàn bộ `model.features` (backbone trích đặc trưng, đã học từ dataset
+NGUỒN qua checkpoint EarVN1.0), chỉ train `embedding` + `identity_head` +
+`gender_head`. Giảm mạnh số tham số phải học từ dữ liệu ít, kỳ vọng giảm
+phương sai giữa các seed.
+
+**Chi tiết cài đặt (train_recognition.py)**:
+- `model.features` là tên thuộc tính THỐNG NHẤT cho cả 5 backbone (xem
+  `models/recognition_model.py::EarRecognitionNet.__init__`), nên
+  `for p in model.features.parameters(): p.requires_grad = False` an toàn với
+  MỌI backbone, không cần logic riêng theo kiến trúc (khác với lỗi đã gặp ở
+  `debug_smfanet.py` khi giả định cấu trúc không đúng cho mọi arch).
+- Optimizer đổi từ `model.parameters()` sang
+  `filter(lambda p: p.requires_grad, model.parameters())` — vô hại khi không
+  freeze gì, cần thiết khi có freeze (tránh Adam giữ trạng thái m/v vô ích
+  cho tham số không bao giờ có gradient).
+- BatchNorm trong backbone bị đóng băng vẫn cần ép `model.features.eval()`
+  ngay sau `model.train()` mỗi epoch train — nếu không, `running_mean`/
+  `running_var` của BN vẫn tiếp tục trôi theo minibatch nhỏ của AWE dù
+  affine weight/bias không cập nhật (lỗi âm thầm, không có exception nào báo
+  hiệu). Đã thread `freeze_backbone_bn` qua `run_epoch()`, áp lại đúng logic
+  này ở CẢ 2 điểm model có thể đổi device giữa chừng (đồng bộ device chính +
+  fallback CPU khi OOM) — tránh sót trường hợp.
+- Cảnh báo rõ trong log nếu `--freeze_backbone` dùng mà thiếu
+  `--init_ckpt_transfer` (đóng băng backbone ở trạng thái ngẫu nhiên/ImageNet
+  thô sẽ học rất kém, cờ này chỉ có ý nghĩa khi backbone đã học đặc trưng ear
+  từ dataset nguồn).
+
+**Script mới: `scripts/run_transfer_learning_frozen.sh`** — chạy LẠI đúng
+bước 6 của `run_transfer_learning.sh` (fine-tune nhận diện, 5 backbone x 5
+seed x 3 domain) với `--freeze_backbone` thêm vào, TÁI SỬ DỤNG checkpoint SR
+đã fine-tune và ảnh `sr_baseline_transfer`/`sr_improved_transfer` đã sinh sẵn
+(không train lại SR, không sinh lại ảnh — tiết kiệm thời gian, và đảm bảo so
+sánh frozen vs không-frozen là công bằng, cùng 1 bộ ảnh SR).
+
+**Vì sao vẫn đúng protocol với EarVN1.0**: không đụng đến `hr_source_min`,
+không đụng splits, không đổi seed set, không đổi domain. Freeze-backbone chỉ
+là một tinh chỉnh TRONG nhánh transfer-learning vốn đã là thiết kế riêng cho
+dataset đích (EarVN1.0 là nguồn, không có gì để "transfer về chính nó" nên
+không cần/không thể áp dụng cờ này ngược lại cho EarVN1.0) — không tạo bất
+đối xứng MỚI cần giải trình thêm ngoài bất đối xứng transfer-learning vốn đã
+có sẵn và đã được tài liệu hoá.
+
+**Kết quả ghi vào thư mục RIÊNG**: `results_awe/multi_seed_transfer_frozen/`
+— KHÔNG đè `results_awe/multi_seed_transfer/` (kết quả không-freeze cũ), để
+so sánh trực tiếp `std_identity_accuracy` và `p_bonferroni` giữa 2 file, xem
+freeze-backbone có thực sự giảm phương sai / tăng khả năng đạt ý nghĩa thống
+kê hay không — KHÔNG giả định trước sẽ tốt hơn, phải chạy thật để biết.
+
+**Đã kiểm chứng**: `python3 -m py_compile` toàn bộ `.py` và `bash -n` toàn bộ
+`.sh` trong project — PASS. Đối chiếu logic bằng tay với
+`models/recognition_model.py` để xác nhận `model.features` tồn tại và đúng ý
+nghĩa (feature extractor trước global pooling) cho cả 5 backbone.
+
+**LƯU Ý QUAN TRỌNG — chưa chạy thực nghiệm thật**: sandbox hiện tại không có
+GPU/dữ liệu ảnh thật, nên KHÔNG THỂ chạy `run_transfer_learning_frozen.sh`
+để lấy số liệu thật. Mọi kiểm chứng ở trên chỉ là cú pháp + đối chiếu logic
+nguồn, KHÔNG phải bằng chứng thực nghiệm rằng freeze-backbone thực sự cải
+thiện kết quả AWE. Cần chạy trên máy có GPU + dữ liệu AWE thật (bước 6 đã
+hoàn tất) rồi gửi lại `multi_seed_summary_transfer_frozen.csv` +
+`_pairwise.csv` để đánh giá.
