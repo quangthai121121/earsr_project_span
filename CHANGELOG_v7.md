@@ -755,3 +755,100 @@ kết quả thiếu/gây hiểu nhầm):
 trực tiếp với source thật của SPAN/EDSR/RLFN/ECBSR/SAFMN/SMFANet trong
 `models/sr_models.py` — không suy đoán tên thuộc tính. Cùng giới hạn môi
 trường như Phần E/F: chưa chạy được functional test thật (không có `torch`).
+
+---
+
+## Phần H — [SỬA, đợt 9] scripts/run_transfer_learning.sh: n=3→5 seed mặc định cho AWE
+
+Đọc dữ liệu AWE cũ (`awe.zip`/`awe_finetune.zip` người dùng gửi) phát hiện:
+đây là dataset RẤT nhỏ (100 identity x 10 ảnh/người → chia 70/15/15 chỉ còn
+~5.7 ảnh train/identity cho bước recognition) — multi-seed cũ (n=3) cho std
+0.15-0.21 trên mean chỉ 0.05-0.4, tức là đổi seed thôi kết quả có thể nhảy từ
+7% lên 39%. n=3 không đủ tin cậy cho dataset nhiễu ở mức này.
+
+Cũng phát hiện: SR train-from-scratch trên AWE kém hẳn (816 ảnh HR, span_tiny
+chỉ 23.976dB) nhưng `awe_finetune.zip` cũ đã chứng minh transfer learning từ
+checkpoint EarVN1.0 sửa được (27.045dB zero-shot → 27.218dB fine-tuned) — xác
+nhận lại: `scripts/run_transfer_learning.sh` (đã có sẵn từ trước, không phải
+file mới) chính là cách làm ĐÚNG cho AWE, không nên train-from-scratch làm số
+liệu chính.
+
+**Sửa**: `scripts/run_transfer_learning.sh` — đổi `SEEDS=(42 123 2024)` thành
+`SEEDS=(42 123 2024 44 999)` (n=5 mặc định NGAY TỪ ĐẦU, không cần chạy n=3 rồi
+mở rộng riêng như đã làm với EarVN1.0). Cập nhật tiền đề: giờ cần checkpoint
+nguồn (EarVN1.0) đủ 5 seed (`pipeline/run_multi_seed.sh` +
+`pipeline/run_multi_seed_extra_seeds.sh` đã chạy xong cả 2).
+
+**Mới**: `RUNBOOK_AWE.md` — hướng dẫn chạy AWE đầy đủ, đúng thứ tự (setup →
+pipeline from-scratch bắt buộc làm tiền đề + đối chiếu → transfer learning là
+số liệu CHÍNH), kèm 1 dòng `sed` để bật multi-seed n=5 cho cả bản from-scratch
+(tùy chọn, để có bằng chứng định lượng cho phần giải thích trong Discussion).
+
+**Kiểm chứng**: `bash -n` PASS. Xác nhận vòng lặp prerequisite-check VÀ vòng
+lặp train đều dùng `"${SEEDS[@]}"` động (không hardcode số seed ở chỗ khác) —
+sửa 1 chỗ duy nhất áp dụng đúng cho toàn bộ script.
+
+---
+
+## Phần I — [SỬA lỗi thật, đợt 9] Audit chống lẫn kết quả EarVN1.0 <-> AWE
+
+Theo yêu cầu kiểm tra lại code để không lẫn kết quả giữa 2 dataset — ĐÃ THỰC SỰ
+CHẠY `scripts/setup_second_dataset_pipeline.sh awe 100` trên code thật trong
+sandbox để kiểm chứng thực nghiệm (không chỉ đọc code suy đoán), phát hiện 2
+lỗi thật + 1 lỗi tự gây ra khi sửa (đã bắt lại bằng cách re-verify sau mỗi bước
+sửa, đúng tinh thần luôn kiểm chứng trước khi tin):
+
+**Lỗi 1 (nguy hiểm) — `pipeline/run_full_pipeline_and_report.sh`**: biến
+`FINAL_DIR="results/final_report"` hardcode CỨNG, không ăn theo `RESULTS_DIR`
+— sed rule cũ trong `setup_second_dataset_pipeline.sh` chỉ thay đúng biến tên
+`RESULTS_DIR=`, bỏ sót biến tên khác (`FINAL_DIR=`) cũng trỏ vào "results/".
+Hậu quả nếu không sửa: chạy Bước 9 của pipeline AWE sẽ GHI ĐÈ vào
+`results/final_report/` (của EarVN1.0) thay vì `results_awe/final_report/` —
+đúng loại lỗi "lẫn kết quả" người dùng lo ngại. **Đã sửa**: đổi thành
+`FINAL_DIR="${RESULTS_DIR}/final_report"` (suy ra từ RESULTS_DIR, không
+hardcode) — sửa tận gốc, không chỉ vá triệu chứng.
+
+**Lỗi 2 (nguy hiểm, nghiêm trọng hơn) — `pipeline/run_all_after_fix.sh`**:
+script tiện ích CŨ (từ giai đoạn sửa lỗi công thức SPAB, đã xong từ rất lâu,
+không còn liên quan) chứa nhiều lệnh `cp`/`rm -rf` thao tác TRỰC TIẾP lên
+`results/multi_seed`, `results/lambda_sweep`, `results/ablation.csv`,
+`results/final_report`... (KHÔNG hề ăn theo dataset) — nếu bị chạy nhầm dưới
+`pipeline_awe/`, sẽ **XOÁ THẬT** dữ liệu `results/` của EarVN1.0 (không phải
+chỉ đọc nhầm, mà GHI ĐÈ/XOÁ). **Đã xử lý**: xoá hẳn file này khỏi
+`pipeline/` (không còn mục đích sử dụng, sed cũng không cover được các biến
+thể đặt tên tuỳ tiện trong nó) — không còn bị copy sang `pipeline_<dataset>/`
+nào trong tương lai nữa.
+
+**Lỗi 3 (tự gây ra khi sửa, đã tự bắt lại)**: bước sửa lỗi 1 ở trên ban đầu
+đổi rule sed từ dạng hẹp (chỉ khớp đúng tên biến `RESULTS_DIR=`) sang dạng
+rộng khớp CHUỖI CON `"results/"` (có dấu `/`) để bắt được `FINAL_DIR=`. Nhưng
+rule mới này lại BỎ SÓT trường hợp gán biến giá trị TRẦN không có dấu `/`
+theo sau (`RESULTS_DIR="results"`, xuất hiện ở CHÍNH 3 file:
+`08_benchmark_and_aggregate.sh`, `run_ablation.sh`,
+`run_full_pipeline_and_report.sh`) — phát hiện NGAY khi re-run kiểm chứng
+thực nghiệm sau khi sửa (không phải merge mà không test lại). **Đã sửa**:
+thêm rule thứ 2 khớp riêng dạng gán biến trần `="results"` ->
+`="results_<dataset>"`, dùng SONG SONG với rule chuỗi con `results/` — giờ
+bao phủ cả 2 dạng.
+
+**Đã kiểm chứng lại LẦN CUỐI (thực nghiệm, không suy đoán)**: chạy lại
+`bash scripts/setup_second_dataset_pipeline.sh awe 100` từ đầu trên code đã
+sửa, quét ĐỘC LẬP (không dùng lại đúng logic kiểm tra nội bộ của chính script
+đó) toàn bộ `pipeline_awe/*.sh` tìm mọi tham chiếu `runs/`, `splits/`,
+`results/` CHƯA gắn hậu tố `_awe` — kết quả: **SẠCH, 0 dấu vết còn sót**.
+`bash -n` PASS cho toàn bộ 12 file trong `pipeline_awe/`.
+
+**Đã xác nhận riêng `scripts/run_transfer_learning.sh`** (file rủi ro cao
+nhất vì CHỦ ĐÍCH đọc từ CẢ 2 dataset — nguồn EarVN1.0 + đích AWE cùng lúc):
+liệt kê toàn bộ điểm GHI (`--out_json`/`--out_csv`/`--out_dir`) — tất cả đều
+dùng `${RESULTS_DIR}`/`${SPLITS_DIR}` (đã gắn hậu tố `_awe` qua tham số dòng
+lệnh `$TARGET`), không có điểm ghi nào trỏ vào đường dẫn không hậu tố. Các
+điểm ĐỌC không hậu tố (`runs/sr_improved_span_tiny/best.pt`,
+`runs/sr_span_official/best.pt`, `runs/recognition_..._seed<seed>/best.pt`)
+là ĐÚNG THEO THIẾT KẾ (đọc checkpoint NGUỒN từ EarVN1.0 để fine-tune sang
+AWE) — không phải lỗi.
+
+**Đã kiểm tra thêm**: tất cả script `data/aggregate_*.py` và
+`data/generate_final_report.py` đều khai báo `--results_dir`/`--out_csv`/
+`--out_dir` với `required=True` (không có giá trị mặc định ngầm) — không có
+đường lùi nào âm thầm trỏ về `results/` nếu người gọi quên truyền tham số.

@@ -66,9 +66,23 @@ for f in "$PIPELINE_NEW"/*.sh; do
     sed -i "s|CONFIG=\"configs/config.yaml\"|CONFIG=\"${CONFIG_NEW}\"|" "$f"
     sed -i "s|RAW_DIR=\"raw_data/EarVN1.0_raw\"|RAW_DIR=\"${RAW_DIR_NEW}\"|" "$f"
 
-    # 2) Biến RESULTS_DIR="results..." viết cứng trong 08 và run_multi_seed.sh/
-    #    run_ablation.sh/run_lambda_sweep.sh (ví dụ RESULTS_DIR="results/multi_seed")
-    sed -i "s|RESULTS_DIR=\"results|RESULTS_DIR=\"results_${NAME}|g" "$f"
+    # 2) [SỬA — bug lẫn dataset phát hiện qua review] MỌI đường dẫn "results/..."
+    #    viết cứng, KHÔNG CHỈ biến RESULTS_DIR= (bản trước chỉ thay đúng biến tên
+    #    "RESULTS_DIR=", bỏ sót các biến tên KHÁC cũng gán "results/..." — ví dụ
+    #    FINAL_DIR="results/final_report" trong run_full_pipeline_and_report.sh —
+    #    khiến script đó ghi đè NHẦM vào results/final_report của dataset GỐC
+    #    thay vì results_<dataset>/final_report. Đổi sang thay TOÀN BỘ chuỗi con
+    #    "results/" -> "results_<dataset>/", giống hệt cách làm với "runs/" và
+    #    "splits/" bên dưới (đã xác nhận cách này không bỏ sót trường hợp nào)."
+    sed -i "s|results/|results_${NAME}/|g" "$f"
+    # [SỬA — lỗi phát hiện qua kiểm chứng thực tế sau khi sửa rule ở trên]
+    # Rule "results/" (có dấu / theo sau) KHÔNG bắt được các dòng GÁN BIẾN dạng
+    # RESULTS_DIR="results" (giá trị TRẦN, không có / theo sau, ví dụ trong
+    # pipeline/run_full_pipeline_and_report.sh) — bản thân RESULTS_DIR sẽ KHÔNG
+    # được sửa, kéo theo mọi biến khác suy ra từ nó (ví dụ FINAL_DIR="${RESULTS_DIR}/...")
+    # cũng sai theo dù bản thân dòng đó không chứa "results/" trực tiếp. Thêm
+    # rule riêng cho đúng dạng gán biến ="results" (đóng ngoặc kép ngay sau).
+    sed -i "s|=\"results\"|=\"results_${NAME}\"|g" "$f"
 
     # 3) MỌI đường dẫn "runs/..." viết cứng rải rác trong thân script (checkpoint
     #    paths — đã đối chiếu: KHÔNG có trường hợp "runs/" là substring của từ

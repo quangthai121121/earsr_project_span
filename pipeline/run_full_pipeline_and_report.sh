@@ -13,7 +13,9 @@ set -e
 
 CONFIG="configs/config.yaml"
 RESULTS_DIR="results"
-FINAL_DIR="results/final_report"
+FINAL_DIR="${RESULTS_DIR}/final_report"  # [SỬA — bug lẫn dataset] trước đây hardcode "results/final_report",
+# không ăn theo RESULTS_DIR -> khi genericize cho dataset thứ 2 (AWE...) sẽ ghi ĐÈ vào results/final_report
+# của EarVN1.0 thay vì results_<dataset>/final_report. Giờ suy ra từ RESULTS_DIR, luôn đúng dataset.
 
 echo "################################################################"
 echo "# KIỂM TRA ĐIỀU KIỆN TIÊN QUYẾT (Bước 1-5 đã xong chưa)        #"

@@ -52,7 +52,9 @@
 #   runs/sr_improved_span_tiny/best.pt
 #   runs/sr_span_official/best.pt
 #   runs/recognition_<domain>_<backbone>_seed<seed>/best.pt
-#     (domain = lr/sr_baseline/sr_improved, backbone = 5 cái, seed = 42/123/2024)
+#     (domain = lr/sr_baseline/sr_improved, backbone = 5 cái, seed = 42/123/2024/44/999 — [SỬA] cần ĐỦ 5 seed ở dataset
+#     nguồn nữa, tức là pipeline/run_multi_seed.sh + pipeline/run_multi_seed_extra_seeds.sh
+#     của EarVN1.0 đã chạy xong cả 2)
 #   Dataset ĐÍCH đã chạy xong pipeline from-scratch (RUN_ALL_NEW_DATASET.sh)
 #   ít nhất tới bước có runs_<đích>/sr_span_official/best.pt và
 #   runs_<đích>/recognition_hr_mobilenet_v2/best.pt
@@ -76,7 +78,7 @@ RUNS_DIR="runs_${TARGET}"
 SPLITS_DIR="splits_${TARGET}"
 SUFFIX="_finetuned_from_${SOURCE_LABEL}"
 BACKBONES=("mobilenet_v2" "mobilenet_v3_small" "resnet18" "efficientnet_b0" "ghostnet_100")
-SEEDS=(42 123 2024)
+SEEDS=(42 123 2024 44 999)
 
 echo "################################################################"
 echo "# KIỂM TRA TIỀN ĐỀ"
@@ -189,7 +191,7 @@ python data/build_sr.py --lr_dir "${SPLITS_DIR}/lr" \
 
 echo ""
 echo "################################################################"
-echo "# BƯỚC 6/6 — Fine-tune nhận diện trên ảnH MỚI: 3 domain x 5 backbone x 3 seed"
+echo "# BƯỚC 6/6 — Fine-tune nhận diện trên ảnH MỚI: 3 domain x 5 backbone x 5 seed"
 echo "################################################################"
 for BACKBONE in "${BACKBONES[@]}"; do
     for SEED in "${SEEDS[@]}"; do
