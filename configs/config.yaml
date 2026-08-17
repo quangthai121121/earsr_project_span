@@ -36,14 +36,14 @@ image:
 sr:
   arch: "span_official"
   pretrained_path: "checkpoints/span_pretrained_x4.pth"  # chỉ dùng khi arch=span_official
-  max_epochs: 100
+  max_epochs: 150
   patience: 10                   # dừng sớm nếu val loss không cải thiện sau 10 epoch
   batch_size: 64
   lr: 1.0e-3
 
 # ===== Cải tiến SR (train_sr_distill.py) =====
 sr_improve:
-  max_epochs: 100
+  max_epochs: 150
   patience: 10                   # dừng sớm nếu val total loss không cải thiện sau 10 epoch
   batch_size: 64
   lr: 1.0e-4
@@ -66,8 +66,8 @@ recognition:
     - "efficientnet_b0"
     - "ghostnet_100"
   embedding_dim: 256
-  max_epochs: 100
-  patience: 7                    # dừng sớm nếu val_id_acc không cải thiện sau 7 epoch
+  max_epochs: 150
+  patience: 10                    # dừng sớm nếu val_id_acc không cải thiện sau 7 epoch
   batch_size: 64
   lr: 3.0e-4
   weight_decay: 5.0e-4
