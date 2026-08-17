@@ -696,7 +696,6 @@ kế thừa thãi, mà là bài học thực tế:
 | 11 | Kernel nội suy domain `lr` không khớp nơi khác (BILINEAR ngầm định thay vì BICUBIC) | Không nhất quán tiền xử lý ảnh giữa các domain | `datasets/ear_dataset.py` |
 | 12 | PSNR/SSIM đo cả viền đệm đen letterbox | Số liệu bị thổi phồng, không so sánh được với literature SR chuẩn | `utils/metrics.py`, `eval_sr_quality.py`, `datasets/hrlr_pair_dataset.py` |
 | 13 | Quét lambda_identity: 5 so sánh không hiệu chỉnh multiple-comparison | Tăng rủi ro báo sai "có ý nghĩa thống kê" | `data/aggregate_lambda_sweep.py` |
-| 14 | `eval_sr_quality.py` ghi CSV kiểu append nhưng đổi schema (thêm cột ROI/LPIPS) mà không kiểm tra header cũ | Nếu chạy tiếp trên `results/sr_quality.csv` có từ trước, dữ liệu ghi thêm bị LỆCH CỘT so với header cũ trên đĩa, không có exception nào báo | `eval_sr_quality.py` (kiểm tra header khớp `fieldnames` trước khi append, báo lỗi rõ nếu lệch) |
 
 ---
 

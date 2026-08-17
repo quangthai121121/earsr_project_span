@@ -599,3 +599,159 @@ trên — KHÔNG cần thêm lệnh riêng.
 - **Giới hạn cần bạn tự xác nhận thêm** (môi trường soạn thảo không có
   mạng để cài `torch`): chạy `python test_new_sr_archs.py` trước khi chạy
   full pipeline — xem Phần B.
+
+---
+
+## Phần E — [MỚI, đợt 8] 3 script bổ sung: mở rộng seed, kiểm định KD thật, chẩn đoán SMFANet
+
+Bối cảnh: sau khi chạy xong toàn bộ Phần A-D (đã có `results.zip` đầy đủ),
+2 lỗ hổng còn lại được xác định:
+1. n=3 seed cho multi-seed chính (`pipeline/run_multi_seed.sh`) có lực kiểm
+   định (statistical power) còn yếu.
+2. Câu hỏi "distillation (KD) có thật sự giúp span_tiny không?" chỉ có bằng
+   chứng n=1 (`results/ablation.csv` gốc), xu hướng quan sát được
+   (`pixel_only` > `pixel_distill`) KHÔNG có ý nghĩa thống kê ở n=1 — không
+   đủ căn cứ để khẳng định theo hướng nào.
+3. SMFANet (baseline 2024 mới thêm ở Phần D) có PSNR đo được ~20-25dB, thấp
+   bất thường so với mọi kiến trúc khác (~26.25-27.5dB) — chưa rõ do lỗi
+   train (bất ổn định số học) hay do kiến trúc thật sự không hợp với ảnh LR
+   20x20 cực nhỏ của dataset — KHÔNG được đưa số liệu này vào bài khi chưa
+   chẩn đoán.
+
+**E1. `pipeline/run_multi_seed_extra_seeds.sh`** — chạy thêm seed 44, 999
+cho ĐÚNG 3 domain (lr/sr_baseline/sr_improved) x 5 backbone như
+`run_multi_seed.sh` gốc, ghi vào CÙNG `results/multi_seed/` (không tạo thư
+mục riêng) để bước tổng hợp đọc đủ 5 seed (42,123,2024,44,999) cùng lúc.
+Chạy SAU `pipeline/run_multi_seed.sh`.
+
+**E2. `pipeline/run_ablation_multiseed.sh`** — phiên bản multi-seed (5 seed)
+CỦA RIÊNG bước train_recognition trong `pipeline/run_ablation.sh` (4 cấu
+hình pixel_only/pixel_distill/pixel_identity/full), DÙNG LẠI checkpoint SR
+đã có (không train lại SR — đúng quy ước "SR train 1 lần, chỉ multi-seed
+recognition" đã dùng xuyên suốt project). Kết quả:
+`results/ablation_multiseed/ablation_multiseed_summary_pairwise.csv` — có
+ĐỦ paired t-test (raw + Bonferroni theo 6 cặp) + Cohen's d cho cả 6 cặp so
+sánh trong C(4,2), gồm ĐÚNG cặp `pixel_only` vs `pixel_distill` cần để trả
+lời câu hỏi KD có tác dụng hay không BẰNG SỐ LIỆU THẬT thay vì cảm tính.
+GIỚI HẠN cần nêu trong bài: multi-seed ở đây chỉ áp dụng cho bước
+recognition, SR vẫn cố định ở seed=42 — không phải multi-seed toàn chuỗi.
+Chạy SAU `pipeline/run_ablation.sh` VÀ sau khi đã có đủ 5 seed checkpoint
+`recognition_lr_mobilenet_v2_seed*` (tức sau cả E1).
+
+**E3. `debug_smfanet.py`** — script CHẨN ĐOÁN (không tự sửa/train lại gì).
+Kiểm tra theo thứ tự: (0) quét `train.log` tìm cảnh báo batch bị NaN/Inf
+GradScaler âm thầm bỏ qua; (1) NaN/Inf + độ lớn trọng số trong checkpoint;
+(2) forward thật trên ảnh LR test thật — thống kê biên độ output trước/sau
+clamp, tỷ lệ pixel bão hoà, độ lớn đặc trưng qua từng khối (`feats[i]`,
+dùng forward hook) để phát hiện nổ/triệt tiêu qua chiều sâu — nghi vấn hàng
+đầu là `F.normalize` không có tham số affine, lặp 2 lần/khối x 8 khối, có
+thể làm mất ổn định biên độ đặc trưng ở ảnh cực nhỏ 20x20 (khác hẳn ảnh
+DIV2K gốc dùng để thiết kế kiến trúc); (3) tuỳ chọn so sánh trực tiếp với 1
+kiến trúc tham chiếu đang hoạt động bình thường (`--compare_ckpt`, mặc định
+gợi ý `rlfn_adapted`) trên CÙNG ảnh LR. In kết luận gợi ý (KHÔNG tự động kết
+luận thay người dùng) + lưu `results/debug_smfanet/report.txt` +
+`sample_*.png` (ảnh LR/SR/HR cạnh nhau) để xem bằng mắt.
+
+**Kiểm chứng đã làm cho Phần E**: `bash -n` PASS cho cả 2 file `.sh`,
+`python -m py_compile` PASS cho `debug_smfanet.py`. Đối chiếu tên biến/tên
+thuộc tính (`to_feat`/`feats`/`to_img`, `head`/`body`/`upsample`) trực tiếp
+với `models/sr_models.py` để đảm bảo hook/forward thủ công trong
+`debug_smfanet.py` khớp đúng kiến trúc thật — phát hiện RLFN dùng tên thuộc
+tính khác SMFANet, đã thêm nhánh fallback + cảnh báo minh bạch trong output
+thay vì báo số liệu "trước clamp" sai cho kiến trúc không hỗ trợ.
+**Giới hạn**: môi trường soạn thảo KHÔNG có `torch` cài sẵn và không có
+mạng để cài — chưa chạy được functional test thật (forward pass thật) cho 3
+script này, CHỈ kiểm chứng qua đọc code đối chiếu trực tiếp với
+`models/sr_models.py`/`utils/metrics.py`/`datasets/hrlr_pair_dataset.py`
+thật + syntax check. Bạn nên chạy thử `debug_smfanet.py` trên 1 checkpoint
+nhỏ trước khi tin tưởng hoàn toàn báo cáo của nó.
+
+---
+
+## Phần F — [MỚI, đợt 9] Đồng bộ n=5 seed cho Track A, Track B, span_large-ablation
+
+Sau Phần E, bảng so sánh CHÍNH (lr/sr_baseline/sr_improved) và ablation KD đã
+lên n=5 seed, nhưng Track A/Track B/span_large-ablation vẫn n=3 — lực kiểm
+định KHÔNG đồng đều giữa các phần của bài báo. 3 script dưới đây mở rộng
+từng phần lên n=5, theo ĐÚNG khuôn mẫu script gốc tương ứng (chỉ thêm seed
+44,999 cho bước train_recognition.py, KHÔNG train lại SR — SR các phần này
+vốn đã chỉ train 1 lần ở seed=42 theo quy ước toàn project):
+
+- **`RUN_ALL_extra_sr_baseline_extra_seeds.sh <arch> [config]`** — mở rộng
+  Track A. Chạy SAU `RUN_ALL_extra_sr_baseline.sh <arch>` gốc VÀ sau
+  `pipeline/run_multi_seed_extra_seeds.sh`.
+- **`RUN_ALL_extra_sr_baseline_distilled_extra_seeds.sh <arch> [config]`** —
+  mở rộng Track B (bảng so sánh CHÍNH với span_tiny). Cùng tiền đề như trên,
+  đổi sang `RUN_ALL_extra_sr_baseline_distilled.sh` gốc.
+- **`RUN_ALL_span_large_ablation_extra_seeds.sh [config]`** — mở rộng
+  ablation span_tiny vs span_large. Cùng tiền đề, đổi sang
+  `RUN_ALL_span_large_ablation.sh` gốc.
+
+Cả 3 đều: (1) kiểm tra tiền đề ở BƯỚC 0 (dừng sớm nếu thiếu checkpoint seed
+44/999 của domain `lr` — cần chạy `run_multi_seed_extra_seeds.sh` trước);
+(2) thêm đúng 2 seed cho recognition trên domain đã có; (3) xoá sạch thư mục
+`combined/` cũ rồi build lại từ đầu (tránh trộn lẫn 3-seed cũ với 5-seed
+mới) trước khi gọi lại `data/aggregate_multi_seed_results.py` — kết quả file
+CSV tổng hợp giữ NGUYÊN TÊN như bản gốc (ghi đè, vì giờ là bản đầy đủ hơn,
+không phải kết quả khác).
+
+**Kiểm chứng**: `bash -n` PASS cho cả 3 file. Đối chiếu trực tiếp biến
+`RESULTS_DIR`/tên checkpoint/tên domain với đúng 3 script gốc tương ứng
+(`RUN_ALL_extra_sr_baseline.sh`, `RUN_ALL_extra_sr_baseline_distilled.sh`,
+`RUN_ALL_span_large_ablation.sh`) để đảm bảo khớp quy ước đặt tên, không suy
+đoán. Cùng giới hạn môi trường như Phần E: chưa chạy được functional test
+thật (không có `torch` trong môi trường soạn thảo).
+
+---
+
+## Phần G — [SỬA, đợt 10] 2 lỗi thật trong debug_smfanet.py (phát hiện qua code review)
+
+Người dùng đối chiếu trực tiếp code với `models/sr_models.py` và phát hiện
+đúng 2 lỗi làm giảm giá trị chẩn đoán (không phải lỗi crash, lỗi ÂM THẦM cho
+kết quả thiếu/gây hiểu nhầm):
+
+1. **BƯỚC 1 (`check_checkpoint_weights`) không có breakdown theo khối như
+   header hứa.** Header in "feats.0..feats.7 = 8 khối" nhưng code dùng
+   `model.named_children()` — chỉ liệt kê 3 con trực tiếp (to_feat/feats/
+   to_img), `module.parameters()` trên "feats" lại GỘP CHUNG tham số của cả
+   8 khối thành 1 số trung bình duy nhất. Nếu 1 khối cụ thể bị nổ trọng số
+   còn 7 khối kia bình thường, số trung bình gộp che mất dấu hiệu đó hoàn
+   toàn — chẩn đoán sai lệch (false negative).
+2. **`--compare_arch rlfn_adapted` (default) không có breakdown theo khối
+   khi so sánh.** Điều kiện cũ `hasattr(model,"feats") and isinstance(...,
+   Sequential)` chỉ đúng cho SMFANet/SAFMN — RLFN/RLFN_adapted dùng thuộc
+   tính `.body` (ModuleList), không phải `.feats`, nên hook không được gắn,
+   toàn bộ phần so sánh "quỹ đạo đặc trưng qua từng khối" với baseline chính
+   của bài báo (rlfn_adapted) TRỐNG RỖNG khi chạy đúng lệnh mẫu trong
+   docstring cũ.
+
+**Sửa (không chỉ vá triệu chứng, sửa gốc)**:
+- `_find_block_container(model)`: tự động chọn Sequential/ModuleList NHIỀU
+  PHẦN TỬ NHẤT trong các con trực tiếp — phân biệt được "thân chứa khối lặp"
+  (feats/body/backbone) với các Sequential ngắn khác (to_img/upsample, chỉ
+  2 lớp). Đã xác nhận đúng cho SMFANet/SAFMN ("feats", len=8), RLFN/
+  RLFN_adapted ("body", len=4), ECBSR ("backbone", len=6) bằng cách đọc trực
+  tiếp `models/sr_models.py`, không suy đoán.
+- `_forward_pre_clamp(model, lr_img)`: thay nhánh if/else cũ (chỉ hỗ trợ 1
+  khuôn mẫu) bằng 3 khuôn mẫu forward tường minh (backbone/upsampler cho
+  ECBSR; head/body/body_tail/upsample cho RLFN/RLFN_adapted — VÀ tình cờ
+  cũng đúng cho SPAN/span_tiny/span_large/EDSR do cùng cấu trúc; to_feat/
+  feats/to_img cho SMFANet/SAFMN) — cả BƯỚC 1 (trọng số) lẫn BƯỚC 2/3
+  (activation) giờ dùng chung 1 nguồn phát hiện container.
+- `check_checkpoint_weights()`: thêm breakdown theo TỪNG KHỐI thật (dùng
+  `_find_block_container`) bên cạnh breakdown theo con trực tiếp cũ (giữ
+  lại, đổi header cho ĐÚNG với những gì nó thực sự in ra).
+- Đổi `_mean_abs_weight()` sang trung bình CÓ TRỌNG SỐ THEO SỐ PHẦN TỬ (thay
+  vì trung bình của các trung bình từng tensor) — tránh thiên lệch khi 1
+  tensor rất lớn bị đánh đồng trọng số ngang với nhiều tensor nhỏ.
+- GIỮ NGUYÊN default `--compare_arch=rlfn_adapted` (không đổi sang `safmn`
+  như gợi ý ban đầu) vì rlfn_adapted mới là baseline THẬT SỰ dùng trong bảng
+  so sánh chính của bài báo (xem `build_sr_model()` docstring) — sửa gốc
+  công cụ để hỗ trợ đúng kiến trúc cần dùng, thay vì đổi khuyến nghị sang
+  kiến trúc khác chỉ vì công cụ từng có giới hạn.
+
+**Kiểm chứng**: `py_compile` PASS. Đối chiếu TỪNG khuôn mẫu forward
+(backbone/upsampler, head/body/body_tail/upsample, to_feat/feats/to_img)
+trực tiếp với source thật của SPAN/EDSR/RLFN/ECBSR/SAFMN/SMFANet trong
+`models/sr_models.py` — không suy đoán tên thuộc tính. Cùng giới hạn môi
+trường như Phần E/F: chưa chạy được functional test thật (không có `torch`).
