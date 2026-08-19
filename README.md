@@ -613,6 +613,84 @@ bằng tay — khớp chính xác (ví dụ 1.500 vs 1.500) trước khi coi là
 
 ---
 
+## 14. [MỚI] Multi-Judge Ensemble Identity Loss + Feature-level KD (cải tiến `span_tiny`, đang thử nghiệm)
+
+Bổ sung sau khi phát hiện `span_tiny` (recipe cũ, Bước 6) cải thiện accuracy
+KHÔNG đồng nhất giữa 5 backbone recognition (có ý nghĩa thống kê ở 3/5,
+không có bằng chứng ở `resnet18`) — xem phân tích đầy đủ + động lực thiết kế
+trong `docs/03_span_improvement.md` mục "Multi-Judge Ensemble Identity-Aware
+Distillation + Feature-level KD". Tóm tắt 2 cơ chế mới trong
+`train_sr_distill.py` (tương thích ngược 100% với mọi kết quả cũ — config cũ
+không có các khoá bên dưới sẽ tự fallback về đúng hành vi trước đây):
+
+1. **Multi-judge identity loss** (`sr_improve.identity_judges` trong
+   `configs/config.yaml`): dùng đồng thời nhiều backbone recognition (mặc
+   định `mobilenet_v2`+`resnet18`+`ghostnet_100`) làm giám khảo thay vì 1
+   model duy nhất — nhắm vào giả thuyết "identity loss cũ overfit vào gu của
+   đúng 1 kiến trúc, không tổng quát hoá".
+2. **Feature-level KD** (`sr_improve.lambda_feat`, giá trị khởi điểm `0.5`,
+   CẦN sweep): khớp feature map trước pixel-shuffle giữa student/teacher qua
+   `models/sr_models.py::SRFeatureHook` (forward hook theo TYPE module,
+   hoạt động với cả `span_official` lẫn kiến trúc tự viết) — bổ sung bên
+   cạnh distillation output-level cũ, không thay thế.
+
+Cả 2 đã được functional-test bằng PyTorch thật (không chỉ kiểm tra cú pháp)
+trước khi coi là hoàn tất. Quy trình chạy (2 bước, theo đúng thứ tự):
+
+```bash
+bash pipeline/run_ablation_kd_v2.sh       # 1) sàng lọc nhanh, 1 backbone/1 seed
+# sửa LAMBDA_FEAT/LAMBDA_IDENTITY đầu file dưới đây theo cấu hình thắng ở trên
+bash pipeline/run_multi_seed_kdv2.sh      # 2) validate đầy đủ, 5 backbone x n seed
+```
+
+**Chưa có số liệu thật** (cần GPU chạy training — xem
+`docs/03_span_improvement.md` để biết bảng kết quả cần điền và tiêu chí
+thành công trước khi đưa vào bài báo).
+
+## 15. [MỚI] Saliency-Weighted Identity-Critical Loss + Learned Block Pruning (tăng novelty ngoài việc cắt khối cố định)
+
+Trả lời trực tiếp câu hỏi "novelty của `span_tiny` có phải chỉ là cắt bớt số
+khối SPAN?" — 2 cơ chế bên dưới đưa thêm đóng góp KHÔNG có trong bất kỳ công
+trình nào được trích ở Related Work của bài báo (chi tiết động lực + công
+thức đầy đủ trong `docs/03_span_improvement.md`).
+
+1. **Saliency-Weighted Identity-Critical Loss** (`sr_improve.lambda_saliency`
+   trong `configs/config.yaml`, giá trị khởi điểm `0.3`, CẦN sweep) — dùng
+   gradient của CHÍNH hội đồng judge theo từng pixel ảnh HR
+   (`train_sr_distill.py::compute_multi_judge_saliency`) làm trọng số không
+   gian cho 1 pixel loss bổ sung, ép model ưu tiên tái tạo đúng vùng ảnh
+   hưởng nhiều nhất đến đặc trưng nhận dạng — nhắm thẳng vào phát hiện định
+   tính "PSNR cao do tái tạo tốt tóc/nền chứ không phải tai" (Figure 2b).
+   KHÔNG cần nhãn segmentation tai mới, KHÔNG ảnh hưởng chi phí lúc deploy.
+2. **Differentiable/Learned Block Pruning**
+   (`models/sr_models.py::SPANLearnedPrune`, script riêng
+   `train_sr_learned_prune.py`) — thay vì chọn TAY "giữ khối 1-3, bỏ khối
+   4-6" như `span_tiny` (bài báo tự nhận đây là hạn chế, mục 5.7-ii), mỗi
+   khối SPAB có 1 gate liên tục học được, huấn luyện CÙNG loss downstream
+   (tái sử dụng 100% `compute_total_loss`) + 1 sparsity penalty — khối nào
+   không đóng góp bị TỰ ĐỘNG đẩy gate về 0. Sau khi train, `harden_and_export()`
+   xoá hẳn khối bị pruning, xuất ra 1 model SPAN thường gọn nhẹ thật sự
+   (không còn overhead gate nào lúc deploy).
+
+Cả 2 đã được functional-test bằng PyTorch thật (bao gồm kiểm tra riêng
+`harden_and_export()` — copy đúng trọng số, xử lý đúng trường hợp biên "tất
+cả gate đều thấp"). Quy trình chạy:
+
+```bash
+# Saliency-weighted loss (chạy SAU khi đã chốt cấu hình KD v2 ở Mục 14):
+bash pipeline/run_lambda_saliency_sweep.sh
+
+# Learned block pruning (độc lập với 2 cơ chế trên, có thể chạy song song):
+bash pipeline/run_prune_sparsity_screen.sh        # 1) sàng lọc nhanh lambda_sparsity
+bash pipeline/run_multi_seed_learned_prune.sh     # 2) validate đầy đủ, 5 backbone x n seed
+```
+
+**Chưa có số liệu thật** (cần GPU chạy training — xem
+`docs/03_span_improvement.md` mục tương ứng để biết bảng kết quả cần điền
+và tiêu chí thành công trước khi đưa vào bài báo).
+
+---
+
 ## Cấu trúc thư mục
 
 ```
@@ -628,6 +706,11 @@ earsr_project/
     run_ablation.sh                 # Bước 10.1
     run_lambda_sweep.sh             # Bước 10.2
     run_multi_seed.sh               # Bước 10.3
+    run_ablation_kd_v2.sh           # [MỚI] Mục 14 — ablation sàng lọc multi-judge + feature-KD
+    run_multi_seed_kdv2.sh          # [MỚI] Mục 14 — validate đầy đủ 5-backbone x multi-seed
+    run_lambda_saliency_sweep.sh    # [MỚI] Mục 15 — sweep lambda_saliency
+    run_prune_sparsity_screen.sh    # [MỚI] Mục 15 — sàng lọc lambda_sparsity (learned pruning)
+    run_multi_seed_learned_prune.sh # [MỚI] Mục 15 — validate đầy đủ learned pruning
     _update_config_from_report.py
 
   docs/                             # tài liệu phương pháp (điền số liệu sau khi chạy)
@@ -644,6 +727,8 @@ earsr_project/
     aggregate_ablation_results.py   # gộp JSON -> ablation.csv (Bước 10.1)
     aggregate_lambda_sweep.py       # gộp JSON -> lambda_sweep_summary.csv + t-test (Bước 10.2)
     aggregate_multi_seed_results.py # gộp JSON -> multi_seed_summary.csv (Bước 10.3)
+    aggregate_ablation_kd_v2_results.py # [MỚI] gộp JSON -> ablation_kd_v2.csv (Mục 14)
+    aggregate_saliency_sweep.py     # [MỚI] gộp JSON -> saliency_sweep_summary.csv + t-test (Mục 15)
     export_training_log_summary.py  # trích epoch/OOM/thời gian từ train.log -> CSV
 
   datasets/
@@ -651,7 +736,7 @@ earsr_project/
     hrlr_pair_dataset.py            # Dataset đọc cặp (HR, LR), dùng chung cho train_sr*/eval_sr_quality
 
   models/
-    sr_models.py                    # SPAN tự viết lại (span, span_tiny, span_large) + EDSR
+    sr_models.py                    # SPAN tự viết lại (span, span_tiny, span_large) + EDSR + [MỚI] SPANLearnedPrune, SRFeatureHook
     span_official_wrapper.py        # import SPAN CHÍNH THỨC, vá lỗi chuẩn hóa (SPANWithRescale)
     recognition_model.py            # factory 5 backbone, đo feat_dim động (tránh lệch metadata)
 
@@ -666,7 +751,8 @@ earsr_project/
     seed.py
 
   train_sr.py                       # train SR thường (pixel loss) — SPAN baseline, EDSR
-  train_sr_distill.py               # train span_tiny: distillation + identity loss (fp32, hỗ trợ --seed)
+  train_sr_distill.py               # train span_tiny: distillation + feature-KD + saliency-weighted + identity loss (fp32, hỗ trợ --seed)
+  train_sr_learned_prune.py         # [MỚI] học pruning độ sâu có giám sát (gate học được, harden_and_export)
   train_recognition.py              # train recognition 1 domain + 1 backbone (hỗ trợ --seed, --init_ckpt)
   eval_recognition.py               # test checkpoint, hỗ trợ cross-domain
   eval_sr_quality.py                # đo PSNR/SSIM/FLOPs/latency cho 1 model SR

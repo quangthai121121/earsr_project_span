@@ -85,6 +85,8 @@ def compute_psnr_roi(img1: torch.Tensor, img2: torch.Tensor, bbox, max_val: floa
     utils/letterbox.py::compute_letterbox_geometry(), suy từ (width, height)
     ảnh gốc lưu sẵn trong splits.json — KHÔNG cần sinh lại ảnh nào."""
     x0, y0, w, h = bbox
+    if w <= 0 or h <= 0:
+        return float("nan")
     return compute_psnr(img1[:, :, y0:y0 + h, x0:x0 + w], img2[:, :, y0:y0 + h, x0:x0 + w], max_val)
 
 
@@ -96,6 +98,8 @@ def compute_ssim_roi(img1: torch.Tensor, img2: torch.Tensor, bbox, window_size: 
     lệ khung hình rất lệch — ví dụ ảnh 41x300px sau letterbox về 80x80 chỉ
     còn ROI cao ~11px) — tránh lỗi kích thước conv window > kích thước ảnh."""
     x0, y0, w, h = bbox
+    if w <= 0 or h <= 0:
+        return float("nan")
     c1 = img1[:, :, y0:y0 + h, x0:x0 + w]
     c2 = img2[:, :, y0:y0 + h, x0:x0 + w]
     ws = min(window_size, c1.shape[-1], c1.shape[-2])

@@ -50,7 +50,8 @@ from tqdm import tqdm
 from datasets.ear_dataset import EarDataset, build_label_map
 from models.recognition_model import EarRecognitionNet, SUPPORTED_BACKBONES
 from utils.device_manager import DeviceManager, move_optimizer_state
-from utils.early_stopping import EarlyStopping
+from utils.early_stopping import (EarlyStopping, save_state_dict as _save_state_dict,
+                                   save_last_if_missing as _save_last_if_missing)
 from utils.logger import setup_logger
 from utils.metrics import compute_accuracy
 from utils.seed import set_seed
@@ -334,17 +335,21 @@ def main():
         is_best = stopper.step(val_id_acc)
         if is_best:
             # luôn lưu checkpoint ở CPU state_dict để load lại được bất kể device lúc train
-            torch.save({k: v.cpu() for k, v in model.state_dict().items()}, run_dir / "best.pt")
+            _save_state_dict(model, run_dir / "best.pt")
             logger.info(f"  -> checkpoint tốt nhất mới (val_id_acc={val_id_acc:.4f}), đã lưu.")
 
         if stopper.should_stop:
             logger.info(
                 f"EARLY STOPPING tại epoch {epoch + 1}: val_id_acc không cải thiện "
-                f"sau {patience} epoch liên tiếp. Best val_id_acc={stopper.best:.4f}"
+                f"sau {patience} epoch liên tiếp. Best val_id_acc={stopper.best_str}"
             )
             break
 
-    logger.info(f"=== Hoàn tất train '{run_name}'. Best val_id_acc={stopper.best:.4f}. "
+    # [SỬA — bổ sung sau code review, vòng 4, điểm 3] xem giải thích tương tự
+    # trong train_sr.py — đảm bảo LUÔN có best.pt kể cả khi val_id_acc là
+    # NaN (ví dụ do numerically-unstable embedding) ở MỌI epoch.
+    _save_last_if_missing(run_dir / "best.pt", model, logger, "best.pt")
+    logger.info(f"=== Hoàn tất train '{run_name}'. Best val_id_acc={stopper.best_str}. "
                 f"Tổng số lần fallback CPU do OOM: {device_mgr.total_oom_events}. "
                 f"Checkpoint: {run_dir / 'best.pt'} ===")
 

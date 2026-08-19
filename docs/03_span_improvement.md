@@ -136,8 +136,301 @@ distillation kết hợp identity-aware loss cải thiện accuracy nhận diệ
 quán trên nhiều kiến trúc recognition khác nhau, mà không tốn thêm chi phí
 suy luận."
 
+## [MỚI] Multi-Judge Ensemble Identity-Aware Distillation + Feature-level KD
+
+### Động lực — chẩn đoán tại sao recipe cũ không tổng quát hoá tốt qua backbone
+
+Bảng kết quả chính (bản thảo bài báo) cho thấy `span_tiny` cải thiện accuracy
+so với `lr` (no-SR) KHÔNG đồng nhất giữa 5 backbone recognition — có ý nghĩa
+thống kê ở 3/5 (`ghostnet_100`, `mobilenet_v2`, `efficientnet_b0`), chỉ ở
+mức trend ở 1/5 (`mobilenet_v3_small`), và KHÔNG có bằng chứng nào ở
+`resnet18`. Trên AWEx from-scratch, tình trạng còn rõ hơn: `span_tiny` có
+lúc còn CAO HƠN `span_baseline` (`ghostnet_100`), có lúc thấp hơn có ý nghĩa
+thống kê so với `lr` xét theo baseline (`resnet18`).
+
+Chẩn đoán nguyên nhân hợp lý nhất: identity loss ở recipe cũ chỉ dùng **1
+model giám khảo duy nhất** (`mobilenet_v2` domain HR). Khi tăng
+`lambda_identity`, kết quả xấu đi có ý nghĩa thống kê (Cohen's d=-10.09) —
+tức là SR bị ép tối ưu theo đúng "gu" của 1 kiến trúc, tạo ra đặc trưng ăn
+khớp riêng với backbone đó nhưng KHÔNG tổng quát hoá được sang backbone
+khác. Đồng thời, distillation loss cũ chỉ so khớp OUTPUT PIXEL cuối cùng —
+dạng KD yếu nhất trong literature, không truyền được tín hiệu về cách
+teacher tổ chức đặc trưng nội bộ.
+
+### Phương pháp đề xuất (2 cơ chế, độc lập, bật/tắt qua config)
+
+**(A) Multi-Judge Ensemble Identity Loss** — thay vì 1 recognition model giám
+khảo, dùng đồng thời `K` backbone khác họ kiến trúc (mặc định
+`mobilenet_v2` + `resnet18` + `ghostnet_100`, đều đã train sẵn ở domain HR,
+đóng băng hoàn toàn):
+
+```
+L_identity = (1/K) * Σ_k (1 − cos(f_k(SR), f_k(HR)))
+```
+
+Cấu hình qua `configs/config.yaml -> sr_improve.identity_judges` (danh sách
+`{backbone, ckpt}`). Nếu để trống, tự fallback về hành vi single-judge cũ
+(tương thích ngược 100%, xem `train_sr_distill.py::build_judges()`).
+
+**(B) Feature-level Knowledge Distillation (hint-based)** — bổ sung BÊN
+CẠNH distillation output-level cũ (không thay thế), khớp feature map ngay
+trước pixel-shuffle của student (qua 1 adapter Conv1x1 học được, chỉ tồn tại
+lúc train) với feature map tương ứng của teacher:
+
+```
+L_feat = || Adapter(F_student) − F_teacher ||_1
+L_total = λ_pixel·L1(SR,HR) + λ_distill·L1(SR,SR_teacher)
+        + λ_feat·L_feat + λ_identity·L_identity(multi-judge)
+```
+
+Trích feature qua `models/sr_models.py::SRFeatureHook` — dùng forward hook
+đăng ký theo TYPE (`nn.PixelShuffle`), không theo tên thuộc tính nội bộ, nên
+hoạt động được với `span_official` (code ngoài từ `external/SPAN/`, không
+kiểm soát được tên thuộc tính) lẫn mọi kiến trúc tự viết trong
+`models/sr_models.py`. Cấu hình qua `sr_improve.lambda_feat` (mặc định 0.0
+= tắt hoàn toàn, không tốn thêm chi phí — bật bằng cách đặt >0).
+
+Cả 2 cơ chế đã được **functional-test** (forward + backward + optimizer
+step qua PyTorch thật, không chỉ kiểm tra cú pháp) trước khi coi là hoàn
+tất — xác nhận: gradient chảy đúng về cả student lẫn feature-adapter, phép
+trung bình multi-judge thu gọn đúng về công thức single-judge cũ khi
+`identity_judges` rỗng, và đường tắt `lambda_feat=0` không tạo chi phí thừa.
+
+### Không ảnh hưởng chi phí lúc DEPLOY
+
+Cả feature adapter (Conv1x1) lẫn toàn bộ judge model CHỈ tồn tại trong quá
+trình train — checkpoint lưu ra (`student.state_dict()`) không đổi cấu trúc
+so với recipe cũ, params/FLOPs/latency lúc triển khai **giữ nguyên**.
+
+### Ablation cần chạy trước khi đưa vào bài báo
+
+```bash
+bash pipeline/run_ablation_kd_v2.sh
+```
+
+Chạy 2x2 factorial (`kdv2_baseline`, `kdv2_feat`, `kdv2_multijudge`,
+`kdv2_full`) trên 1 backbone đại diện (`mobilenet_v2`, giống quy mô
+`run_ablation.sh` cũ) — CHỈ là tín hiệu sàng lọc nhanh.
+
+### Validate đầy đủ (multi-seed x 5-backbone) — BẮT BUỘC trước khi công bố
+
+Sau khi xác định cấu hình thắng ở ablation trên, sửa 2 biến `LAMBDA_FEAT`/
+`LAMBDA_IDENTITY` đầu file `pipeline/run_multi_seed_kdv2.sh` cho khớp, rồi:
+
+```bash
+bash pipeline/run_multi_seed_kdv2.sh
+```
+
+Script train lại SR **1 lần** (seed cố định, đúng protocol thống kê của
+project — xem mục 3.5 bản thảo bài báo: chỉ downstream recognition lặp qua
+seed để đo phương sai, không train lại SR nhiều seed vì tốn kém), sau đó
+train + eval recognition qua **5 backbone x 3 seed** (mặc định `42 123
+2024`, có thể thêm `44 999` để khớp n=5 như bản thảo bài báo) trên domain
+mới `sr_improved_kdv2`, tái sử dụng ĐÚNG checkpoint `recognition_lr_*_seed*`
+đã có từ `pipeline/run_multi_seed.sh` (yêu cầu chạy trước) — giữ đúng chuỗi
+fine-tune `hr -> lr -> sr_improved_kdv2`, không dùng chung 1 checkpoint `hr`.
+
+Kết quả: `results/multi_seed_kdv2/multi_seed_kdv2_summary.csv`. Để so sánh
+trực tiếp (paired t-test + Cohen's d) với `lr` (no-SR) và `sr_improved`
+(recipe `span_tiny` CŨ) đã có sẵn, copy 2 bộ JSON đó vào cùng thư mục rồi
+chạy lại `data/aggregate_multi_seed_results.py` — script tự gộp theo domain
+đọc từ nội dung JSON (xem hướng dẫn in ra cuối `run_multi_seed_kdv2.sh`), tự
+sinh bảng kiểm định cho MỌI cặp domain kể cả `sr_improved` (cũ) vs
+`sr_improved_kdv2` (mới) — tránh lặp lại giới hạn "chỉ 1 backbone" đã bị nêu
+ra khi review bản thảo hiện tại (Table 3, mục Limitations #4).
+
+| Cấu hình | λ_pixel | λ_distill | λ_feat | λ_identity | Giả thuyết kiểm định |
+|---|---|---|---|---|---|
+| `kdv2_baseline` | 1.0 | 1.0 | 0.0 | 0.0 | Đối chứng — đúng recipe cũ |
+| `kdv2_feat` | 1.0 | 1.0 | 0.5 | 0.0 | Feature-KD một mình có giúp không? |
+| `kdv2_multijudge` | 1.0 | 1.0 | 0.0 | 0.1 | Multi-judge một mình có giúp không (khác single-judge cũ đã thất bại)? |
+| `kdv2_full` | 1.0 | 1.0 | 0.5 | 0.1 | Kết hợp cả 2 — cấu hình đề xuất |
+
+**Lưu ý quan trọng**: `lambda_feat=0.5` và `lambda_identity=0.1` (multi-judge)
+ở bảng trên là giá trị KHỞI ĐIỂM hợp lý, CHƯA qua sweep — coi bảng ablation
+2x2 này là bước đầu xác định "cơ chế nào có tác dụng theo hướng nào", còn
+GIÁ TRỊ lambda tối ưu cần 1 lần sweep riêng (tương tự
+`pipeline/run_lambda_sweep.sh` đã làm cho `lambda_identity` bản cũ) trước
+khi chốt số liệu chính thức.
+
+### Kết quả ablation KD v2 (điền sau khi chạy)
+
+| Cấu hình | identity_accuracy (mobilenet_v2) | Chênh lệch so với `kdv2_baseline` |
+|---|---|---|
+| `kdv2_baseline` | | — |
+| `kdv2_feat` | | |
+| `kdv2_multijudge` | | |
+| `kdv2_full` | | |
+
+### Kết quả validate đầy đủ (multi-seed x 5 backbone, điền sau khi chạy)
+
+| Backbone | `span_tiny` (recipe cũ) | `span_tiny` (recipe mới, cấu hình thắng) | Cohen's d | pBonf |
+|---|---|---|---|---|
+| EfficientNet-B0 | | | | |
+| GhostNet-100 | | | | |
+| MobileNetV2 | | | | |
+| MobileNetV3-Small | | | | |
+| ResNet-18 | | | | |
+
+**Tiêu chí thành công cho cải tiến này**: (1) tăng tỷ lệ backbone đạt ý
+nghĩa thống kê cho `tiny > lr` từ 3/5 (recipe cũ) lên cao hơn, lý tưởng 5/5;
+(2) đặc biệt cải thiện đúng backbone yếu nhất hiện tại (`resnet18`); (3)
+không làm xấu đi bất kỳ backbone nào đang tốt (không "được chỗ này mất chỗ
+kia"); (4) lặp lại được ở cả 2 dataset (EarVN1.0 + AWEx).
+
+## [MỚI] Saliency-Weighted Identity-Critical Loss
+
+### Động lực
+
+Phân tích định tính trong bản thảo bài báo (Figure 2b) chỉ ra 1 điểm mù của
+recipe hiện tại: PSNR gần như hoà giữa 2 cấu hình (30.92 vs 30.89 dB) hoá ra
+là do model tái tạo TỐT phần TÓC/NỀN, chứ không phải phần TAI (bị che khuất
+trong mẫu đó) — tức là pixel loss L1 đồng đều trên toàn ảnh đang "phí" một
+phần dung lượng học vào vùng KHÔNG quan trọng cho tác vụ nhận dạng downstream.
+Đây là lỗ hổng khá cơ bản: loss huấn luyện SR không hề biết "vùng nào của
+ảnh mới thực sự quyết định danh tính".
+
+### Phương pháp
+
+Dùng CHÍNH hội đồng judge (multi-judge, mục trên) để suy ra 1 saliency map
+KHÔNG CẦN NHÃN SEGMENTATION TAI MỚI (EarVN1.0 không có, annotate tay tốn kém):
+với mỗi judge, tính gradient của "năng lượng embedding" `||f(x)||²` theo
+TỪNG PIXEL ảnh HR đầu vào — pixel nào có gradient lớn là pixel ảnh hưởng
+nhiều nhất đến đặc trưng nhận dạng theo góc nhìn của judge đó. Trung bình
+saliency qua tất cả judge, chuẩn hoá về [0.3, 1.0] (không triệt tiêu hoàn
+toàn vùng "ít quan trọng", tránh model bỏ mặc hẳn 1 phần ảnh), rồi dùng làm
+trọng số không gian cho 1 pixel loss BỔ SUNG (`lambda_saliency`, cộng thêm
+bên cạnh `lambda_pixel` đồng đều, không thay thế):
+
+```
+saliency(x) = trung_bình_qua_judge( |∂||judge.embed(x)||² / ∂x| )   # chuẩn hoá [0.3, 1.0]
+loss_saliency = mean( saliency ⊙ |SR - HR| )
+```
+
+Xem cài đặt đầy đủ trong `train_sr_distill.py::compute_multi_judge_saliency()`
+và cách nối vào tổng loss trong `compute_total_loss()`.
+
+**Vì sao đây là novelty thật (không chỉ là "thêm 1 hệ số")**: các công trình
+SR-cho-nhận-dạng được trích trong Related Work (Ataer-Cansizoglu et al.,
+Nguyen et al., Ribeiro et al.) đều chỉ so khớp EMBEDDING TOÀN CỤC (identity
+loss dạng cosine/L2 trên vector đặc trưng) — KHÔNG có công trình nào trong
+nhóm này dùng chính gradient của recognition model để tạo trọng số KHÔNG
+GIAN cho pixel loss. Đây là 1 dạng "self-supervised region-of-interest" suy
+ra hoàn toàn từ model đã có, không cần thêm dữ liệu/nhãn/model nào mới.
+
+### Chi phí — chỉ ảnh hưởng lúc TRAIN
+
+`compute_multi_judge_saliency()` cần 1 lần forward+backward bổ sung QUA TỪNG
+judge (chỉ khi `lambda_saliency > 0`), KHÔNG ảnh hưởng gì đến checkpoint/
+params/FLOPs/latency lúc deploy (giống hệt các judge khác, chỉ tồn tại lúc
+train).
+
+### Cần sweep trước khi đưa vào bài báo
+
+```bash
+bash pipeline/run_lambda_saliency_sweep.sh
+```
+
+Quét `lambda_saliency` (0.0, 0.15, 0.3, 0.6, 1.0) x 3 seed, cố định
+`lambda_feat`/`lambda_identity` ở cấu hình đã thắng từ `run_ablation_kd_v2.sh`
+(sửa 2 biến đầu file trước khi chạy). Kết quả:
+`results/lambda_saliency_sweep/saliency_sweep_summary.csv` (đã gồm paired
+t-test + Cohen's d so với `lambda_saliency=0.0`).
+
+## [MỚI] Differentiable/Learned Block Pruning
+
+### Động lực
+
+Bản thảo bài báo tự nhận việc `span_tiny` "giữ khối 1-3, bỏ khối 4-6" là
+"a choice made for implementation convenience rather than validated against
+alternatives" (mục 5.7-ii — hạn chế đã tự nêu, chưa giải quyết). Đây cũng là
+nguồn gốc hợp lý nhất của hiện tượng "`span_tiny` không đồng nhất giữa các
+backbone/dataset": cắt cố định theo VỊ TRÍ, không theo MỨC ĐỘ ĐÓNG GÓP thực
+tế — khối bị cắt có thể quan trọng với backbone/dataset này nhưng không
+quan trọng với backbone/dataset khác.
+
+### Phương pháp
+
+`models/sr_models.py::SPANLearnedPrune` — SPAN với 1 gate liên tục học được
+cho MỖI khối SPAB (`gate_i = sigmoid(alpha_i)`, `alpha_i` là 1 scalar):
+
+```
+O_i = O_{i-1} + gate_i * (SPAB_i(O_{i-1}) - O_{i-1})
+```
+
+`gate_i=0` → bỏ hoàn toàn khối i; `gate_i=1` → áp dụng đầy đủ. Khởi tạo TẤT
+CẢ gate gần 1 (hành vi ban đầu giống `span_large`, ngân sách đầy đủ 6 khối),
+huấn luyện với ĐÚNG loss downstream đã có (pixel + distill + feature-KD +
+saliency + identity, tái sử dụng 100% `compute_total_loss()` từ
+`train_sr_distill.py`) cộng thêm 1 sparsity penalty:
+
+```
+loss_total = compute_total_loss(...) + lambda_sparsity * mean(gate)
+```
+
+Khối nào bị loss downstream "bảo vệ" (gỡ ra làm loss tăng nhiều hơn phần
+tiết kiệm từ sparsity penalty) giữ gate cao; khối không đóng góp nhiều bị
+đẩy gate về gần 0. Sau khi train xong, `harden_and_export()` XOÁ HẲN khối có
+gate dưới ngưỡng (`gate_harden_threshold`, mặc định 0.5) khỏi `ModuleList`,
+trả về 1 model **SPAN thường** (không còn gate/tham số phụ nào) — tái sử
+dụng nguyên vẹn hạ tầng đo params/FLOPs/latency/eval đã có cho SPAN thường,
+không cần code path riêng.
+
+**Vì sao đây là novelty thật**: đây KHÔNG phải magnitude-based pruning kinh
+điển (dựa vào độ lớn trọng số) — quyết định giữ/bỏ khối được dẫn dắt bởi TOÀN
+BỘ loss downstream (bao gồm cả identity-aware loss và saliency-weighted loss
+ở trên), tức là pruning "biết" tác vụ cuối cùng là nhận dạng vành tai, không
+chỉ là tái tạo pixel. Đây cũng là câu trả lời NGUYÊN TẮC (tự động, tái lập
+được) cho câu hỏi "vị trí cắt khối có quan trọng không?" mà bài báo mới chỉ
+đặt ra như 1 hạn chế/ablation dự kiến.
+
+### Huấn luyện + cứng hoá
+
+```bash
+python train_sr_learned_prune.py --config configs/config.yaml
+```
+
+Script tự động: (1) train `SPANLearnedPrune` (ngân sách `n_blocks_budget=6`)
+tới early-stop; (2) cứng hoá bằng `harden_and_export()`; (3) lưu checkpoint
+deploy-ready tương thích `build_sr_model("span_pruned", scale, n_blocks=K)`
+vào `best.pt` + metadata (`prune_metadata.json`, ghi lại khối nào bị
+giữ/bỏ và giá trị gate cuối — dùng vẽ hình minh hoạ "learned pruning
+pattern" cho bài báo).
+
+### Cần sweep + validate trước khi đưa vào bài báo
+
+```bash
+bash pipeline/run_prune_sparsity_screen.sh          # bước 1: sàng lọc nhanh lambda_sparsity (1 backbone, 1 seed/mức)
+bash pipeline/run_multi_seed_learned_prune.sh       # bước 2: validate multi-seed x 5-backbone (sau khi chọn xong lambda_sparsity)
+```
+
+### Dùng checkpoint đã cứng hoá ở các bước sau
+
+Y HỆT cách dùng `span_tiny`, chỉ khác cờ kiến trúc:
+
+```bash
+python data/build_sr.py --arch span_pruned --n_blocks <K> --sr_ckpt runs/sr_learned_prune*/best.pt ...
+python eval_sr_quality.py --arch span_pruned --n_blocks <K> --ckpt runs/sr_learned_prune*/best.pt ...
+```
+
+(`<K>` = `n_blocks_kept` đọc từ `prune_metadata.json` ghi kèm checkpoint đó.)
+
 ## Script liên quan
 
-- `train_sr_distill.py` — huấn luyện SPAN cải tiến
-- `data/build_sr.py` — sinh `splits/sr_improved` từ checkpoint đã cải tiến
-- `models/sr_models.py` — định nghĩa SPAN, SPAB, EDSR
+- `train_sr_distill.py` — huấn luyện SPAN cải tiến (multi-judge identity loss
+  + feature-level KD + saliency-weighted identity-critical loss + distillation
+  output-level + pixel loss)
+- `train_sr_learned_prune.py` — [MỚI] học pruning độ sâu có giám sát (gate học
+  được cho từng khối SPAB, tái sử dụng toàn bộ loss ở trên + sparsity penalty)
+- `data/build_sr.py` — sinh `splits/sr_improved`/`splits/sr_pruned` từ
+  checkpoint đã cải tiến (hỗ trợ `--arch span_pruned --n_blocks K`)
+- `models/sr_models.py` — định nghĩa SPAN, SPAB, EDSR, `SRFeatureHook`,
+  `SPANLearnedPrune` ([MỚI])
+- `pipeline/run_ablation_kd_v2.sh` + `data/aggregate_ablation_kd_v2_results.py`
+  — ablation 2x2 cho feature-KD + multi-judge
+- `pipeline/run_lambda_saliency_sweep.sh` + `data/aggregate_saliency_sweep.py`
+  — [MỚI] sweep lambda_saliency
+- `pipeline/run_prune_sparsity_screen.sh` — [MỚI] sàng lọc lambda_sparsity cho
+  learned pruning
+- `pipeline/run_multi_seed_learned_prune.sh` — [MỚI] validate đầy đủ learned
+  pruning (multi-seed x 5-backbone)

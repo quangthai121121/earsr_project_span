@@ -119,6 +119,24 @@ echo ""
 echo "################################################################"
 echo "# BƯỚC 1/5 — Train span_large (1 lần)                           #"
 echo "################################################################"
+# [SỬA — bổ sung sau code review, vòng 4, điểm 1] Script này CỐ Ý KHÔNG pin
+# cứng lambda_feat/saliency/identity — đúng docstring đầu file: mục đích là
+# train span_large bằng "đúng lambda CUỐI CÙNG đã chốt trong config" (tức
+# CÙNG recipe với span_tiny ở thời điểm chạy, để cô lập biến kiến trúc, không
+# phải cô lập biến recipe). Pin cứng về đây sẽ làm HỎNG chính mục đích so
+# sánh công bằng này nếu sau này bạn chốt lambda_feat/saliency>0 cho span_tiny.
+# RỦI RO đã ghi nhận: nếu default trong config.yaml đổi SAU KHI script này đã
+# chạy 1 lần với giá trị cũ, 2 lần chạy sẽ dùng 2 recipe khác nhau mà không
+# có cảnh báo nào — để giảm rủi ro "âm thầm đổi recipe", IN RÕ giá trị lambda
+# THẬT SỰ được dùng ngay dưới đây (để bạn ghi lại theo từng lần chạy, phát
+# hiện ngay nếu vô tình khác input trước đó).
+python -c "
+import yaml
+ci = yaml.safe_load(open('$CONFIG'))['sr_improve']
+print('>>> Lambda THẬT SỰ dùng cho span_large (đọc từ $CONFIG, sr_improve.*):')
+for k in ['lambda_pixel', 'lambda_distill', 'lambda_feat', 'lambda_saliency', 'lambda_identity']:
+    print(f'    {k} = {ci.get(k, 0.0)}')
+"
 python train_sr_distill.py --config "$CONFIG" --student_arch span_large
 
 echo ""

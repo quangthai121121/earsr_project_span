@@ -17,6 +17,23 @@ mkdir -p "$RESULTS_DIR"
 ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")
 
+# [SỬA — bổ sung sau code review, vòng 5, điểm 2] Xem giải thích đầy đủ trong
+# pipeline/run_prune_sparsity_screen.sh — script này CŨNG dùng checkpoint
+# KHÔNG suffix seed. Fail sớm thay vì mất hàng giờ (4 cấu hình) rồi mới lỗi.
+LR_CKPT_NOSUFFIX="runs/recognition_lr_${BACKBONE}/best.pt"
+if [ ! -f "$LR_CKPT_NOSUFFIX" ]; then
+    echo "LỖI: thiếu $LR_CKPT_NOSUFFIX (checkpoint KHÔNG suffix seed)."
+    echo "     -> chạy 'python train_recognition.py --config $CONFIG --domain lr"
+    echo "        --backbone $BACKBONE' (xem pipeline/03_train_baseline_recognition.sh)"
+    echo "        trước — KHÁC với checkpoint '_seed<N>' của run_multi_seed.sh."
+    exit 1
+fi
+
+# pixel_identity / full cần judge HR — kiểm tra NGAY (identity_judges trong
+# config.yaml là 3 backbone, không chỉ mobilenet_v2).
+source "$(dirname "$0")/_check_hr_judges.sh"
+check_hr_judges
+
 declare -A CONFIGS=(
     [pixel_only]="1.0 0.0 0.0"
     [pixel_distill]="1.0 1.0 0.0"
@@ -30,8 +47,14 @@ for NAME in pixel_only pixel_distill pixel_identity full; do
     echo "# Ablation: $NAME (lambda_pixel=$LP lambda_distill=$LD lambda_identity=$LI)"
     echo "################################################################"
 
+    # [SỬA — confound phát hiện qua code review] PIN TƯỜNG MINH lambda_feat=0
+    # và lambda_saliency=0 — ablation này CHỈ cô lập pixel/distill/identity,
+    # không được để 2 cơ chế feature-KD/saliency (thêm sau) âm thầm bật lên
+    # qua default config.yaml (dù default hiện đã là 0.0, pin rõ ở đây để
+    # script này KHÔNG BAO GIỜ phụ thuộc vào default tương lai của config).
     python train_sr_distill.py --config "$CONFIG" \
-        --lambda_pixel "$LP" --lambda_distill "$LD" --lambda_identity "$LI" \
+        --lambda_pixel "$LP" --lambda_distill "$LD" --lambda_feat 0 --lambda_saliency 0 \
+        --lambda_identity "$LI" \
         --run_suffix "_ablation_${NAME}"
 
     python data/build_sr.py --lr_dir splits/lr \

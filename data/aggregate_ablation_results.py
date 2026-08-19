@@ -28,9 +28,18 @@ def main():
     rows = []
     for f in sorted(Path(args.results_dir).glob("ablation_*.json")):
         name = f.stem.replace("ablation_", "")
+        # [SỬA — bug phát hiện qua code review] glob "ablation_*.json" cũng khớp
+        # "ablation_kdv2_*.json" (sinh bởi pipeline/run_ablation_kd_v2.sh, recipe
+        # HOÀN TOÀN KHÁC — 2x2 feat x multijudge, không phải pixel/distill/identity
+        # của ablation này) — nếu chạy lại aggregator này trên cùng thư mục
+        # results/ đã có cả 2 loại file, các dòng "kdv2_*" sẽ lọt vào bảng với
+        # lambda=None (không có trong LAMBDA_MAP) — bỏ qua tường minh thay vì
+        # âm thầm ghi hàng rác vào CSV.
+        if name not in LAMBDA_MAP:
+            continue
         with open(f, "r", encoding="utf-8") as fh:
             data = json.load(fh)
-        lp, ld, li = LAMBDA_MAP.get(name, (None, None, None))
+        lp, ld, li = LAMBDA_MAP[name]
         rows.append({
             "config_name": name,
             "lambda_pixel": lp,

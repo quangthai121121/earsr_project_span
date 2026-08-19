@@ -70,7 +70,13 @@ class DeviceManager:
 def move_optimizer_state(optimizer, device: str):
     """Di chuyển toàn bộ tensor trạng thái của optimizer (momentum, exp_avg...)
     sang device mới — bắt buộc phải làm khi đổi device giữa chừng, nếu không
-    optimizer.step() sẽ lỗi do param và state nằm khác device nhau."""
+    optimizer.step() sẽ lỗi do param và state nằm khác device nhau.
+
+    optimizer=None (pha val/eval, không có optimizer) là no-op — nếu không
+    guard, OOM lúc validation trong train_sr_distill.py/_move_all_to sẽ
+    AttributeError và sập cả job thay vì fallback CPU."""
+    if optimizer is None:
+        return
     for state in optimizer.state.values():
         for k, v in state.items():
             if torch.is_tensor(v):

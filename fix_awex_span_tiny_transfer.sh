@@ -46,6 +46,16 @@ echo ""
 echo "################################################################"
 echo "# BƯỚC 2 — Fine-tune lại span_tiny (teacher giờ đã sạch)"
 echo "################################################################"
+# [SỬA — bổ sung sau code review, vòng 4, điểm 1] CỐ Ý KHÔNG pin cứng lambda
+# — xem giải thích tương tự trong scripts/run_transfer_learning.sh — chỉ in
+# rõ giá trị thật sự dùng để không đổi recipe âm thầm.
+python -c "
+import yaml
+ci = yaml.safe_load(open('$TGT_FT_CONFIG'))['sr_improve']
+print('>>> Lambda THẬT SỰ dùng để fine-tune span_tiny (đọc từ $TGT_FT_CONFIG, sr_improve.*):')
+for k in ['lambda_pixel', 'lambda_distill', 'lambda_feat', 'lambda_saliency', 'lambda_identity']:
+    print(f'    {k} = {ci.get(k, 0.0)}')
+"
 python train_sr_distill.py --config "$TGT_FT_CONFIG" \
     --init_ckpt "runs/sr_improved_span_tiny/best.pt" \
     --run_suffix "$SUFFIX"

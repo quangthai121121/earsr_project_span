@@ -43,6 +43,10 @@ def main():
     ap.add_argument("--skip_lpips", action="store_true",
                      help="Bỏ qua tính LPIPS (nếu chưa cài package `lpips` hoặc muốn chạy nhanh "
                           "để kiểm tra pipeline trước) — CSV sẽ ghi 'NA' cho cột lpips.")
+    ap.add_argument("--n_blocks", type=int, default=None,
+                     help="[MỚI] chỉ cần khi --arch span_pruned (checkpoint đã cứng hoá từ "
+                          "train_sr_learned_prune.py) — khớp số khối còn lại, xem "
+                          "prune_metadata.json ghi kèm checkpoint đó")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -62,9 +66,13 @@ def main():
     splits_json = f"{splits_root}/splits.json"
     test_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "test",
                                 return_bbox=True, splits_json=splits_json)
+    if len(test_set) == 0:
+        raise RuntimeError(
+            f"Tập test rỗng ({splits_root}/hr/test). Không đo được PSNR/SSIM. "
+            f"Chạy data/prepare_splits.py + data/build_lr.py trước.")
     loader = DataLoader(test_set, batch_size=16, shuffle=False, num_workers=4)
 
-    model = build_sr_model(args.arch, scale)
+    model = build_sr_model(args.arch, scale, n_blocks=args.n_blocks)
     state = torch.load(args.ckpt, map_location=device)
     model.load_state_dict(state)
     model.to(device).eval()
@@ -84,31 +92,80 @@ def main():
 
     psnr_roi_sum, ssim_roi_sum, lpips_roi_sum = 0.0, 0.0, 0.0
     psnr_full_sum, ssim_full_sum = 0.0, 0.0
-    n = 0
+    n, n_roi, n_empty_roi = 0, 0, 0
     with torch.no_grad():
         for lr_img, hr_img, bbox in loader:
             lr_img, hr_img = lr_img.to(device), hr_img.to(device)
             x0_b, y0_b, w_b, h_b = bbox
             sr_img = model(lr_img)
+            _, _, H, W = sr_img.shape
             for i in range(sr_img.size(0)):
                 psnr_full_sum += compute_psnr(sr_img[i:i + 1], hr_img[i:i + 1])
                 ssim_full_sum += compute_ssim(sr_img[i:i + 1], hr_img[i:i + 1])
+                n += 1
 
-                bbox_i = (int(x0_b[i]), int(y0_b[i]), int(w_b[i]), int(h_b[i]))
+                x0 = max(0, min(int(x0_b[i]), W))
+                y0 = max(0, min(int(y0_b[i]), H))
+                w = max(0, min(int(w_b[i]), W - x0))
+                h = max(0, min(int(h_b[i]), H - y0))
+                if w <= 0 or h <= 0:
+                    n_empty_roi += 1
+                    continue
+                bbox_i = (x0, y0, w, h)
                 psnr_roi_sum += compute_psnr_roi(sr_img[i:i + 1], hr_img[i:i + 1], bbox_i)
                 ssim_roi_sum += compute_ssim_roi(sr_img[i:i + 1], hr_img[i:i + 1], bbox_i)
                 if lpips_model is not None:
-                    x0, y0, w, h = bbox_i
                     sr_roi = sr_img[i:i + 1, :, y0:y0 + h, x0:x0 + w]
                     hr_roi = hr_img[i:i + 1, :, y0:y0 + h, x0:x0 + w]
                     lpips_roi_sum += compute_lpips(lpips_model, sr_roi, hr_roi)
-                n += 1
+                n_roi += 1
 
-    avg_psnr = psnr_roi_sum / n
-    avg_ssim = ssim_roi_sum / n
-    avg_lpips = (lpips_roi_sum / n) if lpips_model is not None else None
+    if n_empty_roi > 0:
+        print(f"Cảnh báo: {n_empty_roi}/{n} ảnh test có ROI rỗng sau clamp — "
+              f"PSNR/SSIM/LPIPS ROI chỉ trung bình trên {n_roi} ảnh còn lại.")
+    if n_roi == 0:
+        raise RuntimeError(
+            f"Không có ảnh test nào có ROI hợp lệ (n={n}, n_empty_roi={n_empty_roi}). "
+            f"Kiểm tra splits.json width/height và letterbox.")
+
+    avg_psnr = psnr_roi_sum / n_roi
+    avg_ssim = ssim_roi_sum / n_roi
+    avg_lpips = (lpips_roi_sum / n_roi) if lpips_model is not None else None
     avg_psnr_full = psnr_full_sum / n
     avg_ssim_full = ssim_full_sum / n
+
+    # [SỬA — bổ sung sau code review, vòng 7, điểm 3] Test-set-rỗng và
+    # ROI-rỗng-toàn-bộ đã được chặn ở trên (raise RuntimeError) — nhưng còn 1
+    # nguồn NaN/Inf KHÁC chưa được chặn: checkpoint BỊ HỎNG (ví dụ sinh ra từ
+    # 1 lần train mà val toàn NaN suốt training, xem cảnh báo
+    # "[EarlyStopping] KHÔNG có checkpoint ... hợp lệ" trong utils/early_stopping.py)
+    # khiến model sinh ảnh SR chứa NaN/Inf — psnr_roi_sum/ssim_roi_sum/... khi
+    # đó cộng dồn NaN, avg_* ở trên cũng thành NaN, nhưng KHÔNG có exception
+    # nào tự nhiên xảy ra (torch/Python cho phép NaN trôi qua các phép + / im
+    # lặng). Nếu không chặn, dòng NaN này sẽ được APPEND vào out_csv — file
+    # DÙNG CHUNG cho nhiều label/model (xem docstring đầu file) — làm hỏng cả
+    # bảng so sánh mà không ai để ý cho tới khi đọc lại CSV. Chặn tường minh
+    # ở đây, KHÔNG ghi ra file, theo đúng tinh thần "thà crash to còn hơn sai
+    # âm thầm" đã áp dụng ở chỗ khác trong chính file này (xem check schema
+    # CSV bên dưới).
+    _nan_check = {
+        "psnr_db": avg_psnr, "ssim": avg_ssim,
+        "psnr_db_full_canvas": avg_psnr_full, "ssim_full_canvas": avg_ssim_full,
+    }
+    if avg_lpips is not None:
+        _nan_check["lpips"] = avg_lpips
+    _bad_metrics = [k for k, v in _nan_check.items() if v != v or v in (float("inf"), float("-inf"))]
+    if _bad_metrics:
+        raise RuntimeError(
+            f"Metric {_bad_metrics} = NaN/Inf cho label='{args.label}' (arch={args.arch}, "
+            f"ckpt={args.ckpt}). Đây KHÔNG PHẢI do test set/ROI rỗng (đã kiểm tra ở trên) — "
+            f"nguyên nhân thường gặp nhất là CHECKPOINT BỊ HỎNG (model sinh ảnh SR chứa "
+            f"NaN/Inf, ví dụ do lúc train val loss toàn NaN — xem log train có dòng cảnh "
+            f"báo '[EarlyStopping] KHÔNG có checkpoint ... hợp lệ' hay không). KHÔNG ghi "
+            f"kết quả này vào {args.out_csv} (file dùng CHUNG cho nhiều model/label — 1 "
+            f"dòng NaN sẽ làm hỏng toàn bộ bảng so sánh mà không có dấu hiệu báo lỗi rõ "
+            f"ràng khi đọc lại CSV). Kiểm tra lại quá trình train checkpoint này trước khi "
+            f"eval lại.")
 
     params_m = count_params(model)
     params_deploy_m = count_params_deploy_mode(model)
@@ -132,6 +189,17 @@ def main():
         "flops_G": round(flops_g, 4) if flops_g is not None else "NA",
         "latency_ms": round(latency_ms, 3),
         "n_test_images": n,
+        # [SỬA — bổ sung sau code review, vòng 8, điểm 4] TRƯỚC ĐÂY CSV chỉ ghi
+        # "n_test_images" (= n, tổng số ảnh test) trong khi psnr_db/ssim/lpips
+        # (cột ROI) thực ra chia trung bình cho n_roi (= n - n_empty_roi, xem
+        # vòng lặp ở trên) — nếu có ảnh bị loại vì ROI rỗng sau clamp, n_roi <
+        # n nhưng người đọc CSV không biết, dễ hiểu lầm psnr_db là trung bình
+        # trên ĐỦ n ảnh. Với letterbox EarVN1.0 chuẩn, n_roi == n_test_images
+        # (không có ROI rỗng) nên 2 cột này thường trùng nhau — ghi thêm cột
+        # này để MINH BẠCH, không đổi cách tính đã có (n_roi/n_empty_roi đã in
+        # cảnh báo ra log ở trên, giờ lưu luôn vào CSV để không mất khi log
+        # trôi qua).
+        "n_roi_images": n_roi,
     }
 
     print(f"\n{'=' * 60}")
@@ -148,6 +216,10 @@ def main():
           f"PSNR/SSIM). 'NA' nếu chưa cài package `lpips` hoặc chạy với --skip_lpips.")
     print(f"psnr_db_full_canvas/ssim_full_canvas = số liệu CŨ (gồm cả viền đen) — giữ lại để "
           f"đối chiếu minh bạch, KHÔNG dùng để báo cáo trong bài báo (bị thổi phồng bởi viền đen).")
+    print(f"n_roi_images = số ảnh THỰC SỰ dùng để trung bình psnr_db/ssim/lpips (loại các ảnh "
+          f"ROI rỗng sau clamp, xem cảnh báo bên trên nếu có) — [MỚI] nếu n_roi_images < "
+          f"n_test_images, psnr_db/ssim/lpips KHÔNG phải trung bình trên toàn bộ tập test. "
+          f"Với letterbox EarVN1.0 chuẩn, 2 số này luôn bằng nhau.")
     print(f"{'=' * 60}\n")
 
     out_path = Path(args.out_csv)

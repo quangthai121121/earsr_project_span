@@ -39,7 +39,8 @@ from tqdm import tqdm
 from datasets.hrlr_pair_dataset import HRLRPairDataset
 from models.sr_models import build_sr_model
 from utils.device_manager import DeviceManager, move_optimizer_state
-from utils.early_stopping import EarlyStopping
+from utils.early_stopping import (EarlyStopping, save_state_dict as _save_state_dict,
+                                   save_last_if_missing as _save_last_if_missing)
 from utils.logger import setup_logger
 from utils.seed import set_seed
 
@@ -212,17 +213,26 @@ def main():
 
         is_best = stopper.step(val_loss)
         if is_best:
-            torch.save({k: v.cpu() for k, v in model.state_dict().items()}, run_dir / "best.pt")
+            _save_state_dict(model, run_dir / "best.pt")
             logger.info(f"  -> checkpoint tốt nhất mới (val_L1={val_loss:.4f}), đã lưu.")
 
         if stopper.should_stop:
             logger.info(
                 f"EARLY STOPPING tại epoch {epoch + 1}: val_L1 không cải thiện "
-                f"sau {patience} epoch liên tiếp. Best val_L1={stopper.best:.4f}"
+                f"sau {patience} epoch liên tiếp. Best val_L1={stopper.best_str}"
             )
             break
 
-    logger.info(f"=== Hoàn tất train SR '{arch}'. Best val_L1={stopper.best:.4f}. "
+    # [SỬA — bổ sung sau code review, vòng 4, điểm 3] TRƯỚC ĐÂY: nếu val_L1
+    # là NaN/Inf ở MỌI epoch, is_best không bao giờ True -> best.pt KHÔNG BAO
+    # GIỜ được tạo -> job train này tự nó không crash, nhưng bước SAU (data/
+    # build_sr.py, eval_sr_quality.py cố load run_dir/best.pt) sẽ
+    # FileNotFoundError, và log dòng cuối bên dưới vẫn nói "Checkpoint: ...best.pt"
+    # dù file không tồn tại (gây hiểu nhầm). Đảm bảo LUÔN có 1 file tại đây
+    # (xem save_last_if_missing() để biết vì sao checkpoint này — nếu phải
+    # dùng tới — KHÔNG đáng tin).
+    _save_last_if_missing(run_dir / "best.pt", model, logger, "best.pt")
+    logger.info(f"=== Hoàn tất train SR '{arch}'. Best val_L1={stopper.best_str}. "
                 f"Tổng số lần fallback CPU do OOM: {device_mgr.total_oom_events}. "
                 f"Checkpoint: {run_dir / 'best.pt'} ===")
 

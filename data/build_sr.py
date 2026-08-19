@@ -25,10 +25,14 @@ def main():
     ap.add_argument("--arch", default="fsrcnn")
     ap.add_argument("--scale", type=int, default=4)
     ap.add_argument("--out_dir", required=True)
+    ap.add_argument("--n_blocks", type=int, default=None,
+                     help="[MỚI] chỉ cần khi --arch span_pruned (checkpoint đã cứng hoá "
+                          "từ train_sr_learned_prune.py) — khớp số khối còn lại, xem "
+                          "prune_metadata.json ghi kèm checkpoint đó")
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_sr_model(args.arch, args.scale).to(device)
+    model = build_sr_model(args.arch, args.scale, n_blocks=args.n_blocks).to(device)
     model.load_state_dict(torch.load(args.sr_ckpt, map_location=device))
     model.eval()
 

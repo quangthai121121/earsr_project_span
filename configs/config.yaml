@@ -51,11 +51,121 @@ sr_improve:
   student_arch: "span_tiny"       # kiến trúc NÉN (nhẹ hơn SPAN baseline) — model thực sự triển khai
   student_pretrained_path: null   # span_tiny chưa có checkpoint chính thức -> train từ đầu
   lambda_pixel: 1.0
-  lambda_distill: 1.0             # ưu tiên bám sát chất lượng teacher
-  lambda_identity: 0.0            # hạ mạnh — có bằng chứng trọng số cao gây hại chất lượng
+  lambda_distill: 1.0             # ưu tiên bám sát chất lượng teacher (output-level KD, như cũ)
+
+  # [MỚI] Feature-level KD (hint-based, xem SRFeatureHook trong
+  # models/sr_models.py) — bổ sung BÊN CẠNH lambda_distill (output-level),
+  # KHÔNG thay thế. Khớp feature map trước conv chiếu cuối giữa student/teacher
+  # qua 1 adapter Conv1x1 học được (chỉ tồn tại lúc train, KHÔNG ảnh hưởng
+  # params/latency lúc deploy).
+  # [SỬA — lỗi CONFOUND phát hiện qua code review] Mặc định ĐỂ 0.0 (TẮT), KHÔNG
+  # phải 0.5 như bản trước — lambda_feat=0.5 làm mặc định khiến MỌI script cũ
+  # không truyền tường minh cờ này (pipeline/06_improve_span.sh,
+  # run_ablation.sh, run_lambda_sweep.sh) âm thầm đổi recipe, phá vỡ đúng lời
+  # hứa "TƯƠNG THÍCH NGƯỢC" ghi trong docstring train_sr_distill.py. Giá trị
+  # cần sweep (ví dụ 0.5) PHẢI truyền tường minh qua --lambda_feat khi chạy
+  # ablation (xem pipeline/run_ablation_kd_v2.sh) — KHÔNG đặt làm default toàn
+  # cục cho tới khi đã kiểm định xong bằng ablation.
+  lambda_feat: 0.0
+
+  # [MỚI] Saliency-weighted identity-critical pixel loss (xem
+  # compute_multi_judge_saliency trong train_sr_distill.py) — BỔ SUNG bên
+  # cạnh lambda_pixel đồng đều, KHÔNG thay thế. Trọng số không gian suy từ
+  # gradient của ĐÚNG logit identity thật (không phải ||emb||²) theo pixel
+  # ảnh HR, ép SR ưu tiên tái tạo đúng vùng ảnh hưởng nhiều nhất đến đặc
+  # trưng nhận dạng (nếp sụn tai) thay vì tối ưu đồng đều cả vùng tóc/nền —
+  # nhắm đúng vào phát hiện định tính trong bản thảo bài báo (Figure 2b).
+  # [SỬA — lỗi CONFOUND phát hiện qua code review, giống lambda_feat ở trên]
+  # Mặc định ĐỂ 0.0 (TẮT), KHÔNG phải 0.3 — lý do tương tự lambda_feat: giá
+  # trị cần sweep PHẢI truyền tường minh qua --lambda_saliency (xem
+  # pipeline/run_lambda_saliency_sweep.sh), không đặt làm default toàn cục.
+  lambda_saliency: 0.0
+
+  # hạ mạnh trong bản gốc vì có bằng chứng (single-judge) trọng số cao gây
+  # hại chất lượng (Cohen's d=-10.09, xem CHANGELOG/paper). [MỚI] Với
+  # identity_judges multi-judge bên dưới, giả thuyết là cơ chế gây hại
+  # (overfit vào "gu" của đúng 1 backbone giám khảo) được giảm bớt — CẦN
+  # sweep lại giá trị này (không giả định 0.0 hay giá trị cũ vẫn đúng) trước
+  # khi đưa vào bảng kết quả chính thức.
+  lambda_identity: 0.0
+
   teacher_arch: "span_official"   # học từ SPAN baseline (đã chứng minh chất lượng tốt)
   teacher_ckpt: "runs/sr_span_official/best.pt"
+
+  # [CŨ — vẫn giữ lại để tương thích ngược] chỉ dùng nếu "identity_judges" bên
+  # dưới rỗng/không có trong config (ví dụ config của dataset thứ 2 chưa cập
+  # nhật) — train_sr_distill.py sẽ tự fallback về đúng hành vi single-judge
+  # như trước khi có bản vá multi-judge này.
   frozen_recognition_ckpt: "runs/recognition_hr_mobilenet_v2/best.pt"
+
+  # [MỚI] Multi-Judge Ensemble Identity-Aware Distillation — thay vì 1 model
+  # giám khảo duy nhất (dễ khiến SR bị "overfit" vào đặc trưng riêng của đúng
+  # 1 kiến trúc recognition, không tổng quát hoá được sang backbone khác —
+  # xem phân tích trong docs/03_span_improvement.md), dùng ĐỒNG THỜI nhiều
+  # backbone khác họ kiến trúc (đã train sẵn ở domain "hr", Bước 3 pipeline)
+  # làm hội đồng giám khảo, identity loss = trung bình cosine loss qua cả 3.
+  # Yêu cầu: 3 checkpoint bên dưới đã tồn tại (chạy xong pipeline/
+  # 03_train_baseline_recognition.sh). Để trống danh sách này (identity_judges: [])
+  # nếu muốn dùng lại hành vi single-judge cũ (đọc từ frozen_recognition_ckpt).
+  identity_judges:
+    - backbone: "mobilenet_v2"
+      ckpt: "runs/recognition_hr_mobilenet_v2/best.pt"
+    - backbone: "resnet18"
+      ckpt: "runs/recognition_hr_resnet18/best.pt"
+    - backbone: "ghostnet_100"
+      ckpt: "runs/recognition_hr_ghostnet_100/best.pt"
+
+# ===== [MỚI] Học pruning độ sâu (train_sr_learned_prune.py) =====
+# Dùng CHUNG công thức loss (pixel/distill/feat/saliency/identity) với
+# sr_improve ở trên qua compute_total_loss() — CHỈ thêm 1 chiều mới: gate học
+# được (models/sr_models.py::SPANLearnedPrune) tự quyết định giữ/bỏ khối
+# SPAB nào, thay cho việc chọn tay "giữ khối 1-3" như student_arch=span_tiny.
+sr_learned_prune:
+  max_epochs: 150
+  patience: 10
+  batch_size: 64
+  lr: 1.0e-4
+  n_blocks_budget: 6          # ngân sách khối ban đầu (đầy đủ, bằng span_large) — training tự cắt xuống
+  gate_init: 3.0              # sigmoid(3.0)=0.953 -> gần như áp dụng đầy đủ lúc khởi tạo
+
+  # [CẦN SWEEP] hệ số phạt sparsity trên gate trung bình — quá thấp thì gate
+  # gần như không giảm (không có tác dụng pruning gì, tương đương span_large
+  # thường); quá cao thì MỌI khối đều bị đẩy về 0 bất kể có ích hay không
+  # (sập về model gần-identity, mất khả năng SR). 0.05 là giá trị KHỞI ĐIỂM,
+  # CHƯA kiểm định — cần chạy 1 sweep nhỏ (ví dụ 0.01/0.05/0.1/0.2) trước khi
+  # chốt số liệu chính thức, xem gate cuối cùng ở mỗi mức để chọn mức cho ra
+  # số khối còn lại hợp lý (ví dụ tương đương hoặc ít hơn span_tiny).
+  lambda_sparsity: 0.05
+
+  # [MỚI — sửa lỗi phát hiện qua code review] Regularizer "phân cực hoá" gate
+  # (binary/polarization penalty = mean(gate*(1-gate)), cực đại tại gate=0.5,
+  # cực tiểu tại gate=0 hoặc 1) — khuyến khích gate tụ về 0/1 THẬT thay vì lơ
+  # lửng quanh 0.5 (ví dụ gate=0.51 giữ nguyên khối, 0.49 xoá hẳn khi
+  # harden_and_export() — không có regularizer này, quyết định harden rất
+  # nhạy với sai số nhỏ, gây lệch hành vi train (gate mềm) vs deploy (gate
+  # cứng 0/1) nhiều hơn cần thiết). 0.1 là giá trị KHỞI ĐIỂM, CHƯA kiểm định.
+  lambda_binary: 0.1
+
+  gate_harden_threshold: 0.5  # khối có gate < ngưỡng này bị XOÁ HẲN khi harden_and_export()
+
+  # [MỚI — sửa lỗi "thiếu fine-tune sau harden" phát hiện qua code review]
+  # Sau khi harden_and_export() cắt hẳn các khối gate thấp, mô hình xuất ra
+  # (SPAN thường, không gate) được train THÊM số epoch này (dùng lại đúng
+  # compute_total_loss/run_epoch của train_sr_distill.py — không sparsity,
+  # không gate) để các khối CÒN LẠI thích nghi lại với việc chạy ở gate=1.0
+  # CỨNG (khác với gate mềm ví dụ 0.85 lúc train ban đầu) và với việc các
+  # khối bị xoá đã biến mất HẲN (không chỉ gate≈0). Đặt 0 để tắt hẳn bước
+  # này (không khuyến khích — sẽ có mismatch train/deploy như review đã chỉ ra).
+  finetune_epochs_after_harden: 30
+
+  # [MỚI — sửa lỗi phát hiện qua code review, vòng 2] Hệ số nhân LR train ban
+  # đầu (sr_learned_prune.lr) để ra LR dùng cho pha fine-tune sau harden —
+  # KHÔNG dùng thẳng lr gốc như bản trước. Đúng thông lệ chuẩn khi fine-tune
+  # sau pruning: model đã hội tụ gần tối ưu, chỉ cần thích nghi NHẸ với việc
+  # mất vài khối, LR gốc dễ làm trồi sụt/phá vỡ trọng số tốt đã học của các
+  # khối còn lại. 0.1 (hạ 10x) là giá trị KHỞI ĐIỂM hợp lý theo thông lệ
+  # pruning phổ biến (thường hạ 5-10x), CHƯA kiểm định riêng cho bài toán này.
+  finetune_lr_scale: 0.1
 
 # ===== Mô hình recognition — benchmark đa backbone =====
 recognition:

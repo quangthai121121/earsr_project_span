@@ -109,6 +109,40 @@ echo ""
 echo "################################################################"
 echo "# BƯỚC 1/5 — Train $ARCH qua train_sr_distill.py (CÙNG recipe span_tiny) #"
 echo "################################################################"
+# [SỬA — bổ sung sau code review, vòng 4, điểm 1] CỐ Ý KHÔNG pin cứng lambda
+# (xem docstring đầu file: mục đích là "ĐÚNG CÙNG recipe" với span_tiny/
+# span_large ở thời điểm chạy) — chỉ IN RÕ giá trị lambda thật sự dùng, tránh
+# đổi recipe âm thầm giữa các lần chạy nếu default config.yaml đổi sau này.
+python -c "
+import yaml
+ci = yaml.safe_load(open('$CONFIG'))['sr_improve']
+print('>>> Lambda THẬT SỰ dùng cho $ARCH (đọc từ $CONFIG, sr_improve.*):')
+for k in ['lambda_pixel', 'lambda_distill', 'lambda_feat', 'lambda_saliency', 'lambda_identity']:
+    print(f'    {k} = {ci.get(k, 0.0)}')
+"
+# [SỬA — bổ sung sau code review, vòng 4, điểm 2] CẢNH BÁO riêng cho ECBSR +
+# feature-KD: ECBSR đặt nn.PixelShuffle() ĐỨNG RIÊNG LẺ ngoài mọi
+# nn.Sequential (không theo pattern Sequential[Conv2d, PixelShuffle] mà
+# SRFeatureHook tìm) -> hook LUÔN rơi vào is_fallback=True (hook thẳng
+# PixelShuffle, bắt ảnh ĐÃ ĐÓNG GÓI KÊNH thay vì feature nội bộ thật) khi
+# ARCH=ecbsr. _setup_feat_kd() đã tự log cảnh báo (xem
+# models/sr_models.py::SRFeatureHook, train_sr_distill.py::_setup_feat_kd)
+# NHƯNG cảnh báo đó nằm giữa hàng trăm dòng log training, dễ bị bỏ sót nếu
+# không chủ động tìm — echo thêm 1 lần nữa NGAY TRƯỚC KHI train để không thể
+# bỏ sót nếu vô tình bật lambda_feat>0 khi train ecbsr.
+if [ "$ARCH" == "ecbsr" ]; then
+    LAMBDA_FEAT_CHECK=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['sr_improve'].get('lambda_feat', 0.0))")
+    if python -c "exit(0 if float('$LAMBDA_FEAT_CHECK') > 0 else 1)"; then
+        echo "!!! CẢNH BÁO: ARCH=ecbsr VÀ lambda_feat=$LAMBDA_FEAT_CHECK > 0 !!!"
+        echo "    ECBSR không theo pattern Sequential[Conv2d, PixelShuffle] -> SRFeatureHook"
+        echo "    sẽ fallback (student_feat_ch=teacher_feat_ch=48 TRÙNG NGẪU NHIÊN, KHÔNG"
+        echo "    tự lộ ra qua số kênh log) -> loss_feat thực chất so khớp ẢNH ĐÃ ĐÓNG GÓI"
+        echo "    KÊNH (gần trùng loss_distill), KHÔNG PHẢI hint-based feature-KD thật"
+        echo "    (teacher span_official vẫn hook ĐÚNG bình thường, chỉ student=ecbsr fallback)."
+        echo "    Xem log '[Feature KD] CẢNH BÁO: student hook đã FALLBACK...' ngay sau khi"
+        echo "    lệnh dưới đây chạy để xác nhận."
+    fi
+fi
 python train_sr_distill.py --config "$CONFIG" --student_arch "$ARCH"
 
 echo ""

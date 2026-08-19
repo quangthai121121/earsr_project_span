@@ -81,6 +81,101 @@ class SPAN(nn.Module):
         return torch.clamp(out, 0.0, 1.0)
 
 
+class SPANLearnedPrune(nn.Module):
+    """[MỚI] Biến thể SPAN với GATE HỌC ĐƯỢC cho từng khối SPAB — thay cho
+    việc chọn TAY "giữ khối 1-3, bỏ khối 4-6" như span_tiny hiện tại.
+
+    ĐỘNG LỰC: bản thảo bài báo tự nhận đây là hạn chế của span_tiny (mục
+    5.7-ii: "a choice made for implementation convenience rather than
+    validated against alternatives") — thay vì thử tay vài biến thể cố định
+    (giữ đầu/giữ cuối/xen kẽ), để CHÍNH quá trình huấn luyện quyết định khối
+    nào đáng giữ, dựa trên toàn bộ loss downstream (pixel + distill + feature
+    KD + saliency + identity, xem train_sr_learned_prune.py) — không chỉ dựa
+    vào tái tạo pixel như một tiêu chí pruning kinh điển (ví dụ magnitude-
+    based pruning) thường dùng.
+
+    CÔNG THỨC GATE (soft residual gate — KHÁC hoàn toàn Gumbel-Softmax/
+    discrete gate để đơn giản + ổn định huấn luyện ở quy mô dữ liệu nhỏ của
+    project này):
+        gate_i = sigmoid(alpha_i)                      # alpha_i: 1 scalar học được / khối
+        O_i = O_{i-1} + gate_i * (SPAB_i(O_{i-1}) - O_{i-1})
+    gate_i=0 -> bỏ HOÀN TOÀN khối i (O_i = O_{i-1}, tương đương identity);
+    gate_i=1 -> áp dụng ĐẦY ĐỦ (O_i = SPAB_i(O_{i-1}), giống SPAN thường).
+    Công thức này ĐÚNG với BẤT KỲ nội dung bên trong SPAB, không cần biết cấu
+    trúc residual/attention nội bộ của nó.
+
+    Huấn luyện: khởi tạo TẤT CẢ gate gần 1 (gate_init lớn -> hành vi ban đầu
+    giống hệt span_large với n_blocks đầy đủ), rồi thêm 1 sparsity penalty
+    (xem train_sr_learned_prune.py::lambda_sparsity) khuyến khích gate trung
+    bình giảm dần — khối nào bị loss downstream "bảo vệ" (gỡ ra làm loss tăng
+    nhiều hơn phần tiết kiệm được từ sparsity penalty) sẽ giữ gate cao, khối
+    nào không đóng góp nhiều sẽ bị đẩy gate về gần 0.
+
+    Sau khi train xong, gọi harden_and_export() để "cứng hoá": khối có
+    gate < threshold bị XOÁ HẲN khỏi ModuleList (không chỉ gate=0 lúc suy
+    luận) -> trả về 1 model SPAN THƯỜNG (models/sr_models.py::SPAN, n_blocks
+    = số khối còn lại) — model deploy cuối cùng KHÔNG còn gate/tham số phụ
+    nào, tái sử dụng NGUYÊN VẸN hạ tầng đo params/FLOPs/latency/eval đã có
+    sẵn cho SPAN thường (không cần code path riêng cho kiến trúc "đã prune").
+    """
+
+    def __init__(self, scale: int = 4, channels_in: int = 3, feat: int = 48,
+                 n_blocks: int = 6, gate_init: float = 3.0):
+        super().__init__()
+        self.head = nn.Conv2d(channels_in, feat, kernel_size=3, padding=1)
+        self.body = nn.ModuleList([SPAB(feat) for _ in range(n_blocks)])
+        self.body_tail = nn.Conv2d(feat, feat, kernel_size=3, padding=1)
+        self.upsample = nn.Sequential(
+            nn.Conv2d(feat, channels_in * (scale ** 2), kernel_size=3, padding=1),
+            nn.PixelShuffle(scale),
+        )
+        # gate_init=3.0 -> sigmoid(3.0)=0.953, gần 1 (áp dụng gần như đầy đủ)
+        # lúc khởi tạo -> sparsity penalty dần kéo gate của khối ít cần thiết
+        # xuống trong lúc train, thay vì bắt đầu từ 1 kiến trúc đã bị cắt sẵn.
+        self.gate_logits = nn.Parameter(torch.full((n_blocks,), gate_init))
+        self.scale = scale
+        self.channels_in = channels_in
+
+    def gates(self) -> torch.Tensor:
+        """Gate hiện tại (0..1) cho từng khối, KHÔNG có gradient — dùng để
+        log/theo dõi tiến trình pruning trong lúc train (xem
+        train_sr_learned_prune.py)."""
+        return torch.sigmoid(self.gate_logits.detach())
+
+    def forward(self, x):
+        feat = self.head(x)
+        body_in = feat
+        gates = torch.sigmoid(self.gate_logits)
+        for i, block in enumerate(self.body):
+            feat = feat + gates[i] * (block(feat) - feat)
+        feat = self.body_tail(feat) + body_in
+        out = self.upsample(feat)
+        return torch.clamp(out, 0.0, 1.0)
+
+    def harden_and_export(self, threshold: float = 0.5):
+        """[MỚI] 'Cứng hoá' sau khi train xong: khối có gate < threshold bị
+        XOÁ HẲN. Trả về (model_SPAN_đã_gọn, kept_indices, gate_values) —
+        model trả về dùng ĐÚNG class SPAN thường nên tái dùng 100% hạ tầng đo
+        params/FLOPs/latency/eval đã có, không cần sửa gì thêm ở
+        eval_sr_quality.py/build_sr.py để dùng được checkpoint xuất ra."""
+        gate_values = self.gates().tolist()
+        kept_indices = [i for i, g in enumerate(gate_values) if g >= threshold]
+        if not kept_indices:
+            # An toàn: không bao giờ xoá hết 100% khối (vô nghĩa về mặt kiến
+            # trúc) -> giữ lại ÍT NHẤT khối có gate cao nhất.
+            kept_indices = [max(range(len(gate_values)), key=lambda i: gate_values[i])]
+
+        exported = SPAN(scale=self.scale, channels_in=self.channels_in,
+                         feat=self.head.out_channels, n_blocks=len(kept_indices))
+        exported.head.load_state_dict(self.head.state_dict())
+        exported.body_tail.load_state_dict(self.body_tail.state_dict())
+        exported.upsample.load_state_dict(self.upsample.state_dict())
+        for new_i, old_i in enumerate(kept_indices):
+            exported.body[new_i].load_state_dict(self.body[old_i].state_dict())
+
+        return exported, kept_indices, gate_values
+
+
 class ResBlock(nn.Module):
     """Residual block chuẩn của EDSR (Lim et al., 2017), không dùng BatchNorm."""
 
@@ -832,8 +927,115 @@ class SMFANet(nn.Module):
         return torch.clamp(out, 0.0, 1.0)
 
 
+class SRFeatureHook:
+    """[MỚI — đã VÁ LẠI sau code review] Bắt feature map TRUNG GIAN (kênh
+    `feat`, ví dụ 28/48) TRƯỚC lớp conv chiếu cuối cùng (feat -> 3*scale²) của
+    BẤT KỲ kiến trúc SR nào trong build_sr_model() — dùng cho feature-level
+    knowledge distillation (hint-based KD, xem
+    train_sr_distill.py::compute_total_loss).
+
+    ĐỘNG LỰC: recipe distillation cũ (train_sr_distill.py trước bản vá này)
+    chỉ so khớp OUTPUT PIXEL cuối cùng giữa student/teacher (L1 trên ảnh SR),
+    đây là dạng KD yếu nhất trong literature SR distillation — không truyền
+    được tín hiệu về cách teacher TỔ CHỨC đặc trưng nội bộ, chỉ về kết quả
+    cuối. Hint-based feature distillation (khớp feature map trung gian, kiểu
+    FitNets/Lee et al. ECCV 2020 đã trích trong README) là tín hiệu mạnh hơn,
+    CHƯA được áp dụng trong project này trước bản vá này.
+
+    [SỬA — LỖI NGHIÊM TRỌNG phát hiện qua code review] Bản đầu tiên của class
+    này hook `forward_pre_hook` NGAY TRÊN `nn.PixelShuffle`, nghĩa là bắt
+    `inputs[0]` = output của conv chiếu cuối (feat -> 3*scale² kênh) — tensor
+    đó CHỈ LÀ ảnh SR đã đóng gói lại thành kênh (permute thuần tuý, PixelShuffle
+    không đổi giá trị, chỉ sắp xếp lại vị trí không gian), KHÔNG PHẢI feature
+    nội bộ 28/48 kênh sau các khối SPAB. Vì PixelShuffle là song ánh
+    (bijection) không đổi giá trị phần tử, L1 tính TRÊN tensor trước/sau
+    PixelShuffle cho ra CÙNG MỘT GIÁ TRỊ (chỉ khác thứ tự phần tử được ghép
+    cặp, mean vẫn như nhau) — tức loss_feat cũ gần như trùng lặp với
+    loss_distill (output-level KD), KHÔNG hề là hint-based/FitNets KD như
+    docstring tuyên bố. Bản vá này lùi lại đúng 1 lớp: tìm nn.Sequential chứa
+    PixelShuffle, hook forward_pre_hook lên CONV NGAY TRƯỚC nó trong cùng
+    Sequential đó -> bắt được input của conv này, chính là feature `feat`
+    kênh thật sau body_tail (SPAN/SPANLearnedPrune) hay tương đương ở các
+    kiến trúc khác — đây mới là điểm phù hợp cho hint-based KD.
+
+    THIẾT KẾ: tìm theo TYPE/CẤU TRÚC (Sequential[..., Conv2d, PixelShuffle]),
+    KHÔNG theo tên thuộc tính nội bộ — bắt buộc vì teacher mặc định là
+    span_official (import từ external/SPAN, code ngoài không kiểm soát được
+    tên thuộc tính như span_tiny/span_large tự viết trong file này). Mọi
+    kiến trúc SR "họ SPAN" trong build_sr_model() (SPAN/span_tiny/span_large/
+    span_official/SPANLearnedPrune, EDSR) đều dùng đúng pattern
+    `nn.Sequential(Conv2d(feat, C*scale²), nn.PixelShuffle(scale))` cho khối
+    upsample cuối, nên cách tiếp cận này áp dụng chung được, không cần code
+    riêng cho từng kiến trúc. Với kiến trúc KHÔNG theo pattern này (ví dụ
+    ECBSR, nơi PixelShuffle đứng riêng lẻ ngoài Sequential) — fallback về hook
+    thẳng lên PixelShuffle như bản cũ, kèm cảnh báo, vì các kiến trúc này
+    hiện KHÔNG được dùng làm student/teacher trong recipe distillation của
+    project (chỉ train pixel-loss thuần qua train_sr.py).
+
+    Hook được đăng ký 1 LẦN lúc khởi tạo, tự động cập nhật `self.feat` ở MỌI
+    lần forward() tiếp theo của model — không cần gọi lại registration mỗi
+    batch. Nhớ gọi `.remove()` khi không cần nữa (tránh rò rỉ hook nếu model
+    được tái sử dụng cho việc khác).
+
+    [SỬA — LỖI PHÁT HIỆN QUA CODE REVIEW, vòng 2] `self.is_fallback` (public,
+    trước đây là `_is_fallback` không ai kiểm tra) PHẢI được caller kiểm tra
+    và CẢNH BÁO khi True — vì fallback quay lại hook thẳng PixelShuffle (gần
+    như output-level KD, không phải hint-based KD thật) diễn ra HOÀN TOÀN ÂM
+    THẦM: log "student_feat_ch=... teacher_feat_ch=..." ở nơi gọi (xem
+    train_sr_distill.py/train_sr_learned_prune.py::_setup_feat_kd) vẫn in ra
+    số kênh bình thường, và với SPAN/span_tiny/span_official ở scale=4, số
+    kênh feature nội bộ (48) TRÙNG NGẪU NHIÊN với số kênh RGB đã đóng gói
+    (3*scale²=48) — nên KHÔNG THỂ phân biệt hook đúng hay fallback chỉ bằng
+    cách nhìn số kênh trong log. Do đó bên gọi bắt buộc phải kiểm tra thuộc
+    tính `is_fallback` này tường minh."""
+
+    def __init__(self, model: nn.Module):
+        target = None
+        self.is_fallback = False
+        for m in model.modules():
+            if isinstance(m, nn.Sequential):
+                children = list(m.children())
+                for i, child in enumerate(children):
+                    if isinstance(child, nn.PixelShuffle) and i > 0 \
+                            and isinstance(children[i - 1], nn.Conv2d):
+                        target = children[i - 1]
+        if target is None:
+            # Fallback: kiến trúc không theo pattern Sequential[Conv2d, PixelShuffle]
+            # (ví dụ ECBSR) — hook thẳng lên PixelShuffle như trước, chấp nhận
+            # kém chính xác hơn (gần với output-level KD) vì không có cách tổng
+            # quát khác để định vị "feature trước conv chiếu cuối" không cần biết
+            # tên thuộc tính riêng của từng kiến trúc.
+            for m in model.modules():
+                if isinstance(m, nn.PixelShuffle):
+                    target = m
+            self.is_fallback = True
+        if target is None:
+            raise RuntimeError(
+                "SRFeatureHook: không tìm thấy nn.PixelShuffle trong model "
+                f"{type(model).__name__} — feature-level distillation yêu cầu "
+                "kiến trúc kết thúc bằng pixel-shuffle upsample (đúng với mọi "
+                "kiến trúc hiện có trong build_sr_model())."
+            )
+        self.feat = None
+        self._handle = target.register_forward_pre_hook(self._hook)
+
+    def _hook(self, _module, inputs):
+        # forward_pre_hook: inputs[0] là tensor ĐI VÀO module được hook.
+        # Trường hợp chuẩn (không fallback): module được hook là conv chiếu
+        # cuối (feat -> 3*scale²), nên inputs[0] chính là feature `feat` kênh
+        # TRƯỚC khi chiếu ra ảnh — đúng điểm hint-based KD.
+        # Trường hợp fallback: module được hook là chính PixelShuffle, nên
+        # inputs[0] vẫn là ảnh đã đóng gói kênh (như hành vi cũ).
+        self.feat = inputs[0]
+
+    def remove(self):
+        self._handle.remove()
+        self.feat = None
+
+
 def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
-                    feature_channels: int = None) -> nn.Module:
+                    feature_channels: int = None, n_blocks: int = None,
+                    gate_init: float = 3.0) -> nn.Module:
     """
     arch:
       - "span"          : bản tự viết lại (reimplementation), feat=28, n_blocks=4 —
@@ -853,6 +1055,22 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
                            train from-scratch ở kích thước tùy ý qua
                            feature_channels. Xem models/span_official_wrapper.py.
       - "span_large", "edsr": như cũ.
+      - "span_learned_prune": [MỚI] biến thể SPAN với gate học được cho từng
+                    khối SPAB (xem class SPANLearnedPrune), khởi tạo với ngân
+                    sách ĐẦY ĐỦ 6 khối (bằng span_large) — dùng làm điểm khởi
+                    đầu cho train_sr_learned_prune.py, KHÔNG dùng trực tiếp
+                    để deploy (phải gọi harden_and_export() sau khi train
+                    xong để ra model SPAN thường gọn nhẹ thật sự).
+      - "span_pruned": [MỚI] model SPAN thường (feat=48) với SỐ KHỐI TÙY Ý,
+                    dùng để NẠP LẠI checkpoint đã "cứng hoá" bằng
+                    SPANLearnedPrune.harden_and_export() (xem
+                    train_sr_learned_prune.py) — BẮT BUỘC truyền n_blocks
+                    khớp đúng số khối còn lại sau khi prune (xem
+                    prune_metadata.json ghi kèm checkpoint đó), ví dụ:
+                    build_sr_model("span_pruned", scale, n_blocks=4).
+
+    n_blocks: CHỈ áp dụng cho arch="span_pruned" (bắt buộc) — số khối SPAB
+    còn lại sau khi cứng hoá 1 model học pruning. Bỏ qua với mọi arch khác.
       - "rlfn"    : [MỚI] RLFN-cut (Kong et al. 2022, NTIRE22 runtime-track
                     winner) — baseline SR nhẹ BÊN NGOÀI họ SPAN, train
                     from-scratch bằng train_sr.py (pixel loss L1), KHÔNG
@@ -896,6 +1114,23 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
     if arch == "span_large":
         # biến thể lớn hơn — chỉ dùng để so sánh/khảo sát, KHÔNG phải mục tiêu triển khai
         return SPAN(scale=scale, feat=48, n_blocks=6)
+    if arch == "span_learned_prune":
+        # [SỬA — lỗi phát hiện qua code review] Trước đây hardcode n_blocks=6,
+        # bỏ qua n_blocks_budget/gate_init trong config (sr_learned_prune) —
+        # KHÔNG ảnh hưởng train_sr_learned_prune.py (script đó gọi thẳng
+        # SPANLearnedPrune(...) chứ không qua hàm này) nhưng khiến hàm factory
+        # này cho kết quả sai lệch nếu gọi trực tiếp (debug/inspect model).
+        # Mặc định n_blocks=6/gate_init=3.0 (ngân sách ĐẦY ĐỦ, bằng span_large)
+        # nếu không truyền, nhưng nay tôn trọng tham số truyền vào.
+        return SPANLearnedPrune(scale=scale, feat=48,
+                                 n_blocks=n_blocks if n_blocks is not None else 6,
+                                 gate_init=gate_init)
+    if arch == "span_pruned":
+        if n_blocks is None:
+            raise ValueError(
+                "build_sr_model('span_pruned', ...) yêu cầu truyền n_blocks tường minh "
+                "(khớp số khối còn lại sau harden_and_export(), xem prune_metadata.json).")
+        return SPAN(scale=scale, feat=48, n_blocks=n_blocks)
     if arch == "span_official":
         from models.span_official_wrapper import build_official_span
         kwargs = {"scale": scale, "pretrained_path": pretrained_path}

@@ -23,6 +23,24 @@ mkdir -p "$RESULTS_DIR"
 STUDENT_ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")
 
+# [SỬA — bổ sung sau code review, vòng 5, điểm 2] Xem giải thích đầy đủ trong
+# pipeline/run_prune_sparsity_screen.sh — script này CŨNG dùng checkpoint
+# KHÔNG suffix seed. Fail sớm thay vì mất hàng giờ (6 mức x 3 seed = 18 lần
+# train SR) rồi mới lỗi ở lần train_recognition.py ĐẦU TIÊN.
+LR_CKPT_NOSUFFIX="runs/recognition_lr_${BACKBONE}/best.pt"
+if [ ! -f "$LR_CKPT_NOSUFFIX" ]; then
+    echo "LỖI: thiếu $LR_CKPT_NOSUFFIX (checkpoint KHÔNG suffix seed)."
+    echo "     -> chạy 'python train_recognition.py --config $CONFIG --domain lr"
+    echo "        --backbone $BACKBONE' (xem pipeline/03_train_baseline_recognition.sh)"
+    echo "        trước — KHÁC với checkpoint '_seed<N>' của run_multi_seed.sh."
+    exit 1
+fi
+
+# Các mức lambda_identity>0 cần 3 judge HR — kiểm tra NGAY, không để 3 seed
+# ở mức 0.0 chạy xong rồi mới chết ở 0.05.
+source "$(dirname "$0")/_check_hr_judges.sh"
+check_hr_judges
+
 for LAMBDA_ID in "${LAMBDA_IDENTITY_VALUES[@]}"; do
     for SEED in "${SEEDS[@]}"; do
         TAG="lid${LAMBDA_ID}_seed${SEED}"
@@ -31,8 +49,14 @@ for LAMBDA_ID in "${LAMBDA_IDENTITY_VALUES[@]}"; do
         echo "################################################################"
 
         # 1) Train student với đúng seed + lambda này
+        # [SỬA — confound phát hiện qua code review] PIN TƯỜNG MINH
+        # lambda_feat=0/lambda_saliency=0 — script này chỉ quét lambda_identity,
+        # KHÔNG được để 2 cơ chế feature-KD/saliency (thêm sau) âm thầm bật lên
+        # qua default config.yaml (dù default hiện đã là 0.0, pin rõ ở đây để
+        # script này KHÔNG BAO GIỜ phụ thuộc vào default tương lai của config).
         python train_sr_distill.py --config "$CONFIG" \
-            --lambda_pixel 1.0 --lambda_distill 1.0 --lambda_identity "$LAMBDA_ID" \
+            --lambda_pixel 1.0 --lambda_distill 1.0 --lambda_feat 0 --lambda_saliency 0 \
+            --lambda_identity "$LAMBDA_ID" \
             --seed "$SEED" --run_suffix "_${TAG}"
 
         # 2) Sinh ảnh SR từ student vừa train

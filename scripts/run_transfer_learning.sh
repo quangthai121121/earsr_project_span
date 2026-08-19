@@ -110,10 +110,52 @@ if [ ! -f "${RUNS_DIR}/sr_span_official/best.pt" ]; then
     echo "LỖI: thiếu ${RUNS_DIR}/sr_span_official/best.pt (span_baseline from-scratch của đích)"
     exit 1
 fi
-if [ ! -f "${RUNS_DIR}/recognition_hr_mobilenet_v2/best.pt" ]; then
-    echo "LỖI: thiếu ${RUNS_DIR}/recognition_hr_mobilenet_v2/best.pt (frozen_recognition_ckpt, "
-    echo "     cần cho cả 2 bước fine-tune SR — dù lambda_identity=0.0 vẫn bắt buộc load được)"
-    exit 1
+# [SỬA — bổ sung sau code review, vòng 8, điểm 3] TRƯỚC ĐÂY luôn bắt buộc
+# ${RUNS_DIR}/recognition_hr_mobilenet_v2/best.pt với comment "dù
+# lambda_identity=0.0 vẫn bắt buộc load được" — comment này SAI/CŨ so với code
+# hiện tại: train_sr_distill.py::build_judges() (đọc "sr_improve.identity_judges",
+# fallback "frozen_recognition_ckpt" nếu rỗng) CHỈ được gọi khi
+# `needs_judges = lambda_identity>0 or lambda_saliency>0` — nếu $TGT_CONFIG có
+# cả 2 giá trị này =0 (mặc định kế thừa từ config.yaml gốc) thì KHÔNG cần
+# checkpoint judge nào cả. Ngược lại, nếu $TGT_CONFIG bật identity trên dataset
+# đích, Python đòi ĐỦ danh sách "identity_judges" (thường 3 backbone), trong
+# khi check cũ chỉ xác nhận ĐÚNG 1 file (mobilenet_v2) — sẽ lọt qua đây rồi mới
+# chết ngay lúc BƯỚC 2/6 bắt đầu (train_sr_distill.py::build_judges(), TRƯỚC
+# vòng lặp epoch — không phải giữa epoch, nhưng vẫn phí thời gian tới đây).
+# Đọc ĐÚNG "identity_judges"/"frozen_recognition_ckpt" từ CHÍNH $TGT_CONFIG
+# (không hardcode tên backbone) để check khớp với những gì Python thực sự cần.
+NEEDS_JUDGES=$(python -c "
+import yaml
+ci = yaml.safe_load(open('$TGT_CONFIG'))['sr_improve']
+li = ci.get('lambda_identity', 0.0)
+ls = ci.get('lambda_saliency', 0.0)
+print('1' if (float(li) > 0 or float(ls) > 0) else '0')
+")
+if [ "$NEEDS_JUDGES" = "1" ]; then
+    JUDGE_CKPTS=$(python -c "
+import yaml
+ci = yaml.safe_load(open('$TGT_CONFIG'))['sr_improve']
+judges = ci.get('identity_judges') or [{'backbone': 'mobilenet_v2', 'ckpt': ci['frozen_recognition_ckpt']}]
+for j in judges:
+    print(j['ckpt'])
+")
+    MISSING_JUDGE=0
+    while IFS= read -r CK; do
+        if [ -n "$CK" ] && [ ! -f "$CK" ]; then
+            echo "LỖI: thiếu checkpoint judge $CK (config đích $TGT_CONFIG có" >&2
+            echo "     lambda_identity>0 hoặc lambda_saliency>0 nên train_sr_distill.py cần" >&2
+            echo "     checkpoint này — xem sr_improve.identity_judges trong $TGT_CONFIG)." >&2
+            MISSING_JUDGE=1
+        fi
+    done <<< "$JUDGE_CKPTS"
+    if [ "$MISSING_JUDGE" -eq 1 ]; then
+        echo "-> chạy pipeline/03_train_baseline_recognition.sh (domain hr) cho dataset đích" >&2
+        echo "   để tạo đủ checkpoint judge trước khi chạy BƯỚC 2/6 (fine-tune SR tiny)." >&2
+        exit 1
+    fi
+    echo "OK: đủ checkpoint judge cho identity/saliency loss (config đích có bật)."
+else
+    echo "OK: config đích lambda_identity=lambda_saliency=0 — không cần checkpoint judge nào."
 fi
 if [ ! -f "${SPLITS_DIR}/splits.json" ]; then
     echo "LỖI: thiếu ${SPLITS_DIR}/splits.json — dữ liệu dataset đích chưa được chuẩn bị."
@@ -151,6 +193,19 @@ echo ""
 echo "################################################################"
 echo "# BƯỚC 2/6 — Fine-tune SR tiny trên $TARGET"
 echo "################################################################"
+# [SỬA — bổ sung sau code review, vòng 4, điểm 1] CỐ Ý KHÔNG pin cứng lambda
+# feat/saliency/identity — script này fine-tune tiếp từ checkpoint span_tiny
+# nguồn, nên PHẢI dùng CÙNG recipe (đọc từ $TGT_FT_CONFIG, vốn được sinh ra
+# từ $TGT_CONFIG qua make_finetune_config.py, xem BƯỚC 0) như lúc train
+# span_tiny ban đầu — chỉ IN RÕ giá trị lambda thật sự dùng để tránh đổi
+# recipe âm thầm giữa các lần chạy nếu default config.yaml đổi sau này.
+python -c "
+import yaml
+ci = yaml.safe_load(open('$TGT_FT_CONFIG'))['sr_improve']
+print('>>> Lambda THẬT SỰ dùng để fine-tune span_tiny (đọc từ $TGT_FT_CONFIG, sr_improve.*):')
+for k in ['lambda_pixel', 'lambda_distill', 'lambda_feat', 'lambda_saliency', 'lambda_identity']:
+    print(f'    {k} = {ci.get(k, 0.0)}')
+"
 python train_sr_distill.py --config "$TGT_FT_CONFIG" \
     --init_ckpt "runs/sr_improved_span_tiny/best.pt" \
     --run_suffix "$SUFFIX"
