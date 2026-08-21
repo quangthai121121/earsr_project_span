@@ -8,24 +8,44 @@
 #
 # **SỬA THAM SỐ NÀY** trước khi chạy, khớp đúng mức lambda_sparsity đã THẮNG
 # ở run_prune_sparsity_screen.sh:
-LAMBDA_SPARSITY=0.05
+#
+# [SỬA — bổ sung sau đánh giá kết quả thật, đợt 9] LẦN CHẠY TRƯỚC dùng
+# LAMBDA_SPARSITY=0.05 — nhưng đó là giá trị lấy từ screen CŨ (lambda_feat=
+# lambda_identity=0), và ở CHÍNH mức 0.05 đó, screen cũ đã cho n_blocks_kept=6
+# (KHÔNG prune gì cả, xem results/prune_sparsity_screen/sr_quality_screen.csv
+# dòng "prune_lsp0.05_nblocks6"). Nghĩa là lần multi-seed trước thực chất so
+# sánh 1 model SPAN ĐẦY ĐỦ 6 khối (không nén) với span_tiny 3 khối — không có
+# ý nghĩa gì cho claim "learned pruning". PHẢI chạy lại
+# pipeline/run_prune_sparsity_screen.sh (đã pin lambda_feat=0.5/identity=0.1
+# ở bản sửa mới) TRƯỚC, đọc kết quả n_blocks_kept ở CÁC mức lambda_sparsity
+# mới, rồi điền lại giá trị cho ra khối GẦN 3 NHẤT vào đây.
+#
+# [SỬA — bổ sung sau code review, đợt 10, điểm 1] TRƯỚC ĐÂY để sẵn "0.05" làm
+# giá trị mặc định — CHÍNH giá trị này đã gây ra lỗi đợt 8 (chạy nhầm với
+# λ_feat/identity=0 VÀ 0.05 chưa qua screen mới nên vẫn là số "biết trước là
+# sai", 6 khối, không nén). Nếu người dùng quên sửa và bấm chạy thẳng, script
+# sẽ LẶP LẠI ĐÚNG lỗi cũ, tốn lại hàng giờ GPU. Đổi thành rỗng + fail-fast:
+# BẮT BUỘC phải tự điền giá trị (đọc từ Bước 1 —
+# pipeline/run_prune_sparsity_screen.sh bản mới) trước khi script chạy được.
+LAMBDA_SPARSITY=""  # <-- BẮT BUỘC điền giá trị đọc được từ run_prune_sparsity_screen.sh (bản mới, đã pin identity-aware) trước khi chạy — KHÔNG để trống, KHÔNG dùng lại 0.05 cũ
 
 # [SỬA — bổ sung sau code review, vòng 2, điểm 3; LÀM RÕ THÊM ở vòng 5]
 # **SỬA 3 THAM SỐ NÀY** khớp ĐÚNG cấu hình (lambda_feat/saliency/identity) đã
 # dùng khi chạy run_prune_sparsity_screen.sh để chọn LAMBDA_SPARSITY ở trên —
 # PHẢI NHẤT QUÁN giữa 2 bước (screen -> validate), nếu không kết quả
-# multi-seed sẽ không phản ánh đúng cấu hình đã sàng lọc. Mặc định để 0 (TẮT
-# cả 3). LƯU Ý: LAMBDA_FEAT KHÔNG phải tín hiệu nhận dạng (chỉ so khớp
-# feature SR teacher) — chỉ LAMBDA_SALIENCY/LAMBDA_IDENTITY mới quyết định
-# cờ "identity-aware" (xem prune_metadata.json::identity_aware, tách riêng
-# khỏi uses_feature_kd). Nếu chưa sửa LAMBDA_SALIENCY/LAMBDA_IDENTITY, đây
-# CHỈ là "reconstruction-aware pruning" (có hoặc không kèm feature-KD tùy
-# LAMBDA_FEAT), KHÔNG phải "identity-aware pruning" như tên gọi/docstring mô
-# tả (train_sr_learned_prune.py tự cảnh báo runtime khi 2 giá trị
-# saliency/identity =0, không phụ thuộc LAMBDA_FEAT).
-LAMBDA_FEAT=0.0
+# multi-seed sẽ không phản ánh đúng cấu hình đã sàng lọc. LƯU Ý: LAMBDA_FEAT
+# KHÔNG phải tín hiệu nhận dạng (chỉ so khớp feature SR teacher) — chỉ
+# LAMBDA_SALIENCY/LAMBDA_IDENTITY mới quyết định cờ "identity-aware" (xem
+# prune_metadata.json::identity_aware, tách riêng khỏi uses_feature_kd).
+#
+# [SỬA — bổ sung sau đánh giá kết quả thật, đợt 9] LẦN CHẠY TRƯỚC để cả 3 =0
+# → prune_metadata.json ghi identity_aware=false, uses_feature_kd=false —
+# ĐÚNG như cảnh báo runtime đã có, nhưng đây KHÔNG phải cơ chế bài báo muốn
+# claim. PIN CỨNG giống recipe đã thắng ở KDv2 (kdv2_full) để lần này thực sự
+# là "identity-aware pruning":
+LAMBDA_FEAT=0.5
 LAMBDA_SALIENCY=0.0
-LAMBDA_IDENTITY=0.0
+LAMBDA_IDENTITY=0.1
 
 # SR model (pruning) CHỈ train 1 LẦN ở seed cố định — ĐÚNG protocol thống kê
 # đã dùng xuyên suốt project (train SR nhiều seed bị đánh giá không khả thi
@@ -45,7 +65,46 @@ DOMAIN="sr_learned_prune"
 
 set -e
 
+# [MỚI — bổ sung sau code review, đợt 10, điểm 1] Fail-fast nếu quên điền
+# LAMBDA_SPARSITY (xem giải thích ở khai báo biến phía trên) — dừng NGAY từ
+# đầu, trước khi tốn bất kỳ giờ GPU nào để train SR.
+if [ -z "$LAMBDA_SPARSITY" ]; then
+    echo "LỖI: LAMBDA_SPARSITY chưa được điền (đang rỗng)." >&2
+    echo "     -> chạy 'bash pipeline/run_prune_sparsity_screen.sh' (bản mới, đã pin" >&2
+    echo "        lambda_feat=0.5/lambda_identity=0.1) TRƯỚC, đọc n_blocks_kept ở" >&2
+    echo "        mỗi mức lambda_sparsity trong results/prune_sparsity_screen/" >&2
+    echo "        rồi sửa dòng 'LAMBDA_SPARSITY=' đầu file này thành giá trị cho ra" >&2
+    echo "        số khối GẦN 3 NHẤT, sau đó chạy lại." >&2
+    exit 1
+fi
+
 mkdir -p "$RESULTS_DIR"
+
+# [MỚI — bổ sung sau code review, đợt 10, điểm 3] Nếu đã có JSON seed 44/999
+# từ 1 lần chạy pipeline/run_multi_seed_learned_prune_extra_seeds.sh TRƯỚC
+# (rất có thể trên domain "sr_learned_prune" CŨ, ứng với model 6-khối không
+# identity-aware, đã bị coi là invalid) — CẢNH BÁO rõ vì Bước 2/2 dưới đây
+# CHỈ ghi lại seed 42/123/2024, không tự xoá/ghi đè 2 file seed 44/999 cũ đó.
+# Nếu không dọn, bước tổng hợp cuối sẽ TRỘN 3 seed mới (model đã sửa) với 2
+# seed cũ (model 6-khối invalid) mà không có dấu hiệu cảnh báo nào khi đọc
+# lại CSV.
+STALE_EXTRA_SEED=0
+for SEED in 44 999; do
+    f="${RESULTS_DIR}/${DOMAIN}_mobilenet_v2_seed${SEED}.json"
+    if [ -f "$f" ]; then
+        STALE_EXTRA_SEED=1
+    fi
+done
+if [ "$STALE_EXTRA_SEED" -eq 1 ]; then
+    echo "CẢNH BÁO: đã thấy JSON seed 44/999 trong $RESULTS_DIR (khả năng từ 1 lần" >&2
+    echo "  chạy run_multi_seed_learned_prune_extra_seeds.sh TRƯỚC — RẤT CÓ THỂ ứng" >&2
+    echo "  với model learned-pruning CŨ, không phải model sắp train lại ở đây)." >&2
+    echo "  Xoá các file '${DOMAIN}_*_seed44.json' / '${DOMAIN}_*_seed999.json' trong" >&2
+    echo "  $RESULTS_DIR rồi chạy lại pipeline/run_multi_seed_learned_prune_extra_seeds.sh" >&2
+    echo "  SAU KHI script này (Bước 2/2, seed 42/123/2024) chạy xong với model mới," >&2
+    echo "  để tránh trộn 2 model khác nhau vào cùng bảng tổng hợp." >&2
+    echo "  (Không tự xoá thay bạn — kiểm tra thủ công để chắc chắn trước khi mất dữ liệu.)" >&2
+fi
 
 # [SỬA — lỗi phát hiện qua code review] đọc scale từ config thay vì hardcode 4.
 SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")

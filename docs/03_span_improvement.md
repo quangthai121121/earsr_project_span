@@ -253,32 +253,59 @@ GIÁ TRỊ lambda tối ưu cần 1 lần sweep riêng (tương tự
 `pipeline/run_lambda_sweep.sh` đã làm cho `lambda_identity` bản cũ) trước
 khi chốt số liệu chính thức.
 
-### Kết quả ablation KD v2 (điền sau khi chạy)
+### Kết quả ablation KD v2 (đã chạy, 1 backbone `mobilenet_v2`, 1 seed — chỉ tín hiệu sàng lọc)
 
 | Cấu hình | identity_accuracy (mobilenet_v2) | Chênh lệch so với `kdv2_baseline` |
 |---|---|---|
-| `kdv2_baseline` | | — |
-| `kdv2_feat` | | |
-| `kdv2_multijudge` | | |
-| `kdv2_full` | | |
+| `kdv2_baseline` | 0.5299 | — |
+| `kdv2_feat` | 0.5236 | −0.0063 (kém hơn) |
+| `kdv2_multijudge` | 0.5338 | +0.0039 |
+| `kdv2_full` | **0.5397** | **+0.0098 (thắng, dùng cho multi-seed)** |
 
-### Kết quả validate đầy đủ (multi-seed x 5 backbone, điền sau khi chạy)
+### Kết quả validate đầy đủ (multi-seed x 5 backbone, n=3 seed: 42/123/2024 — ĐÃ CHẠY)
 
-| Backbone | `span_tiny` (recipe cũ) | `span_tiny` (recipe mới, cấu hình thắng) | Cohen's d | pBonf |
+So `sr_improved` (recipe cũ, chỉ pixel+distill) vs `sr_improved_kdv2` (recipe
+mới, `kdv2_full`: λ_feat=0.5, λ_identity=0.1 multi-judge):
+
+| Backbone | mean_diff (kdv2 − cũ) | Cohen's d | p_bonferroni | Kết luận |
 |---|---|---|---|---|
-| EfficientNet-B0 | | | | |
-| GhostNet-100 | | | | |
-| MobileNetV2 | | | | |
-| MobileNetV3-Small | | | | |
-| ResNet-18 | | | | |
+| EfficientNet-B0 | +0.0031 | 0.39 | 1.0 | không có ý nghĩa |
+| GhostNet-100 | +0.0122 | 3.45 | 0.0807 | **có ý nghĩa** (ngưỡng 0.10) |
+| MobileNetV2 | +0.0040 | 0.72 | 1.0 | không có ý nghĩa |
+| MobileNetV3-Small | **−0.0094** | −0.96 | 1.0 | không có ý nghĩa, **hướng âm** |
+| ResNet-18 | +0.0063 | 0.55 | 1.0 | không có ý nghĩa |
 
-**Tiêu chí thành công cho cải tiến này**: (1) tăng tỷ lệ backbone đạt ý
-nghĩa thống kê cho `tiny > lr` từ 3/5 (recipe cũ) lên cao hơn, lý tưởng 5/5;
-(2) đặc biệt cải thiện đúng backbone yếu nhất hiện tại (`resnet18`); (3)
-không làm xấu đi bất kỳ backbone nào đang tốt (không "được chỗ này mất chỗ
-kia"); (4) lặp lại được ở cả 2 dataset (EarVN1.0 + AWEx).
+**Đánh giá theo tiêu chí thành công đã đặt ra ở trên:**
 
-## [MỚI] Saliency-Weighted Identity-Critical Loss
+1. ❌ Tỷ lệ backbone đạt ý nghĩa cho "cải tiến > recipe cũ": chỉ **1/5**
+   (`ghostnet_100`), ở ngưỡng α=0.10 (không đạt α=0.05 chuẩn).
+2. ⚠️ Có cải thiện `resnet18` theo hướng đúng (recipe cũ: `tiny vs lr` KHÔNG
+   có ý nghĩa với p_bonf=0.1768; recipe KDv2: CÓ ý nghĩa với p_bonf=0.0799)
+   — nhưng đồng thời làm **`mobilenet_v3_small` từ có ý nghĩa (recipe cũ,
+   p_bonf=0.0566) chuyển sang không có ý nghĩa (recipe KDv2, p_bonf=0.671,
+   diff âm)**.
+3. ❌ Có "được chỗ này mất chỗ kia" — vi phạm tiêu chí (3) đã đặt ra.
+4. Chưa chạy trên AWEx.
+
+**Kết luận trung thực**: recipe KDv2 (multi-judge + feature-KD) có tác dụng
+thật nhưng **nhỏ và không nhất quán** — nó **đổi backbone nào là điểm yếu**
+(từ resnet18 sang mobilenet_v3_small) thay vì xoá bỏ sự không nhất quán giữa
+backbone. n=3 seed có power thống kê yếu; xem
+`pipeline/run_multi_seed_kdv2_extra_seeds.sh` (thêm seed 44, 999 → n=5) để
+kiểm tra lại trước khi kết luận cuối cùng liệu đây có phải hiệu ứng thật nhỏ
+hay chỉ do thiếu mẫu.
+
+## [MỚI, ĐÃ THỬ NHƯNG THẤT BẠI] Saliency-Weighted Identity-Critical Loss
+
+> **Kết luận sau khi chạy sweep thật (đợt 9)**: cơ chế này KHÔNG cải thiện
+> accuracy ở bất kỳ mức λ nào đã thử — xem bảng kết quả cuối mục này.
+> **KHÔNG đưa vào danh sách đóng góp chính của bài báo.** Giữ lại mục này
+> trong docs như 1 negative result đã được kiểm định nghiêm túc (không phải
+> chỉ là ý tưởng chưa thử), có thể nhắc ngắn trong phần Discussion/Limitations
+> nếu muốn thể hiện đã khảo sát hướng này. `configs/config.yaml` giữ
+> `lambda_saliency` mặc định = 0.0 (tắt hoàn toàn) — không dùng trong bất kỳ
+> pipeline chính thức nào (`run_multi_seed_kdv2.sh`,
+> `run_multi_seed_learned_prune.sh` đều pin cứng `lambda_saliency=0`).
 
 ### Động lực
 
@@ -337,6 +364,31 @@ Quét `lambda_saliency` (0.0, 0.15, 0.3, 0.6, 1.0) x 3 seed, cố định
 `results/lambda_saliency_sweep/saliency_sweep_summary.csv` (đã gồm paired
 t-test + Cohen's d so với `lambda_saliency=0.0`).
 
+### Kết quả sweep (ĐÃ CHẠY, 1 backbone `mobilenet_v2`, n=3 seed) — kết quả ÂM
+
+| λ_saliency | mean_identity_accuracy | Cohen's d vs baseline (λ=0) | p_bonferroni | Kết luận |
+|---|---|---|---|---|
+| 0.0 (đối chứng) | 0.5362 | — | — | — |
+| 0.15 | 0.5261 | −0.78 | 1.0 | kém hơn, không có ý nghĩa |
+| 0.3 | 0.5338 | −0.36 | 1.0 | kém hơn, không có ý nghĩa |
+| 0.6 | 0.5197 | **−2.13** | 0.265 | kém hơn, GẦN đạt ý nghĩa (sai hướng) |
+| 1.0 | 0.5314 | −0.62 | 1.0 | kém hơn, không có ý nghĩa |
+
+**Mọi mức λ_saliency được thử đều cho Cohen's d ÂM** (accuracy thấp hơn đối
+chứng), không mức nào cho tín hiệu dương dù chỉ là trend nhẹ. Ở mức λ=0.6,
+hiệu ứng xấu đi gần đạt ý nghĩa thống kê (p_raw=0.066) — nếu có ý nghĩa thì
+lại là "λ_saliency làm accuracy xấu đi có ý nghĩa", không phải cải thiện.
+
+**Diễn giải khả dĩ** (chưa kiểm chứng thêm, ghi lại để tham khảo nếu muốn thử
+tiếp): (a) gradient-saliency từ judge có thể nhiễu/không ổn định ở ảnh nhỏ độ
+phân giải thấp (LR 20×20, HR 80×80 theo scale=4 của project này), khiến
+trọng số không gian suy ra không đáng tin; (b) cộng thêm 1 loss trọng số theo
+không gian có thể xung đột gradient với pixel loss đồng đều + distill loss đã
+có, thay vì bổ trợ; (c) dải λ đã thử có thể chưa đúng — chưa thử λ rất nhỏ
+(<0.15) là khoảng có khả năng ít gây hại nhất nhưng cũng ít khả năng đủ mạnh
+để thấy hiệu ứng dương. Không tiếp tục sweep thêm trừ khi có thời gian
+GPU dư và một giả thuyết cụ thể hơn để kiểm chứng.
+
 ## [MỚI] Differentiable/Learned Block Pruning
 
 ### Động lực
@@ -361,8 +413,10 @@ O_i = O_{i-1} + gate_i * (SPAB_i(O_{i-1}) - O_{i-1})
 `gate_i=0` → bỏ hoàn toàn khối i; `gate_i=1` → áp dụng đầy đủ. Khởi tạo TẤT
 CẢ gate gần 1 (hành vi ban đầu giống `span_large`, ngân sách đầy đủ 6 khối),
 huấn luyện với ĐÚNG loss downstream đã có (pixel + distill + feature-KD +
-saliency + identity, tái sử dụng 100% `compute_total_loss()` từ
-`train_sr_distill.py`) cộng thêm 1 sparsity penalty:
+identity, tái sử dụng 100% `compute_total_loss()` từ `train_sr_distill.py`
+— **KHÔNG gồm saliency-weighted loss**, xem mục phía trên: sweep cho kết quả
+âm nên bị loại khỏi recipe mặc định, `lambda_saliency` luôn pin=0 ở cả 2
+script sàng lọc/validate pruning) cộng thêm 1 sparsity penalty:
 
 ```
 loss_total = compute_total_loss(...) + lambda_sparsity * mean(gate)
@@ -378,11 +432,11 @@ không cần code path riêng.
 
 **Vì sao đây là novelty thật**: đây KHÔNG phải magnitude-based pruning kinh
 điển (dựa vào độ lớn trọng số) — quyết định giữ/bỏ khối được dẫn dắt bởi TOÀN
-BỘ loss downstream (bao gồm cả identity-aware loss và saliency-weighted loss
-ở trên), tức là pruning "biết" tác vụ cuối cùng là nhận dạng vành tai, không
-chỉ là tái tạo pixel. Đây cũng là câu trả lời NGUYÊN TẮC (tự động, tái lập
-được) cho câu hỏi "vị trí cắt khối có quan trọng không?" mà bài báo mới chỉ
-đặt ra như 1 hạn chế/ablation dự kiến.
+BỘ loss downstream (bao gồm cả identity-aware loss + feature-KD ở trên), tức
+là pruning "biết" tác vụ cuối cùng là nhận dạng vành tai, không chỉ là tái
+tạo pixel. Đây cũng là câu trả lời NGUYÊN TẮC (tự động, tái lập được) cho
+câu hỏi "vị trí cắt khối có quan trọng không?" mà bài báo mới chỉ đặt ra như
+1 hạn chế/ablation dự kiến.
 
 ### Huấn luyện + cứng hoá
 
@@ -402,7 +456,29 @@ pattern" cho bài báo).
 ```bash
 bash pipeline/run_prune_sparsity_screen.sh          # bước 1: sàng lọc nhanh lambda_sparsity (1 backbone, 1 seed/mức)
 bash pipeline/run_multi_seed_learned_prune.sh       # bước 2: validate multi-seed x 5-backbone (sau khi chọn xong lambda_sparsity)
+bash pipeline/run_multi_seed_learned_prune_extra_seeds.sh  # bước 3 (tuỳ chọn): thêm seed 44,999 -> n=5
 ```
+
+> **⚠️ Lần chạy đầu (đợt 8) BỊ LỖI THIẾT KẾ — kết quả KHÔNG dùng được, đã sửa
+> lại script, cần chạy lại toàn bộ (đợt 9)**: cả 2 script trên đã chạy với
+> `LAMBDA_FEAT=LAMBDA_SALIENCY=LAMBDA_IDENTITY=0.0` (giá trị mặc định lúc đó,
+> chưa được sửa tay theo hướng dẫn đầu file) VÀ `LAMBDA_SPARSITY=0.05`. Xem
+> `prune_metadata.json` của lần chạy đó: `"n_blocks_kept": 6` (bằng đúng
+> `n_blocks_budget`) và `"identity_aware": false, "uses_feature_kd": false`.
+> Nghĩa là (1) mô hình **không cắt bỏ khối nào cả** — so sánh
+> `sr_improved` (span_tiny, 3 khối) vs `sr_learned_prune` (6 khối, KHÔNG nén)
+> trong `results/multi_seed_learned_prune/` chỉ phản ánh "model to hơn nhẹ
+> khá hơn", KHÔNG liên quan gì đến cơ chế learned-pruning; (2) do cả 3 λ
+> identity-liên-quan = 0, đây chỉ là "reconstruction-aware pruning" thuần,
+> KHÔNG PHẢI "identity-aware learned pruning" như tên gọi/novelty claim của
+> mục này. **Đã sửa 2 script trên** (đợt 9): pin
+> `LAMBDA_FEAT=0.5, LAMBDA_IDENTITY=0.1` (khớp `kdv2_full` — cấu hình thắng ở
+> KDv2) và mở rộng dải `LAMBDA_SPARSITY_VALUES` sang khoảng (0.05, 0.2) để dò
+> mốc cho `n_blocks_kept` gần 3 nhất (dải cũ 0/0.01/0.05 đều cho 6 khối, 0.1
+> cho 5 khối, 0.2 cho 2 khối — không có mốc nào đúng 3). **Phải chạy lại từ
+> đầu Bước 1 (`run_prune_sparsity_screen.sh`)** rồi cập nhật `LAMBDA_SPARSITY`
+> trong `run_multi_seed_learned_prune.sh` theo kết quả mới, TRƯỚC khi có thể
+> đưa số liệu learned-pruning vào bài báo.
 
 ### Dùng checkpoint đã cứng hoá ở các bước sau
 
@@ -434,3 +510,7 @@ python eval_sr_quality.py --arch span_pruned --n_blocks <K> --ckpt runs/sr_learn
   learned pruning
 - `pipeline/run_multi_seed_learned_prune.sh` — [MỚI] validate đầy đủ learned
   pruning (multi-seed x 5-backbone)
+- `pipeline/run_multi_seed_kdv2_extra_seeds.sh` — [MỚI, đợt 9] thêm seed
+  44,999 cho domain `sr_improved_kdv2` (n=3 -> n=5, không train lại SR)
+- `pipeline/run_multi_seed_learned_prune_extra_seeds.sh` — [MỚI, đợt 9] thêm
+  seed 44,999 cho domain `sr_learned_prune` (n=3 -> n=5, không train lại SR)
