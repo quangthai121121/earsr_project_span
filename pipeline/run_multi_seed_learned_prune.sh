@@ -27,7 +27,14 @@
 # sẽ LẶP LẠI ĐÚNG lỗi cũ, tốn lại hàng giờ GPU. Đổi thành rỗng + fail-fast:
 # BẮT BUỘC phải tự điền giá trị (đọc từ Bước 1 —
 # pipeline/run_prune_sparsity_screen.sh bản mới) trước khi script chạy được.
-LAMBDA_SPARSITY=""  # <-- BẮT BUỘC điền giá trị đọc được từ run_prune_sparsity_screen.sh (bản mới, đã pin identity-aware) trước khi chạy — KHÔNG để trống, KHÔNG dùng lại 0.05 cũ
+# [ĐIỀN — đợt 9, từ kết quả run_prune_sparsity_screen.sh bản identity-aware
+# (lambda_feat=0.5, lambda_identity=0.1), xem results/prune_sparsity_screen/
+# sr_quality_screen.csv]: dải quét cho n_blocks_kept đơn điệu giảm theo
+# lambda_sparsity: 0.0/0.05/0.08/0.1 -> 6 khối, 0.13 -> 5, 0.16 -> 4,
+# 0.2 -> 3 khối (PSNR-ROI 24.629dB, params_deploy=0.23M). CHỈ mức 0.2 cho
+# đúng 3 khối (khớp kích thước span_tiny) — không có mức nào khác trùng để
+# so sánh, nên không cần cân nhắc thêm.
+LAMBDA_SPARSITY=0.2
 
 # [SỬA — bổ sung sau code review, vòng 2, điểm 3; LÀM RÕ THÊM ở vòng 5]
 # **SỬA 3 THAM SỐ NÀY** khớp ĐÚNG cấu hình (lambda_feat/saliency/identity) đã
