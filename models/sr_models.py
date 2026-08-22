@@ -1092,15 +1092,26 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
                     RGB 3 kênh (khác bài gốc dùng Y-channel) để nhất quán
                     với phần còn lại của project.
       - "safmn"   : [MỚI] SAFMN (Sun et al. 2023, ICCV) — dim=36, n_blocks=8
-                    (cấu hình demo mặc định của repo chính thức), train
-                    from-scratch, ~0.228M tham số.
+                    mặc định (cấu hình demo mặc định của repo chính thức),
+                    train from-scratch, ~0.228M tham số. [MỚI — Mục 5.7(i)]
+                    n_blocks có thể ghi đè qua tham số n_blocks của hàm này
+                    (ví dụ n_blocks=4 cho ablation half-depth so với SPAN,
+                    xem RUN_ALL_attention_param_ablation.sh) — KHÔNG ảnh
+                    hưởng bất kỳ lời gọi cũ nào không truyền n_blocks.
       - "smfanet" : [MỚI — bổ sung journal Q1] SMFANet (Zheng et al., ECCV
                     2024, Springer LNCS) — công bố GẦN NHẤT (2024) trong toàn
                     bộ các baseline SR của project, giải quyết đúng khoảng
                     trống "baseline hơi cũ" nêu trong review. dim=24,
-                    n_blocks=8, ffn_scale=1.5 (khớp file nộp chính thức
-                    NTIRE2024_ESR/models/team24_smfan.py). Không suy biến
-                    không gian ở LR 20x20 (đã kiểm tra, xem docstring _SMFA).
+                    n_blocks=8 mặc định, ffn_scale=1.5 (khớp file nộp chính
+                    thức NTIRE2024_ESR/models/team24_smfan.py). Không suy
+                    biến không gian ở LR 20x20 (đã kiểm tra, xem docstring
+                    _SMFA). [MỚI — Mục 5.7(i)] n_blocks có thể ghi đè giống
+                    hệt "safmn" ở trên, cùng mục đích ablation half-depth.
+
+    n_blocks: áp dụng cho "span_pruned" (BẮT BUỘC, như mô tả ở trên), và
+    [MỚI — Mục 5.7(i)] TÙY CHỌN cho "safmn"/"smfanet" (ghi đè n_blocks mặc
+    định 8, dùng để kiểm định half-depth trong ablation attention-
+    parameterization — None giữ nguyên hành vi cũ ở mọi kiến trúc khác).
 
     feature_channels: chỉ áp dụng cho arch="span_official". None -> dùng mặc
     định 48 (khớp checkpoint pretrained chuẩn). Đặt khác 48 sẽ KHÔNG load
@@ -1148,7 +1159,17 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
     if arch == "ecbsr":
         return ECBSR(scale=scale, num_block=4, num_channel=16, with_idt=True, act_type="prelu")
     if arch == "safmn":
-        return SAFMN(scale=scale, dim=36, n_blocks=8, ffn_scale=2.0)
+        # [MỚI — Mục 5.7(i), ablation attention-parameterization] n_blocks giờ
+        # nhận từ tham số hàm nếu có truyền, mặc định 8 (cấu hình demo gốc,
+        # giữ nguyên hành vi cũ cho MỌI lời gọi không truyền n_blocks — an
+        # toàn ngược, không ảnh hưởng bất kỳ kết quả đã có nào).
+        return SAFMN(scale=scale, dim=36,
+                     n_blocks=n_blocks if n_blocks is not None else 8,
+                     ffn_scale=2.0)
     if arch == "smfanet":
-        return SMFANet(scale=scale, dim=24, n_blocks=8, ffn_scale=1.5, bias=False)
+        # [MỚI — Mục 5.7(i), như trên] mặc định 8, giữ hành vi cũ nếu không
+        # truyền n_blocks.
+        return SMFANet(scale=scale, dim=24,
+                       n_blocks=n_blocks if n_blocks is not None else 8,
+                       ffn_scale=1.5, bias=False)
     raise ValueError(f"Kiến trúc SR không hỗ trợ: {arch}")

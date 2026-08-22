@@ -701,6 +701,14 @@ def main():
     ap.add_argument("--student_arch", default=None,
                      help="ghi đè sr_improve.student_arch trong config (dùng cho ablation kiến "
                           "trúc, ví dụ --student_arch span_large)")
+    ap.add_argument("--student_n_blocks", type=int, default=None,
+                     help="[MỚI — Mục 5.7(i), ablation attention-parameterization] ghi đè số "
+                          "khối (n_blocks) của student — CHỈ có tác dụng khi student_arch là "
+                          "'safmn'/'smfanet' (build_sr_model() bỏ qua tham số này với các kiến "
+                          "trúc khác). Dùng để train biến thể half-depth, ví dụ "
+                          "--student_arch safmn --student_n_blocks 4 (mặc định SAFMN/SMFANet là "
+                          "n_blocks=8, xem RUN_ALL_attention_param_ablation.sh). Không truyền "
+                          "-> giữ nguyên hành vi cũ (n_blocks mặc định của kiến trúc).")
     ap.add_argument("--init_ckpt", default=None,
                      help="checkpoint SPAN student có sẵn để khởi tạo trọng số trước khi "
                           "train — dùng cho FINE-TUNE/TRANSFER LEARNING xuyên dataset (ví dụ "
@@ -790,7 +798,11 @@ def main():
                 f"{' + saliency-weighted identity-critical loss' if lambda_saliency > 0 else ''})")
 
     # --- Student: kiến trúc NÉN (student_arch, ví dụ span_tiny) — model sẽ được deploy ---
-    student = build_sr_model(student_arch, scale, pretrained_path=student_pretrained).to(device)
+    # [MỚI — Mục 5.7(i)] truyền student_n_blocks xuống build_sr_model(); hàm
+    # đó tự bỏ qua tham số này với mọi arch khác "safmn"/"smfanet" (an toàn
+    # ngược, không đổi hành vi bất kỳ lời gọi cũ nào không dùng cờ mới).
+    student = build_sr_model(student_arch, scale, pretrained_path=student_pretrained,
+                              n_blocks=args.student_n_blocks).to(device)
 
     # Khởi tạo student từ checkpoint có sẵn — dùng cho fine-tune/transfer learning.
     # An toàn strict=True vì SPAN/span_tiny/span_large không có tầng nào phụ thuộc
