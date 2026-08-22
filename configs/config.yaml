@@ -36,14 +36,14 @@ image:
 sr:
   arch: "span_official"
   pretrained_path: "checkpoints/span_pretrained_x4.pth"  # chỉ dùng khi arch=span_official
-  max_epochs: 150
+  max_epochs: 500
   patience: 10                   # dừng sớm nếu val loss không cải thiện sau 10 epoch
   batch_size: 64
   lr: 1.0e-3
 
 # ===== Cải tiến SR (train_sr_distill.py) =====
 sr_improve:
-  max_epochs: 150
+  max_epochs: 500
   patience: 10                   # dừng sớm nếu val total loss không cải thiện sau 10 epoch
   batch_size: 64
   lr: 1.0e-4
@@ -121,7 +121,7 @@ sr_improve:
 # được (models/sr_models.py::SPANLearnedPrune) tự quyết định giữ/bỏ khối
 # SPAB nào, thay cho việc chọn tay "giữ khối 1-3" như student_arch=span_tiny.
 sr_learned_prune:
-  max_epochs: 150
+  max_epochs: 500
   patience: 10
   batch_size: 64
   lr: 1.0e-4
@@ -176,7 +176,7 @@ recognition:
     - "efficientnet_b0"
     - "ghostnet_100"
   embedding_dim: 256
-  max_epochs: 150
+  max_epochs: 500
   patience: 10                    # dừng sớm nếu val_id_acc không cải thiện sau 10 epoch
   batch_size: 64
   lr: 3.0e-4
