@@ -29,7 +29,7 @@
 #   1. Đã chạy xong pipeline/run_ablation.sh (có 4 checkpoint SR ablation +
 #      4 thư mục ảnh splits/sr_ablation_<name>/).
 #   2. Đã chạy xong pipeline/run_multi_seed.sh (checkpoint recognition_lr_mobilenet_v2_seed{42,123,2024})
-#      VÀ pipeline_run_multi_seed_extra_seeds.sh (thêm seed 44,999) — tức
+#      VÀ pipeline/run_multi_seed_extra_seeds.sh (thêm seed 44,999) — tức
 #      ĐỦ 5 seed của checkpoint recognition_lr_mobilenet_v2_seed<seed>.
 #
 # KẾT QUẢ: results/ablation_multiseed/ablation_multiseed_summary.csv (trung
@@ -73,7 +73,7 @@ for SEED in "${SEEDS[@]}"; do
     if [ ! -f "$LR_CKPT" ]; then
         echo "LỖI: chưa thấy $LR_CKPT"
         echo "     -> chạy 'bash pipeline/run_multi_seed.sh' (seed 42,123,2024) và/hoặc"
-        echo "        'bash pipeline_run_multi_seed_extra_seeds.sh' (seed 44,999) trước."
+        echo "        'bash pipeline/run_multi_seed_extra_seeds.sh' (seed 44,999) trước."
         MISSING=1
     fi
 done

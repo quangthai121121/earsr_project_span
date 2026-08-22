@@ -1,7 +1,7 @@
 #!/bin/bash
-# Chạy toàn bộ 8 bước liên tiếp. Xem pipeline/README.md để biết chi tiết
-# từng bước, hoặc chạy tay từng file 01_*.sh ... 08_*.sh nếu muốn theo dõi
-# kỹ hơn / dừng giữa chừng.
+# Chạy toàn bộ 8 bước liên tiếp. Xem RUNBOOK_EarVN1.0.md mục 1-9 để biết chi
+# tiết từng bước, hoặc chạy tay từng file 01_*.sh ... 08_*.sh nếu muốn theo
+# dõi kỹ hơn / dừng giữa chừng.
 set -e
 
 bash pipeline/01_survey_and_prepare_data.sh

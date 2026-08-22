@@ -170,10 +170,16 @@ def main():
     params_m = count_params(model)
     params_deploy_m = count_params_deploy_mode(model)
     try:
-        flops_g = count_flops(model, (1, 3, lr_size, lr_size), device=device)
+        # [SỬA — lỗi nhãn phát hiện qua review Q1] count_flops() trước đây
+        # trả về 1 số duy nhất bị gọi NHẦM là "FLOPs" nhưng thực ra là MACs
+        # (đã kiểm chứng bằng tay, xem docstring count_flops() trong
+        # utils/metrics.py) — giờ trả về CẢ HAI, ghi rõ ràng cả 2 cột để đối
+        # chiếu đúng quy ước với từng baseline literature (RLFN/ECBSR/SAFMN/
+        # SMFANet) mà bài báo trích dẫn, không đoán quy ước nào được dùng.
+        macs_g, flops_g = count_flops(model, (1, 3, lr_size, lr_size), device=device)
     except ImportError as e:
-        print(f"Cảnh báo: {e}. Bỏ qua FLOPs (điền NA).")
-        flops_g = None
+        print(f"Cảnh báo: {e}. Bỏ qua MACs/FLOPs (điền NA).")
+        macs_g, flops_g = None, None
     latency_ms = measure_latency(model, (1, 3, lr_size, lr_size), device)
 
     result = {
@@ -186,7 +192,8 @@ def main():
         "ssim_full_canvas": round(avg_ssim_full, 4),         # [MỚI] số cũ (gồm viền đen) — đối chiếu
         "params_M": round(params_m, 3),
         "params_deploy_M": round(params_deploy_m, 4),
-        "flops_G": round(flops_g, 4) if flops_g is not None else "NA",
+        "macs_G": round(macs_g, 4) if macs_g is not None else "NA",
+        "flops_G": round(flops_g, 4) if flops_g is not None else "NA",  # [SỬA] giờ = 2xMACs, đúng quy ước
         "latency_ms": round(latency_ms, 3),
         "n_test_images": n,
         # [SỬA — bổ sung sau code review, vòng 8, điểm 4] TRƯỚC ĐÂY CSV chỉ ghi

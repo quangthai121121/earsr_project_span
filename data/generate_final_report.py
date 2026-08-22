@@ -97,6 +97,18 @@ def main():
     domain_order = {"hr": 0, "lr": 1, "sr_baseline": 2, "sr_improved": 3}
     main_rows.sort(key=lambda r: (r["backbone"], domain_order.get(r["domain"], 9)))
 
+    # [MỚI — phát hiện qua code review] không có bước nào trước đây đối chiếu
+    # số dòng thu được với số tổ hợp backbone x domain KỲ VỌNG theo config —
+    # nếu 1 thí nghiệm chưa chạy xong, dòng đó lặng lẽ biến mất khỏi REPORT.md
+    # mà không ai biết, dễ tưởng bảng đã đầy đủ.
+    expected_backbones = cfg["recognition"]["backbones"]
+    expected_combos = {(b, d) for b in expected_backbones for d in domain_order}
+    found_combos = {(r["backbone"], r["domain"]) for r in main_rows}
+    missing_combos = sorted(expected_combos - found_combos)
+    if missing_combos:
+        print(f"!!! CẢNH BÁO: thiếu {len(missing_combos)}/{len(expected_combos)} tổ hợp "
+              f"backbone x domain trong summary.csv: {missing_combos}")
+
     # --- Bảng SR quality: chỉ giữ dòng mới nhất cho mỗi label (phòng khi file bị append nhiều lần) ---
     sr_quality_latest = {}
     for r in sr_quality_rows:
@@ -109,10 +121,14 @@ def main():
                          f"Lambda: pixel={lambda_pixel}, distill={lambda_distill}, "
                          f"identity={lambda_identity}\n")
 
-    report_lines.append("## 1. Chất lượng ảnh SR (PSNR/SSIM/LPIPS/Params/FLOPs/Latency)\n")
+    # [SỬA — bug phát hiện qua review Q1] bản trước chỉ liệt kê "flops_G",
+    # thiếu "macs_G" (cột mới sau khi sửa lỗi nhãn MACs/FLOPs trong
+    # utils/metrics.py::count_flops()) — REPORT.md sẽ thiếu số MACs dù CSV
+    # gốc đã có, trong khi nhiều bài NTIRE báo MACs (gọi nhầm là "FLOPs").
+    report_lines.append("## 1. Chất lượng ảnh SR (PSNR/SSIM/LPIPS/Params/MACs/FLOPs/Latency)\n")
     report_lines.append(md_table(sr_quality_dedup,
                                   columns=["label", "arch", "psnr_db", "ssim", "lpips", "params_M",
-                                           "params_deploy_M", "flops_G", "latency_ms"]))
+                                           "params_deploy_M", "macs_G", "flops_G", "latency_ms"]))
 
     report_lines.append("\n## 2. Độ chính xác nhận diện — theo backbone x domain\n")
     report_lines.append(md_table(main_rows))

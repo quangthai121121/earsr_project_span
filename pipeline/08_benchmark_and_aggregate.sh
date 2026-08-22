@@ -76,4 +76,4 @@ echo "  - real_lr_holdout.csv    : accuracy trên LR thật (kiểm chứng tổ
 echo "  - training_summary.csv   : epoch dừng, best val, OOM count, thời gian train"
 echo "  (chạy thêm 'bash pipeline/run_ablation.sh' riêng để có ablation.csv)"
 echo ""
-echo "Điền số liệu vào docs/04_results_template.md để chuẩn bị viết journal."
+echo "Điền số liệu vào bảng kết quả bài báo (xem RUNBOOK_EarVN1.0.md mục 8)."

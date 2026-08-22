@@ -41,7 +41,6 @@ from datasets.ear_dataset import build_label_map
 from models.recognition_model import EarRecognitionNet
 from models.sr_models import build_sr_model
 from utils.letterbox import letterbox_resize
-from utils.metrics import compute_accuracy
 
 
 class RealLRHoldoutDataset(Dataset):
@@ -77,15 +76,21 @@ class RealLRHoldoutDataset(Dataset):
 
 
 def _run_recognition_eval(model, loader, device):
-    id_acc_sum, gender_acc_sum, n_batches = 0.0, 0.0, 0
+    # [SỬA — cùng lỗi phát hiện qua review Q1 như eval_recognition.py] TRƯỚC
+    # ĐÂY cộng dồn accuracy TỪNG batch rồi chia cho số batch (macro-average) —
+    # không phải micro-average đúng nghĩa (tổng đúng/tổng mẫu). Với
+    # real_lr_holdout chỉ ~173 ảnh và batch_size=16, batch cuối (dư 13 ảnh)
+    # bị lệch trọng số đáng kể hơn cả eval_recognition.py (tập nhỏ hơn nhiều).
+    all_id_correct, all_gender_correct = [], []
     for img, id_labels, gender_labels in loader:
         img = img.to(device)
         id_labels, gender_labels = id_labels.to(device), gender_labels.to(device)
         id_logits, gender_logits, _ = model(img)
-        id_acc_sum += compute_accuracy(id_logits, id_labels)
-        gender_acc_sum += compute_accuracy(gender_logits, gender_labels)
-        n_batches += 1
-    return id_acc_sum / n_batches, gender_acc_sum / n_batches
+        all_id_correct.append((id_logits.argmax(dim=1) == id_labels).cpu())
+        all_gender_correct.append((gender_logits.argmax(dim=1) == gender_labels).cpu())
+    id_acc = torch.cat(all_id_correct).float().mean().item()
+    gender_acc = torch.cat(all_gender_correct).float().mean().item()
+    return id_acc, gender_acc
 
 
 @torch.no_grad()
@@ -134,7 +139,8 @@ def eval_with_sr(cfg, label_map, backbone, device, sr_arch, sr_ckpt, recognition
     rec_model.load_state_dict(torch.load(ckpt_path, map_location=device))
     rec_model.eval()
 
-    id_acc_sum, gender_acc_sum, n_batches = 0.0, 0.0, 0
+    # [SỬA — cùng lỗi micro vs macro-average, xem _run_recognition_eval()]
+    all_id_correct, all_gender_correct = [], []
     for lr_img, id_labels, gender_labels in loader:
         lr_img = lr_img.to(device)
         id_labels, gender_labels = id_labels.to(device), gender_labels.to(device)
@@ -142,11 +148,12 @@ def eval_with_sr(cfg, label_map, backbone, device, sr_arch, sr_ckpt, recognition
         sr_img = sr_model(lr_img)  # LR (nhỏ) -> HR (hr_size), đúng input cho recognition
         id_logits, gender_logits, _ = rec_model(sr_img)
 
-        id_acc_sum += compute_accuracy(id_logits, id_labels)
-        gender_acc_sum += compute_accuracy(gender_logits, gender_labels)
-        n_batches += 1
+        all_id_correct.append((id_logits.argmax(dim=1) == id_labels).cpu())
+        all_gender_correct.append((gender_logits.argmax(dim=1) == gender_labels).cpu())
 
-    return (id_acc_sum / n_batches, gender_acc_sum / n_batches), len(dataset), ckpt_path
+    id_acc = torch.cat(all_id_correct).float().mean().item()
+    gender_acc = torch.cat(all_gender_correct).float().mean().item()
+    return (id_acc, gender_acc), len(dataset), ckpt_path
 
 
 def main():

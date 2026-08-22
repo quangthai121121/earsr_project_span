@@ -992,13 +992,27 @@ class SRFeatureHook:
     def __init__(self, model: nn.Module):
         target = None
         self.is_fallback = False
+        matches = []
         for m in model.modules():
             if isinstance(m, nn.Sequential):
                 children = list(m.children())
                 for i, child in enumerate(children):
                     if isinstance(child, nn.PixelShuffle) and i > 0 \
                             and isinstance(children[i - 1], nn.Conv2d):
-                        target = children[i - 1]
+                        matches.append(children[i - 1])
+        if len(matches) > 1:
+            # [SỬA — bug phát hiện qua code review] bản cũ không break, ghi đè
+            # `target` bằng match CUỐI CÙNG một cách âm thầm nếu có >1 khối
+            # Sequential[Conv2d, PixelShuffle] — chưa kiến trúc nào hiện có kích
+            # hoạt điều này, nhưng nếu tương lai thêm kiến trúc upsample nhiều
+            # tầng thì feature-KD sẽ hook nhầm layer mà không ai biết. Thà báo
+            # lỗi rõ ràng còn hơn để nó âm thầm chọn sai.
+            raise RuntimeError(
+                f"SRFeatureHook: tìm thấy {len(matches)} khối Sequential[Conv2d, "
+                f"PixelShuffle] trong {type(model).__name__} — không rõ nên hook "
+                "vào khối nào. Cần chỉ định tường minh thay vì đoán."
+            )
+        target = matches[0] if matches else None
         if target is None:
             # Fallback: kiến trúc không theo pattern Sequential[Conv2d, PixelShuffle]
             # (ví dụ ECBSR) — hook thẳng lên PixelShuffle như trước, chấp nhận

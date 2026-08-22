@@ -5,7 +5,7 @@ shape output đúng, và đếm tham số — TRƯỚC khi chạy train thật (
 gian). Không cần dataset thật, dùng tensor ngẫu nhiên.
 
 Lưu ý: các kiến trúc mới đã được đối chiếu kỹ với bài báo/mã nguồn gốc bằng
-cách đọc trực tiếp (xem chú thích trong models/sr_models.py + CHANGELOG_v7.md)
+cách đọc trực tiếp (xem chú thích trong models/sr_models.py + RUNBOOK_EarVN1.0.md)
 nhưng KHÔNG chạy thực nghiệm được trong môi trường soạn thảo (không có
 torch) — script này để BẠN tự xác nhận lại trước khi tin tưởng chạy full
 pipeline.

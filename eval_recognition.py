@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 
 from datasets.ear_dataset import EarDataset, build_label_map
 from models.recognition_model import EarRecognitionNet, SUPPORTED_BACKBONES
-from utils.metrics import (compute_accuracy, compute_topk_accuracy, count_params, measure_latency,
+from utils.metrics import (count_params, measure_latency,
                             compute_pairwise_genuine_impostor_scores, compute_roc_auc_eer,
                             compute_confusion_matrix)
 
@@ -68,13 +68,20 @@ def main():
     model.load_state_dict(torch.load(args.ckpt, map_location=device))
     model.eval()
 
-    id_acc_sum, id_rank5_sum, gender_acc_sum, n_batches = 0.0, 0.0, 0.0, 0
-    # [MỚI — bổ sung journal Q1] Tích luỹ TOÀN BỘ embedding/predictions/nhãn
-    # qua các batch (khác với accuracy — chỉ cần cộng dồn trung bình từng
-    # batch) vì AUC/EER (verification, cần so MỌI CẶP ảnh) và confusion
-    # matrix (cần đối chiếu pred/label từng mẫu) không thể tính rời rạc theo
-    # batch rồi gộp — phải có đủ dữ liệu của CẢ test set cùng lúc.
+    # [SỬA — bug phát hiện qua review Q1] TRƯỚC ĐÂY tính accuracy bằng
+    # macro-average theo BATCH (cộng dồn accuracy TỪNG batch rồi chia cho
+    # n_batches) — không phải micro-average đúng nghĩa top-1 (tổng số dự đoán
+    # đúng / tổng số ảnh). Với test set không chia hết cho batch_size (ví dụ
+    # 3480 % 64 = 24), batch CUỐI nhỏ hơn vẫn được tính TRỌNG SỐ NGANG BẰNG
+    # mọi batch khác trong trung bình — sai lệch so với true top-1 accuracy
+    # trên từng mẫu (không lớn, cùng hướng ở mọi domain/backbone nên so sánh
+    # TƯƠNG ĐỐI giữa các domain vẫn hợp lệ, nhưng SỐ TUYỆT ĐỐI báo cáo không
+    # đúng định nghĩa chuẩn "top-1 accuracy"). Code đã sẵn tích luỹ
+    # all_id_preds/all_id_labels cho toàn bộ test set (dùng cho confusion
+    # matrix) — tận dụng luôn để tính ĐÚNG micro-average, thay vì tính thêm 1
+    # cột riêng gây nhầm giữa 2 định nghĩa.
     all_embeddings, all_id_labels, all_id_preds = [], [], []
+    all_id_rank5_hits, all_gender_preds, all_gender_labels = [], [], []
     with torch.no_grad():
         for imgs, id_labels, gender_labels in test_loader:
             imgs = imgs.to(device)
@@ -82,26 +89,31 @@ def main():
             gender_labels = gender_labels.to(device)
 
             id_logits, gender_logits, emb = model(imgs)
-            id_acc_sum += compute_accuracy(id_logits, id_labels)
-            id_rank5_sum += compute_topk_accuracy(id_logits, id_labels, k=5)
-            gender_acc_sum += compute_accuracy(gender_logits, gender_labels)
-            n_batches += 1
+            k = min(5, id_logits.size(1))
+            rank5_hit = (id_logits.topk(k, dim=1).indices == id_labels.unsqueeze(1)).any(dim=1)
 
             all_embeddings.append(emb.cpu())
             all_id_labels.append(id_labels.cpu())
             all_id_preds.append(id_logits.argmax(dim=1).cpu())
+            all_id_rank5_hits.append(rank5_hit.cpu())
+            all_gender_preds.append(gender_logits.argmax(dim=1).cpu())
+            all_gender_labels.append(gender_labels.cpu())
 
-    id_acc = id_acc_sum / n_batches
-    id_rank5_acc = id_rank5_sum / n_batches
-    gender_acc = gender_acc_sum / n_batches
+    # Cat 1 lần duy nhất, dùng lại cho cả accuracy (micro-average đúng) lẫn
+    # AUC/EER/confusion matrix bên dưới — tránh cat trùng lặp.
+    all_embeddings = torch.cat(all_embeddings, dim=0)
+    all_id_labels = torch.cat(all_id_labels, dim=0)
+    all_id_preds = torch.cat(all_id_preds, dim=0)
+    all_gender_preds = torch.cat(all_gender_preds, dim=0)
+    all_gender_labels = torch.cat(all_gender_labels, dim=0)
+
+    id_acc = (all_id_preds == all_id_labels).float().mean().item()
+    id_rank5_acc = torch.cat(all_id_rank5_hits, dim=0).float().mean().item()
+    gender_acc = (all_gender_preds == all_gender_labels).float().mean().item()
     params_m = count_params(model)
     latency_ms = measure_latency(model, (1, 3, image_size, image_size), device)
 
     # --- [MỚI] Verification setting: AUC/EER qua toàn bộ cặp genuine/impostor ---
-    all_embeddings = torch.cat(all_embeddings, dim=0)
-    all_id_labels = torch.cat(all_id_labels, dim=0)
-    all_id_preds = torch.cat(all_id_preds, dim=0)
-
     genuine_scores, impostor_scores = compute_pairwise_genuine_impostor_scores(
         all_embeddings, all_id_labels)
     roc_result = compute_roc_auc_eer(genuine_scores, impostor_scores)

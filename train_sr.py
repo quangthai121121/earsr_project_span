@@ -42,7 +42,7 @@ from utils.device_manager import DeviceManager, move_optimizer_state
 from utils.early_stopping import (EarlyStopping, save_state_dict as _save_state_dict,
                                    save_last_if_missing as _save_last_if_missing)
 from utils.logger import setup_logger
-from utils.seed import set_seed
+from utils.seed import set_seed, seed_worker, seeded_generator
 
 
 def _forward_step(model, lr_img, hr_img, device, criterion, optimizer, scaler, is_train,
@@ -65,19 +65,32 @@ def _forward_step(model, lr_img, hr_img, device, criterion, optimizer, scaler, i
         sr_img = model(lr_img)
         loss = criterion(sr_img, hr_img)
 
+    loss_val = loss.item()
     if is_train:
         if scaler is not None:
+            # scaler.step() đã tự bỏ qua optimizer.step() khi phát hiện grad
+            # không hữu hạn (hành vi chuẩn của GradScaler) — an toàn sẵn.
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             scaler.step(optimizer)
             scaler.update()
         else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            optimizer.step()
+            # [SỬA — phát hiện qua review Q1, cùng lỗi đã sửa ở
+            # train_sr_distill.py/train_sr_learned_prune.py] nhánh KHÔNG dùng
+            # GradScaler (use_amp=False cho span_official, hoặc fallback CPU)
+            # không có lớp bảo vệ tự động nào — trước đây backward()/step()
+            # chạy vô điều kiện. span_official CHÍNH LÀ kiến trúc đã có lịch sử
+            # NaN thật (xem comment phía trên) nên đáng chặn ở đây cho nhất
+            # quán, dù rủi ro thấp hơn train_sr_distill.py (pixel loss L1 ổn
+            # định hơn identity/saliency loss).
+            is_finite = loss_val == loss_val and loss_val not in (float("inf"), float("-inf"))
+            if is_finite:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+                optimizer.step()
 
-    return loss.item() * lr_img.size(0), lr_img.size(0)
+    return loss_val * lr_img.size(0), lr_img.size(0)
 
 
 def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None, logger=None,
@@ -116,9 +129,12 @@ def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None,
                     model, lr_img, hr_img, device, criterion, optimizer, None, is_train,
                     use_amp=use_amp)
 
-            # Bỏ qua batch có loss NaN/Inf khi tính trung bình hiển thị — do
-            # GradScaler đã tự bỏ qua bước cập nhật cho batch đó (không hỏng
-            # trọng số), chỉ cần không để nó làm "bẩn" số liệu trung bình epoch.
+            # Bỏ qua batch có loss NaN/Inf khi tính trung bình hiển thị — trọng
+            # số KHÔNG bị hỏng: nhánh có GradScaler tự bỏ qua optimizer.step()
+            # khi phát hiện grad không hữu hạn; nhánh không có scaler (fallback
+            # CPU, hoặc span_official tắt AMP) tự chặn bằng is_finite check
+            # trong _forward_step() (xem sửa đổi NaN gradient, review Q1) —
+            # cả 2 đường đều an toàn, chỉ khác cơ chế.
             if loss_sum != loss_sum or loss_sum in (float("inf"), float("-inf")):
                 nan_batches += 1
                 continue
@@ -128,7 +144,7 @@ def run_epoch(model, loader, device_mgr, criterion, optimizer=None, scaler=None,
 
     if nan_batches > 0 and logger:
         logger.info(f"  (lưu ý: {nan_batches} batch có loss NaN/Inf, đã bỏ qua khi tính trung bình "
-                     f"— GradScaler tự bỏ qua cập nhật cho các batch này, không ảnh hưởng trọng số)")
+                     f"— trọng số không bị ảnh hưởng, xem chú thích trong run_epoch())")
 
     return total_loss / total_n if total_n > 0 else float("nan")
 
@@ -147,10 +163,23 @@ def main():
                           "QUAN TRỌNG: không truyền cờ này khi chạy pipeline chính bình thường "
                           "(pipeline/04_train_teacher_and_span_baseline.sh) — chỉ dùng khi cố ý "
                           "muốn lưu checkpoint riêng, không đè bản gốc.")
+    ap.add_argument("--seed", type=int, default=None,
+                     help="[MỚI — phát hiện qua review Q1] ghi đè seed trong config. Trước đây "
+                          "train_sr.py KHÔNG có cờ này — toàn bộ SR (EDSR/span_official/Track A) "
+                          "luôn train ở đúng 1 seed mặc định config.yaml (n=1), trong khi recognition "
+                          "downstream lặp lại 5 seed — nghĩa là phương sai do CHÍNH seed train SR "
+                          "(không chỉ downstream) chưa từng được đo. Cờ này thêm NĂNG LỰC train SR "
+                          "nhiều seed (dùng cùng --run_suffix để tránh ghi đè checkpoint, ví dụ "
+                          "--seed 123 --run_suffix _seed123) — CHƯA tự động chạy multi-seed SR trong "
+                          "pipeline nào (cần bổ sung script điều phối + tốn thêm compute đáng kể, "
+                          "là quyết định nghiên cứu/ngân sách GPU, không tự ý bật mặc định).")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    if args.seed is not None:
+        cfg["split"]["seed"] = args.seed
 
     set_seed(cfg["split"]["seed"])
 
@@ -163,8 +192,11 @@ def main():
 
     loader_kwargs = dict(num_workers=4, pin_memory=torch.cuda.is_available(),
                           persistent_workers=True)
+    # [MỚI — phát hiện qua review Q1] worker_init_fn + generator cố định, xem
+    # giải thích đầy đủ trong train_recognition.py / utils/seed.py.
     train_loader = DataLoader(train_set, batch_size=cfg["sr"]["batch_size"],
-                               shuffle=True, **loader_kwargs)
+                               shuffle=True, worker_init_fn=seed_worker,
+                               generator=seeded_generator(cfg["split"]["seed"]), **loader_kwargs)
     val_loader = DataLoader(val_set, batch_size=cfg["sr"]["batch_size"],
                              shuffle=False, **loader_kwargs)
 

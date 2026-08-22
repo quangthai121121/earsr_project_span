@@ -51,7 +51,10 @@ def survey_resolutions(raw_dir: Path):
         if not person_dir.is_dir():
             continue
         person_id = extract_person_id(person_dir.name)
-        for img_path in person_dir.glob("*.jpg"):
+        # sorted(): glob() không đảm bảo thứ tự ổn định giữa các filesystem/OS
+        # khác nhau — nếu không sort trước khi shuffle theo seed cố định bên
+        # dưới, cùng 1 seed vẫn có thể ra split khác nhau giữa các máy.
+        for img_path in sorted(person_dir.glob("*.jpg")):
             try:
                 with Image.open(img_path) as im:
                     w, h = im.size
@@ -200,21 +203,37 @@ def split_by_identity(records, train_ratio, val_ratio, seed):
     splits = {"train": [], "val": [], "test": []}
     empty_split_warning = []
 
+    test_ratio = max(0.0, 1.0 - train_ratio - val_ratio)
+    val_share_of_remainder = (
+        val_ratio / (val_ratio + test_ratio) if (val_ratio + test_ratio) > 0 else 0.5
+    )
+
     for pid, imgs in by_person.items():
         imgs = imgs.copy()
         rng.shuffle(imgs)
         n = len(imgs)
 
-        n_train = max(1, round(n * train_ratio))
-        n_val = max(1, round(n * val_ratio)) if n - n_train >= 2 else max(0, n - n_train - 1)
-        n_train = min(n_train, n - 2) if n >= 3 else n  # chừa chỗ cho val/test nếu đủ ảnh
+        if n < 3:
+            # Không đủ ảnh để chia cả 3 phần (cần tối thiểu 1 ảnh/phần) — toàn bộ
+            # rơi vào train, val/test rỗng cho identity này. Đây là trường hợp
+            # biên không thể tránh khỏi (không phải lỗi làm tròn), luôn được ghi
+            # vào empty_split_warning bên dưới để không bị bỏ sót khi báo cáo.
+            n_train, n_val = n, 0
+        else:
+            # [SỬA] n_train được CHỐT trước (không đổi sau khi tính n_val — bản
+            # cũ tính n_val từ n_train GỐC rồi mới hạ n_train, khiến phần dư luôn
+            # bị dồn hết vào test thay vì chia đều theo đúng val_ratio/test_ratio
+            # -> lệch tỷ lệ có hệ thống, đo được ~19% trên dữ liệu thật).
+            n_train = min(max(round(n * train_ratio), 1), n - 2)
+            remaining = n - n_train  # luôn >= 2
+            n_val = min(max(round(remaining * val_share_of_remainder), 1), remaining - 1)
 
         train_imgs = imgs[:n_train]
         val_imgs = imgs[n_train:n_train + n_val]
         test_imgs = imgs[n_train + n_val:]
 
-        if n >= 3 and (len(train_imgs) == 0 or len(val_imgs) == 0 or len(test_imgs) == 0):
-            empty_split_warning.append(pid)
+        if len(train_imgs) == 0 or len(val_imgs) == 0 or len(test_imgs) == 0:
+            empty_split_warning.append((pid, n))
 
         for split_name, img_list in [("train", train_imgs), ("val", val_imgs), ("test", test_imgs)]:
             for path, _, w, h in img_list:
@@ -225,8 +244,9 @@ def split_by_identity(records, train_ratio, val_ratio, seed):
     print(f"Số identity (giống nhau ở cả 3 split): {len(by_person)}")
     print(f"Số ảnh: train={len(splits['train'])} val={len(splits['val'])} test={len(splits['test'])}")
     if empty_split_warning:
+        detail = ", ".join(f"{pid} (n={n})" for pid, n in empty_split_warning)
         print(f"!!! CẢNH BÁO: {len(empty_split_warning)} identity có split rỗng "
-              f"(quá ít ảnh để chia đủ 3 phần): {empty_split_warning}")
+              f"(quá ít ảnh để chia đủ 3 phần): {detail}")
 
     return splits
 
@@ -249,7 +269,7 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--report_out", default=None,
                      help="nếu chỉ định, ghi báo cáo ngưỡng đã chọn ra file text này "
-                          "(dùng để điền vào docs/01_data_preparation.md)")
+                          "(dùng để điền vào bảng dữ liệu bài báo, xem RUNBOOK_EarVN1.0.md mục 1)")
     args = ap.parse_args()
 
     raw_dir = Path(args.raw_dir)

@@ -1,0 +1,22 @@
+metric,value
+total_images_raw,28412
+min_short_side_px,13
+max_short_side_px,472
+p5_short_side_px,27
+p10_short_side_px,32
+p20_short_side_px,41
+p25_short_side_px,46
+p50_short_side_px,77
+p75_short_side_px,122
+p90_short_side_px,161
+hr_source_min_px,41
+too_small_max_px,20
+hr_size_px,80
+scale_factor,"4 (cố định, xem configs/config.yaml)"
+n_hr_source_images,22972
+n_too_small_images_real_lr,173
+pct_data_kept,80.85
+n_identities_total,164
+n_train_images,16077
+n_val_images,3415
+n_test_images,3480

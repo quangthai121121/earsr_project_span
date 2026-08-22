@@ -8,7 +8,7 @@ SỬ DỤNG NGUYÊN VẸN compute_total_loss()/build_judges()/
 compute_multi_judge_saliency() từ train_sr_distill.py, chỉ thêm 2 thành phần
 mới: sparsity penalty + binary/polarization penalty trên gate).
 
-ĐỘNG LỰC (xem thêm docs/03_span_improvement.md):
+ĐỘNG LỰC (xem thêm RUNBOOK_EarVN1.0.md mục 13.2):
 Bản thảo bài báo tự nhận việc chọn "giữ 3 khối đầu" của span_tiny là "a
 choice made for implementation convenience rather than validated against
 alternatives" (mục 5.7-ii) — và đây cũng là nguồn gốc hợp lý nhất của hiện
@@ -208,7 +208,15 @@ def _forward_step_prune(student, teacher, judges, lr_img, hr_img, identity_label
     # "quality_total", không dùng "total" — nhưng số log/metadata gây hiểu
     # nhầm khi đọc lại để chỉnh lambda_sparsity/lambda_binary).
 
-    if is_train:
+    loss_val = loss_train.item()
+    # [SỬA — bug NGHIÊM TRỌNG phát hiện qua review Q1, cùng lỗi với
+    # train_sr_distill.py::_forward_step] TRƯỚC ĐÂY backward()+optimizer.step()
+    # chạy VÔ ĐIỀU KIỆN, kiểm tra NaN/Inf chỉ ở run_epoch_prune() và CHỈ loại
+    # batch đó khỏi trung bình hiển thị — gradient NaN/Inf đã ngấm vào trọng
+    # số (và cả gate_logits) TỪ TRƯỚC đó. Không dùng AMP ở file này nên không
+    # có lớp bảo vệ tự động như GradScaler. Chặn ĐÚNG TRƯỚC backward().
+    is_finite = loss_val == loss_val and loss_val not in (float("inf"), float("-inf"))
+    if is_train and is_finite:
         loss_train.backward()
         params_to_clip = list(student.parameters())
         if feat_adapter is not None:
@@ -216,7 +224,7 @@ def _forward_step_prune(student, teacher, judges, lr_img, hr_img, identity_label
         torch.nn.utils.clip_grad_norm_(params_to_clip, max_norm=1.0)
         optimizer.step()
 
-    return loss_train.item(), parts
+    return loss_val, parts
 
 
 def run_epoch_prune(student, teacher, judges, loader, device_mgr, cfg,
@@ -344,7 +352,8 @@ def main():
                                return_bbox=True, return_label=True, splits_json=splits_json)
     _validate_identity_labels(train_set, cfg["num_identities"])
     _validate_identity_labels(val_set, cfg["num_identities"])
-    train_loader, val_loader = _make_hrlr_loaders(train_set, val_set, lp["batch_size"])
+    train_loader, val_loader = _make_hrlr_loaders(train_set, val_set, lp["batch_size"],
+                                                   seed=cfg["split"]["seed"])
 
     run_dir = Path(cfg["paths"]["runs_root"]) / f"sr_learned_prune{args.run_suffix}"
     run_dir.mkdir(parents=True, exist_ok=True)

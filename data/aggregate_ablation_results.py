@@ -1,7 +1,7 @@
 """
 Gộp kết quả 4 cấu hình ablation (pixel_only / pixel_distill / pixel_identity /
 full) thành 1 bảng CSV, kèm giá trị lambda tương ứng — sẵn sàng dán vào bảng
-ablation trong docs/03_span_improvement.md.
+ablation trong bài báo (xem RUNBOOK_EarVN1.0.md mục 10.1).
 
 Chạy:
     python data/aggregate_ablation_results.py --results_dir results --out_csv results/ablation.csv
@@ -53,6 +53,14 @@ def main():
     if not rows:
         print("Không tìm thấy file ablation_*.json nào trong", args.results_dir)
         return
+
+    # [MỚI — phát hiện qua code review] cảnh báo rõ nếu thiếu cấu hình so với
+    # kỳ vọng (LAMBDA_MAP), tránh CSV trông "đầy đủ" trong khi thực ra có thí
+    # nghiệm chưa chạy xong bị lặng lẽ bỏ qua.
+    found_names = {r["config_name"] for r in rows}
+    missing = sorted(set(LAMBDA_MAP) - found_names)
+    if missing:
+        print(f"!!! CẢNH BÁO: thiếu {len(missing)}/{len(LAMBDA_MAP)} cấu hình kỳ vọng: {missing}")
 
     fieldnames = ["config_name", "lambda_pixel", "lambda_distill", "lambda_identity",
                   "identity_accuracy", "gender_accuracy", "backbone"]

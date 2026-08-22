@@ -3,7 +3,7 @@ Chỉ số cho cả 2 trục đánh giá: accuracy (identity/gender) và hiệu 
 (params, FLOPs, latency) — dùng để vẽ Pareto frontier ở Giai đoạn 4. Ngoài ra
 có PSNR/SSIM/LPIPS để đánh giá chất lượng ảnh SR (độc lập với accuracy
 downstream), và ROC/AUC/EER + confusion matrix cho phía nhận diện (bổ sung
-đợt review journal Q1 — xem CHANGELOG_v7.md mục D).
+đợt review journal Q1 — xem RUNBOOK_EarVN1.0.md mục 11).
 """
 import math
 import time
@@ -327,9 +327,27 @@ def count_params(model: torch.nn.Module) -> float:
     return sum(p.numel() for p in model.parameters()) / 1e6
 
 
-def count_flops(model: torch.nn.Module, input_size, device: str = "cpu") -> float:
+def count_flops(model: torch.nn.Module, input_size, device: str = "cpu") -> tuple:
     """
-    Trả về số GFLOPs cho 1 lần forward với kích thước input_size (ví dụ (1,3,32,32)).
+    [SỬA — lỗi nhãn phát hiện qua review Q1] Trả về (GMACs, GFLOPs) cho 1 lần
+    forward với kích thước input_size (ví dụ (1,3,32,32)).
+
+    LỖI TRƯỚC ĐÂY: hàm này trả về `flops/1e9` và gọi thẳng là "GFLOPs", nhưng
+    `thop.profile()` thực ra trả về MACs (multiply-accumulate operations),
+    KHÔNG PHẢI FLOPs — đã kiểm chứng độc lập bằng tay: Conv2d(1,1,kernel=1)
+    trên input 1x1x2x2 có MACs=Cout*Cin*K*K*H*W=4 (đúng hand-calc), trong khi
+    quy ước FLOPs=2xMACs (1 phép nhân + 1 phép cộng/vị trí) sẽ ra 8 —
+    `thop.profile()` trả về đúng 4.0, xác nhận nó trả MACs chứ không phải
+    FLOPs. Với 1 bài báo về "efficient SR" trích dẫn NTIRE (nơi các baseline
+    RLFN/ECBSR/SAFMN/SMFANet công bố số liệu riêng của họ), lệch 2x giữa
+    MACs/FLOPs khi đối chiếu trực tiếp với literature là sai số nghiêm trọng,
+    không phải sai số làm tròn.
+
+    QUY ƯỚC CỘNG ĐỒNG SR/NTIRE KHÔNG THỐNG NHẤT (một số bài tự gọi MACs là
+    "FLOPs" một cách không chính xác) — nên hàm này trả về CẢ HAI, gọi tên rõ
+    ràng, để người dùng tự đối chiếu đúng với quy ước mà từng baseline được
+    trích dẫn thực sự dùng, thay vì đoán.
+
     Dùng thư viện thop — cần `pip install thop`.
     """
     try:
@@ -340,8 +358,9 @@ def count_flops(model: torch.nn.Module, input_size, device: str = "cpu") -> floa
         )
     model = model.to(device).eval()
     dummy = torch.randn(*input_size).to(device)
-    flops, _ = profile(model, inputs=(dummy,), verbose=False)
-    return flops / 1e9  # GFLOPs
+    macs, _ = profile(model, inputs=(dummy,), verbose=False)
+    macs_g = macs / 1e9
+    return macs_g, macs_g * 2  # (GMACs, GFLOPs=2xGMACs)
 
 
 def freeze_reparam_modules(model: torch.nn.Module) -> int:

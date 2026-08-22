@@ -29,8 +29,8 @@ pixel/distill/identity. Muốn dùng feature-KD/saliency-loss, truyền tường
 minh qua CLI (`--lambda_feat`, `--lambda_saliency`) hoặc sửa config, xem
 pipeline/run_ablation_kd_v2.sh và pipeline/run_lambda_saliency_sweep.sh.
 
-ĐỘNG LỰC bản vá multi-judge + feature-KD này (xem docs/03_span_improvement.md
-mục "Multi-Judge Ensemble Identity-Aware Distillation" để biết đầy đủ):
+ĐỘNG LỰC bản vá multi-judge + feature-KD này (xem RUNBOOK_EarVN1.0.md mục 12
+"Multi-Judge Ensemble Identity Loss + Feature-level KD" để biết đầy đủ):
   - Bản gốc chỉ dùng 1 recognition model (mobilenet_v2) làm giám khảo cho
     identity loss. Khi tăng lambda_identity, kết quả downstream accuracy XẤU
     ĐI có ý nghĩa thống kê (Cohen's d=-10.09) — cách diễn giải hợp lý nhất:
@@ -121,7 +121,7 @@ from utils.device_manager import DeviceManager, move_optimizer_state
 from utils.early_stopping import (EarlyStopping, save_state_dict as _save_state_dict,
                                    save_last_if_missing as _save_last_if_missing)
 from utils.logger import setup_logger
-from utils.seed import set_seed
+from utils.seed import set_seed, seed_worker, seeded_generator
 
 
 def build_judges(cfg, device):
@@ -578,7 +578,22 @@ def _forward_step(student, teacher, judges, lr_img, hr_img, identity_label, bbox
                                       student_feat=student_feat, teacher_feat=teacher_feat,
                                       feat_adapter=feat_adapter, saliency_map=saliency_map)
 
-    if is_train:
+    loss_val = loss.item()
+    # [SỬA — bug NGHIÊM TRỌNG phát hiện qua review Q1] TRƯỚC ĐÂY backward()+
+    # optimizer.step() chạy VÔ ĐIỀU KIỆN, kiểm tra NaN/Inf chỉ nằm ở
+    # run_epoch() và CHỈ loại batch đó khỏi trung bình HIỂN THỊ — gradient
+    # NaN/Inf đã ngấm vào trọng số TỪ TRƯỚC đó rồi (optimizer.step() đã chạy
+    # xong). Với Adam, 1 lần cập nhật bằng gradient NaN làm nhiễm NaN vĩnh
+    # viễn vào buffer m/v của đúng tham số đó (NaN lan qua mọi bước sau, vì
+    # beta*NaN + (1-beta)*x = NaN với MỌI x) — hậu quả: model coi như hỏng từ
+    # thời điểm đó, dù log chỉ nói "bỏ qua khi tính trung bình" (nghe như vô
+    # hại). Không dùng AMP/GradScaler ở file này (xem lý do phía trên) nên
+    # KHÔNG có lớp bảo vệ tự động nào như train_sr.py/train_recognition.py có
+    # được trên CUDA (scaler.step() tự bỏ qua update khi phát hiện grad
+    # không hữu hạn). Chặn ĐÚNG TRƯỚC backward()/optimizer.step() thay vì chỉ
+    # lọc sau khi đã cập nhật xong.
+    is_finite = loss_val == loss_val and loss_val not in (float("inf"), float("-inf"))
+    if is_train and is_finite:
         loss.backward()
         params_to_clip = list(student.parameters())
         if feat_adapter is not None:
@@ -586,7 +601,7 @@ def _forward_step(student, teacher, judges, lr_img, hr_img, identity_label, bbox
         torch.nn.utils.clip_grad_norm_(params_to_clip, max_norm=1.0)
         optimizer.step()
 
-    return loss.item(), parts
+    return loss_val, parts
 
 
 def run_epoch(student, teacher, judges, loader, device_mgr, cfg,
@@ -651,9 +666,13 @@ def _require_ckpt(path, what: str):
     return p
 
 
-def _make_hrlr_loaders(train_set, val_set, batch_size, num_workers=4):
+def _make_hrlr_loaders(train_set, val_set, batch_size, num_workers=4, seed=42):
     """DataLoader an toàn: dataset rỗng + persistent_workers=True dễ treo/crash
-    worker (đặc biệt macOS spawn). Báo lỗi ngay, không để job chạy rồi sập."""
+    worker (đặc biệt macOS spawn). Báo lỗi ngay, không để job chạy rồi sập.
+
+    [MỚI — phát hiện qua review Q1] worker_init_fn + generator cố định (seed):
+    cudnn.deterministic (set_seed()) không đủ để tái lập tuyệt đối khi
+    num_workers>0 — xem utils/seed.py::seed_worker/seeded_generator."""
     if len(train_set) == 0 or len(val_set) == 0:
         raise RuntimeError(
             f"Dataset rỗng: train={len(train_set)} val={len(val_set)}. "
@@ -664,8 +683,10 @@ def _make_hrlr_loaders(train_set, val_set, batch_size, num_workers=4):
         num_workers=nw,
         pin_memory=torch.cuda.is_available(),
         persistent_workers=(nw > 0),
+        worker_init_fn=seed_worker if nw > 0 else None,
     )
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, **kwargs)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,
+                               generator=seeded_generator(seed), **kwargs)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, **kwargs)
     return train_loader, val_loader
 
@@ -772,7 +793,8 @@ def main():
                                return_bbox=True, return_label=True, splits_json=splits_json)
     _validate_identity_labels(train_set, cfg["num_identities"])
     _validate_identity_labels(val_set, cfg["num_identities"])
-    train_loader, val_loader = _make_hrlr_loaders(train_set, val_set, ci["batch_size"])
+    train_loader, val_loader = _make_hrlr_loaders(train_set, val_set, ci["batch_size"],
+                                                   seed=cfg["split"]["seed"])
 
     student_arch = ci.get("student_arch", cfg["sr"]["arch"])
     student_pretrained = ci.get("student_pretrained_path")

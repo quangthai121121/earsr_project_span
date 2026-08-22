@@ -32,4 +32,4 @@ data vào đây nếu bạn muốn chạy lại từ đầu (ví dụ dùng bả
 muốn tự chọn lại ngưỡng thủ công).
 
 Sau khi copy xong (nếu chạy lại), chạy `bash pipeline/01_survey_and_prepare_data.sh`
-(xem `pipeline/README.md` để biết thứ tự chạy đầy đủ).
+(xem `RUNBOOK_EarVN1.0.md` để biết thứ tự chạy đầy đủ).

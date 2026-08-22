@@ -49,10 +49,18 @@ class EarDataset(Dataset):
         # xuất đúng kích thước), nên Resize() ở đây thực chất là NO-OP (không
         # đổi gì) bất kể kernel nào — bản sửa này chỉ THỰC SỰ ảnh hưởng domain
         # "lr" (20x20 -> 80x80).
+        # [SỬA — bỏ theo quyết định sau review Q1] RandomHorizontalFlip đã bị
+        # XOÁ khỏi augmentation train: lật ngang ảnh tai có thể biến đặc trưng
+        # hình thái tai TRÁI thành trông giống tai PHẢI (không đối xứng hai
+        # bên như khuôn mặt) — reviewer biometrics có cơ sở để phản biện đây
+        # là augmentation không hợp lệ về mặt sinh trắc học cho modality này.
+        # ẢNH HƯỞNG: mọi checkpoint recognition đã train TRƯỚC bản sửa này
+        # dùng augmentation khác — cần TRAIN LẠI TỪ ĐẦU toàn bộ pipeline
+        # recognition (Bước 3 trở đi) để số liệu phản ánh đúng bản đã sửa,
+        # không thể chỉ eval lại (khác với các lỗi chỉ đổi cách ĐO).
         if train:
             self.transform = transforms.Compose([
                 transforms.Resize((image_size, image_size), interpolation=InterpolationMode.BICUBIC),
-                transforms.RandomHorizontalFlip(p=0.5),
                 transforms.ToTensor(),
             ])
         else:

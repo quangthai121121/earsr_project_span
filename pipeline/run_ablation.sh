@@ -1,11 +1,23 @@
 #!/bin/bash
 # Chạy 4 cấu hình ablation (pixel_only / pixel_distill / pixel_identity / full)
-# để cô lập tác dụng của từng thành phần loss (docs/03_span_improvement.md).
+# để cô lập tác dụng của từng thành phần loss (xem RUNBOOK_EarVN1.0.md mục 10.1).
 # Dùng 1 backbone duy nhất (mobilenet_v2) để tiết kiệm thời gian — đổi
 # BACKBONE bên dưới nếu muốn chạy ablation trên backbone khác hoặc cả 5.
 #
 # YÊU CẦU: đã chạy xong pipeline 01-05 (có sẵn checkpoint recognition_lr_*,
 # EDSR teacher, recognition_hr_mobilenet_v2 làm giám khảo).
+#
+# !!! [CẢNH BÁO — phát hiện qua review Q1] cấu hình pixel_identity/full ở
+# đây dùng identity loss qua `train_sr_distill.py::build_judges()`, ĐỌC
+# `configs/config.yaml::sr_improve.identity_judges` — hiện tại danh sách này
+# có 3 judge (mobilenet_v2/resnet18/ghostnet_100), KHÔNG PHẢI single-judge
+# mobilenet_v2 như bản ablation ĐẦU TIÊN (kết quả từng nêu trong
+# RUNBOOK_EarVN1.0.md mục 10.1: "pixel_distill nhỉnh hơn full"). Không có cờ
+# CLI nào để ghi đè identity_judges, nên chạy lại script này BÂY GIỜ sẽ cho
+# số liệu KHÔNG so sánh được trực tiếp với ablation cũ (cơ chế identity loss
+# khác nhau — multi-judge vs single-judge) — ĐỪNG trộn 2 bộ số liệu này vào
+# cùng 1 bảng mà không ghi rõ chú thích, và đừng diễn giải "full thắng/thua
+# pixel_distill" khi so sánh giữa 2 lần chạy khác cơ chế identity judge.
 
 set -e
 

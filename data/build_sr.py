@@ -6,6 +6,7 @@ Chạy:
         --arch fsrcnn --scale 4 --out_dir splits/sr
 """
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -38,6 +39,19 @@ def main():
 
     to_tensor = transforms.ToTensor()
     to_pil = transforms.ToPILImage()
+
+    # [SỬA — bug phát hiện qua review Q1, cùng lỗi đã sửa ở data/build_lr.py]
+    # TRƯỚC ĐÂY không xoá out_dir cũ trước khi ghi — nếu build lại tay (đổi
+    # checkpoint SR, hoặc splits/lr đổi sau khi sửa split) mà không tự xoá
+    # trước, ảnh SR của lần chạy TRƯỚC vẫn còn sót lại lẫn với ảnh mới. Không
+    # gây lỗi khi train (EarDataset đọc danh sách ảnh từ splits.json, không
+    # quét thư mục) nhưng phá hỏng khả năng kiểm tra vật lý bằng mắt và lãng
+    # phí ổ đĩa — xoá sạch trước khi ghi lại để out_dir luôn khớp CHÍNH XÁC
+    # với splits/lr hiện tại.
+    out_dir = Path(args.out_dir)
+    if out_dir.exists():
+        print(f"Xoá thư mục cũ: {out_dir}")
+        shutil.rmtree(out_dir)
 
     for split_name in ["train", "val", "test"]:
         split_dir = Path(args.lr_dir) / split_name

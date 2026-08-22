@@ -9,7 +9,15 @@ Track A & B, transfer learning dataset thứ 2) — sửa 1 lần ở đây, có
 trung bình" — chỉ là ước lượng thô, không phải kiểm định thống kê thật) bằng
 PAIRED T-TEST + Cohen's d (paired dz) thật, ghép cặp qua KHOÁ SEED tường minh
 (đọc từ tên file, dạng *_seed<N>.json) — không dựa vào thứ tự list ngầm định
-như cách làm heuristic cũ. Ghi ra 2 file:
+như cách làm heuristic cũ.
+
+[MỚI — phát hiện qua review Q1] Paired t-test giả định normality của hiệu
+số — khó tin cậy với n<=5 seed. Thêm Wilcoxon signed-rank (phi tham số) làm
+robustness check, và khoảng tin cậy 95% cho mean_diff (paired_ci95()) — vì
+n=5 + Bonferroni cho power thấp, nhiều "trend" (0.05<=p<0.10) có thể chỉ do
+thiếu power. Thêm MDES (mdes_paired()) — định lượng CỤ THỂ "thiếu power tới
+mức nào" bằng noncentral-t CHÍNH XÁC, cả ở alpha=.10 thô và alpha sau
+Bonferroni. Ghi ra 2 file:
   - <out_csv>                    : trung bình/độ lệch chuẩn theo (backbone, domain)
   - <out_csv stem>_pairwise.csv  : kiểm định từng cặp domain (cùng backbone),
                                     kèm p-value (raw + Bonferroni theo backbone)
@@ -29,6 +37,7 @@ from itertools import combinations
 from pathlib import Path
 
 from scipy import stats
+from scipy.optimize import brentq
 
 SEED_RE = re.compile(r"_seed(\d+)\.json$")
 
@@ -57,6 +66,85 @@ def cohens_d_paired(values_a, values_b):
     if std_diff < 1e-9:
         return None
     return mean_diff / std_diff
+
+
+def paired_ci95(values_a, values_b):
+    """[MỚI — phát hiện qua review Q1] Khoảng tin cậy 95% cho mean(a-b), dùng
+    phân phối t (đúng cho mẫu nhỏ, không xấp xỉ chuẩn). Bổ sung BÊN CẠNH
+    p-value/Cohen's d: với n=5 seed + hiệu chỉnh Bonferroni, power rất thấp —
+    nhiều "trend" (0.05<=p<0.10) có thể chỉ do thiếu power chứ không phải
+    hiệu ứng yếu thật. CI cho người đọc tự đánh giá độ chắc chắn thay vì chỉ
+    dựa vào ngưỡng p có/không ý nghĩa."""
+    diffs = [a - b for a, b in zip(values_a, values_b)]
+    n = len(diffs)
+    if n < 2:
+        return None, None
+    mean_diff = statistics.mean(diffs)
+    std_diff = statistics.stdev(diffs)
+    se = std_diff / (n ** 0.5)
+    if se < 1e-12:
+        return mean_diff, mean_diff
+    t_crit = stats.t.ppf(0.975, df=n - 1)
+    margin = t_crit * se
+    return mean_diff - margin, mean_diff + margin
+
+
+def wilcoxon_paired_p(values_a, values_b):
+    """[MỚI — phát hiện qua review Q1] Wilcoxon signed-rank test — kiểm định
+    phi tham số, KHÔNG giả định phân phối chuẩn của hiệu số (paired t-test
+    giả định normality, khó tin cậy với n<=5 seed). Dùng làm robustness check
+    bên cạnh t-test, đặc biệt hữu ích khi p-value t-test nằm sát ngưỡng
+    0.05/0.10. Trả về None nếu không đủ dữ liệu hoặc hiệu số bằng 0 hết
+    (trường hợp suy biến scipy không tính được)."""
+    diffs = [a - b for a, b in zip(values_a, values_b)]
+    if len(diffs) < 2 or all(abs(d) < 1e-12 for d in diffs):
+        return None
+    try:
+        _, p = stats.wilcoxon(values_a, values_b)
+        return p
+    except ValueError:
+        return None
+
+
+def mdes_paired(values_a, values_b, alpha=0.05, power=0.80):
+    """[MỚI — phát hiện qua review Q1] Minimum Detectable Effect Size (MDES):
+    hiệu ứng NHỎ NHẤT mà thiết kế n-seed NÀY có thể phát hiện với xác suất
+    `power` ở mức `alpha` cho trước — trả lời ĐỊNH LƯỢNG câu hỏi "n=5 +
+    Bonferroni power thấp -> thấp TỚI MỨC NÀO" thay vì chỉ nói định tính.
+
+    Dùng phân phối t KHÔNG TÂM (noncentral t, scipy.stats.nct) CHÍNH XÁC —
+    KHÔNG xấp xỉ chuẩn — vì df ở đây rất nhỏ (n<=5, df<=4), xấp xỉ chuẩn sai
+    đáng kể ở df nhỏ. Giải noncentrality (delta) bằng root-finding (brentq)
+    sao cho xác suất bác bỏ H0 (2 phía) = power mong muốn, rồi suy ra
+    Cohen's d = delta / sqrt(n). Đã kiểm chứng bằng tay khớp bảng power-
+    analysis chuẩn (ví dụ n=30, alpha=.05, power=.80 -> d~0.53).
+
+    Trả về (mdes_cohens_d, mdes_accuracy_units) — mdes quy đổi ra đơn vị
+    accuracy thực tế bằng cách nhân với std hiệu số QUAN SÁT ĐƯỢC (dễ đọc
+    hơn Cohen's d thuần với người không quen thống kê). (None, None) nếu
+    n<2 hoặc std hiệu số ~0 (không đủ thông tin quy đổi)."""
+    diffs = [a - b for a, b in zip(values_a, values_b)]
+    n = len(diffs)
+    if n < 2:
+        return None, None
+    std_diff = statistics.stdev(diffs)
+    if std_diff < 1e-9:
+        return None, None
+
+    df = n - 1
+    t_crit = stats.t.ppf(1 - alpha / 2, df)
+
+    def power_at_delta(delta):
+        return (1 - stats.nct.cdf(t_crit, df, delta)) + stats.nct.cdf(-t_crit, df, delta)
+
+    lo, hi = 1e-6, 3.0
+    while power_at_delta(hi) < power:
+        hi *= 1.5
+        if hi > 30:
+            return None, None  # không hội tụ trong khoảng an toàn (không nên xảy ra ở alpha/power thông thường)
+    delta = brentq(lambda d: power_at_delta(d) - power, lo, hi)
+    mdes_d = delta / (n ** 0.5)
+    return mdes_d, mdes_d * std_diff
 
 
 def main():
@@ -141,8 +229,11 @@ def main():
                 pairwise_rows.append({
                     "backbone": backbone, "domain_a": d1, "domain_b": d2,
                     "n_common_seeds": len(common_seeds),
-                    "mean_diff_b_minus_a": "", "cohens_d": "",
-                    "p_raw": "", "p_bonferroni": "", "n_comparisons_this_backbone": n_comparisons,
+                    "mean_diff_b_minus_a": "", "ci95_lower": "", "ci95_upper": "", "cohens_d": "",
+                    "p_raw": "", "p_bonferroni": "", "wilcoxon_p": "",
+                    "mdes_d_alpha10": "", "mdes_accuracy_alpha10": "",
+                    "mdes_d_bonferroni": "", "mdes_accuracy_bonferroni": "",
+                    "n_comparisons_this_backbone": n_comparisons,
                     "note": "< 2 seed chung -> không đủ để kiểm định",
                 })
                 continue
@@ -152,12 +243,28 @@ def main():
             _, p_raw = stats.ttest_rel(vals_b, vals_a)
             p_bonferroni = min(1.0, p_raw * n_comparisons)
             d = cohens_d_paired(vals_b, vals_a)
+            ci_lo, ci_hi = paired_ci95(vals_b, vals_a)
+            wilcoxon_p = wilcoxon_paired_p(vals_b, vals_a)
+            # [SỬA — phát hiện qua review Q1] alpha=0.10 (không phải 0.05 truyền
+            # thống) — PHẢI khớp đúng ngưỡng "có ý nghĩa" thật sự dùng để ra
+            # quyết định ở dòng "note" bên dưới (p_bonferroni < 0.10). Trước đây
+            # MDES tính ở alpha=0.05 trong khi quyết định dùng alpha=0.10 —
+            # 2 con số không cùng ý nghĩa, dễ đọc nhầm.
+            mdes_d_a10, mdes_acc_a10 = mdes_paired(vals_b, vals_a, alpha=0.10)
+            mdes_d_bonf, mdes_acc_bonf = mdes_paired(vals_b, vals_a, alpha=0.10 / n_comparisons)
             pairwise_rows.append({
                 "backbone": backbone, "domain_a": d1, "domain_b": d2,
                 "n_common_seeds": len(common_seeds),
                 "mean_diff_b_minus_a": round(mean_diff, 4),
+                "ci95_lower": round(ci_lo, 4) if ci_lo is not None else "NA",
+                "ci95_upper": round(ci_hi, 4) if ci_hi is not None else "NA",
                 "cohens_d": round(d, 4) if d is not None else "NA (std hiệu số~0)",
                 "p_raw": round(p_raw, 4), "p_bonferroni": round(p_bonferroni, 4),
+                "wilcoxon_p": round(wilcoxon_p, 4) if wilcoxon_p is not None else "NA",
+                "mdes_d_alpha10": round(mdes_d_a10, 3) if mdes_d_a10 is not None else "NA",
+                "mdes_accuracy_alpha10": round(mdes_acc_a10, 4) if mdes_acc_a10 is not None else "NA",
+                "mdes_d_bonferroni": round(mdes_d_bonf, 3) if mdes_d_bonf is not None else "NA",
+                "mdes_accuracy_bonferroni": round(mdes_acc_bonf, 4) if mdes_acc_bonf is not None else "NA",
                 "n_comparisons_this_backbone": n_comparisons,
                 "note": "có ý nghĩa sau Bonferroni (p<0.10)" if p_bonferroni < 0.10
                         else "chưa đủ ý nghĩa sau Bonferroni (p>=0.10)",
@@ -185,7 +292,7 @@ def main():
                       f"{r['std_identity_accuracy']:.4f}  (n={r['n_seeds']} seed, "
                       f"rank5={r['mean_identity_accuracy_rank5']}, gender={r['mean_gender_accuracy']})")
 
-        print("-- Kiểm định từng cặp domain (paired t-test + Cohen's d) --")
+        print("-- Kiểm định từng cặp domain (paired t-test + Wilcoxon + Cohen's d + CI95%) --")
         for pr in pairwise_rows:
             if pr["backbone"] != backbone:
                 continue
@@ -193,8 +300,12 @@ def main():
                 print(f"  {pr['domain_a']} vs {pr['domain_b']}: {pr['note']}")
                 continue
             print(f"  {pr['domain_a']} vs {pr['domain_b']}: chênh lệch(b-a)={pr['mean_diff_b_minus_a']:+.4f}  "
+                  f"CI95%=[{pr['ci95_lower']}, {pr['ci95_upper']}]  "
                   f"Cohen's d={pr['cohens_d']}  p_raw={pr['p_raw']:.4f}  "
-                  f"p_bonferroni={pr['p_bonferroni']:.4f} ({pr['note']})")
+                  f"p_bonferroni={pr['p_bonferroni']:.4f}  wilcoxon_p={pr['wilcoxon_p']} ({pr['note']})")
+            print(f"      MDES (hiệu ứng nhỏ nhất phát hiện được, power=80%): "
+                  f"alpha=.10 -> d={pr['mdes_d_alpha10']} (~{pr['mdes_accuracy_alpha10']} accuracy)  |  "
+                  f"sau Bonferroni -> d={pr['mdes_d_bonferroni']} (~{pr['mdes_accuracy_bonferroni']} accuracy)")
 
 
 if __name__ == "__main__":

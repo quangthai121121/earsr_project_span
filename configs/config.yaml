@@ -101,7 +101,7 @@ sr_improve:
   # [MỚI] Multi-Judge Ensemble Identity-Aware Distillation — thay vì 1 model
   # giám khảo duy nhất (dễ khiến SR bị "overfit" vào đặc trưng riêng của đúng
   # 1 kiến trúc recognition, không tổng quát hoá được sang backbone khác —
-  # xem phân tích trong docs/03_span_improvement.md), dùng ĐỒNG THỜI nhiều
+  # xem phân tích trong RUNBOOK_EarVN1.0.md mục 12), dùng ĐỒNG THỜI nhiều
   # backbone khác họ kiến trúc (đã train sẵn ở domain "hr", Bước 3 pipeline)
   # làm hội đồng giám khảo, identity loss = trung bình cosine loss qua cả 3.
   # Yêu cầu: 3 checkpoint bên dưới đã tồn tại (chạy xong pipeline/

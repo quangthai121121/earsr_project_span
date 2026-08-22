@@ -1,8 +1,8 @@
 #!/bin/bash
 # [MỚI] Validate ĐẦY ĐỦ multi-seed x 5-backbone cho recipe KD v2 (multi-judge
 # identity loss + feature-level KD — xem train_sr_distill.py,
-# docs/03_span_improvement.md mục "Multi-Judge Ensemble Identity-Aware
-# Distillation + Feature-level KD"). Đây là BƯỚC BẮT BUỘC sau khi
+# RUNBOOK_EarVN1.0.md mục 12 "Multi-Judge Ensemble Identity Loss +
+# Feature-level KD"). Đây là BƯỚC BẮT BUỘC sau khi
 # pipeline/run_ablation_kd_v2.sh (1 backbone, 1 seed — chỉ là tín hiệu sàng
 # lọc nhanh) đã xác định được cấu hình thắng, trước khi đưa số liệu vào bảng
 # kết quả chính thức — tránh lặp lại đúng giới hạn "ablation loss chỉ chạy 1
@@ -16,7 +16,7 @@ LAMBDA_IDENTITY=0.1
 # Nếu cấu hình thắng là "kdv2_multijudge" (chỉ multi-judge): LAMBDA_FEAT=0.0
 
 # SR model CHỈ train 1 LẦN ở seed cố định — ĐÚNG protocol thống kê đã dùng
-# xuyên suốt project (xem docs/03_span_improvement.md, configs/config.yaml
+# xuyên suốt project (xem RUNBOOK_EarVN1.0.md mục 10.5, configs/config.yaml
 # split.seed): train SR nhiều seed bị đánh giá không khả thi về chi phí, chỉ
 # downstream recognition được lặp lại qua seed để đo phương sai.
 SR_SEED=42

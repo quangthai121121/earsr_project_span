@@ -54,7 +54,7 @@ from utils.early_stopping import (EarlyStopping, save_state_dict as _save_state_
                                    save_last_if_missing as _save_last_if_missing)
 from utils.logger import setup_logger
 from utils.metrics import compute_accuracy
-from utils.seed import set_seed
+from utils.seed import set_seed, seed_worker, seeded_generator
 
 
 def load_transfer_checkpoint(model, ckpt_path, device, logger=None):
@@ -106,19 +106,29 @@ def _forward_step(model, imgs, id_labels, gender_labels, device, cfg,
         loss = (cfg["recognition"]["identity_loss_weight"] * loss_id +
                 cfg["recognition"]["gender_loss_weight"] * loss_gender)
 
+    loss_val = loss.item()
     if is_train:
         if scaler is not None:
+            # scaler.step() đã tự bỏ qua optimizer.step() khi grad không hữu
+            # hạn — an toàn sẵn.
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             scaler.step(optimizer)
             scaler.update()
         else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            optimizer.step()
+            # [SỬA — phát hiện qua review Q1, cùng lỗi đã sửa ở
+            # train_sr_distill.py/train_sr.py] nhánh fallback CPU (scaler=None)
+            # không có bảo vệ tự động — CrossEntropyLoss ổn định hơn nhiều so
+            # với identity/saliency loss nên rủi ro thấp, nhưng chặn cho nhất
+            # quán, chi phí gần như bằng 0.
+            is_finite = loss_val == loss_val and loss_val not in (float("inf"), float("-inf"))
+            if is_finite:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+                optimizer.step()
 
-    return loss.item(), id_logits.detach(), gender_logits.detach(), id_labels, gender_labels
+    return loss_val, id_logits.detach(), gender_logits.detach(), id_labels, gender_labels
 
 
 def run_epoch(model, loader, device_mgr, cfg, optimizer=None, scaler=None, logger=None,
@@ -246,10 +256,16 @@ def main():
     # pin_memory + persistent_workers: tối ưu tốc độ nạp dữ liệu lên GPU
     loader_kwargs = dict(num_workers=4, pin_memory=torch.cuda.is_available(),
                           persistent_workers=True)
+    # [MỚI — phát hiện qua review Q1] worker_init_fn + generator cố định:
+    # cudnn.deterministic (set_seed()) không đủ để tái lập tuyệt đối khi
+    # num_workers>0 — thứ tự shuffle giờ tường minh qua generator seed riêng
+    # thay vì dựa ngầm vào RNG toàn cục, và mỗi worker subprocess được seed
+    # lại rõ ràng (xem utils/seed.py::seed_worker/seeded_generator).
     train_loader = DataLoader(train_set, batch_size=cfg["recognition"]["batch_size"],
-                               shuffle=True, **loader_kwargs)
+                               shuffle=True, worker_init_fn=seed_worker,
+                               generator=seeded_generator(cfg["split"]["seed"]), **loader_kwargs)
     val_loader = DataLoader(val_set, batch_size=cfg["recognition"]["batch_size"],
-                             shuffle=False, **loader_kwargs)
+                             shuffle=False, worker_init_fn=seed_worker, **loader_kwargs)
 
     run_name = f"recognition_{args.domain}_{args.backbone}{args.run_suffix}"
     run_dir = Path(cfg["paths"]["runs_root"]) / run_name

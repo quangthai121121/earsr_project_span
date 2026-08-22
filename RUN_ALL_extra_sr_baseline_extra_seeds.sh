@@ -3,11 +3,16 @@
 # từ n=3 seed lên n=5 seed (thêm 44, 999) — đồng bộ lực kiểm định thống kê
 # với bảng so sánh chính (đã mở rộng qua pipeline/run_multi_seed_extra_seeds.sh).
 #
-# KHÔNG train lại SR (train_sr.py không có cờ --seed — SR của Track A LUÔN
-# train ở seed=42 mặc định config.yaml, đây là quy ước có chủ đích, không
-# phải thiếu sót — xem RUN_ALL_extra_sr_baseline.sh gốc). CHỈ thêm 2 seed
-# cho bước train_recognition.py trên domain sr_<arch> đã có sẵn, rồi tổng
-# hợp lại (giờ đọc đủ 5 seed).
+# KHÔNG train lại SR — SR của Track A LUÔN train ở seed=42 mặc định
+# config.yaml, đây là quy ước có chủ đích, không phải thiếu sót — xem
+# RUN_ALL_extra_sr_baseline.sh gốc. [CẬP NHẬT — phát hiện qua review Q1]
+# train_sr.py giờ ĐÃ có cờ --seed (thêm sau review, cho phép train SR nhiều
+# seed nếu muốn đo phương sai do chính seed train SR — xem ghi chú trong
+# train_sr.py) — nhưng script NÀY vẫn cố tình KHÔNG dùng nó, vì mở rộng đó
+# đòi hỏi retrain toàn bộ pipeline SR nhiều lần (tốn compute đáng kể) và là
+# quyết định nghiên cứu/ngân sách GPU riêng, chưa được bật ở đây. CHỈ thêm 2
+# seed cho bước train_recognition.py trên domain sr_<arch> đã có sẵn, rồi
+# tổng hợp lại (giờ đọc đủ 5 seed).
 #
 # DÙNG (Y HỆT cú pháp bản gốc):
 #   bash RUN_ALL_extra_sr_baseline_extra_seeds.sh <rlfn|rlfn_adapted|ecbsr|safmn|smfanet> [đường_dẫn_config]

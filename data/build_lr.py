@@ -6,6 +6,7 @@ Chạy:
     python data/build_lr.py --splits splits/splits.json --hr_size 128 --scale 4 --out_dir splits
 """
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -49,6 +50,20 @@ def main():
     import json
     with open(args.splits, "r", encoding="utf-8") as f:
         splits = json.load(f)
+
+    # [SỬA — bug phát hiện qua code review] trước đây chỉ mkdir(exist_ok=True),
+    # không xoá thư mục đích cũ -> nếu splits.json thay đổi (ví dụ sau khi sửa
+    # lỗi split-by-identity), ảnh của lần chạy TRƯỚC vẫn còn sót lại lẫn với
+    # ảnh mới trên đĩa (số file thật > số entry trong splits.json). Không gây
+    # data leakage khi train (EarDataset đọc danh sách ảnh từ splits.json, không
+    # quét thư mục) nhưng phá hỏng mục đích kiểm tra vật lý bằng mắt và lãng phí
+    # ổ đĩa. Xoá sạch trước khi ghi lại để splits/hr, splits/lr luôn khớp CHÍNH
+    # XÁC với splits.json hiện tại.
+    for sub in ("hr", "lr"):
+        sub_dir = Path(args.out_dir) / sub
+        if sub_dir.exists():
+            print(f"Xoá thư mục cũ: {sub_dir}")
+            shutil.rmtree(sub_dir)
 
     for split_name, entries in splits.items():
         process_split(entries, split_name, args.hr_size, args.scale, args.out_dir)
