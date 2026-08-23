@@ -122,14 +122,14 @@ run_step() {
 # ---------------------------------------------------------------
 # [1] Pipeline chính — Bước 1-9 (RUNBOOK_EarVN1.0.md mục 1-9)
 # ---------------------------------------------------------------
-run_step "Bước 1 - Chuẩn bị dữ liệu"        bash pipeline/01_survey_and_prepare_data.sh
-run_step "Bước 2 - Setup SPAN chính thức"   bash pipeline/02_setup_span_official.sh
-run_step "Bước 3 - Recognition baseline"    bash pipeline/03_train_baseline_recognition.sh
-run_step "Bước 4 - EDSR + SPAN baseline"    bash pipeline/04_train_teacher_and_span_baseline.sh
-run_step "Bước 5 - Recognition sr_baseline" bash pipeline/05_train_recognition_sr_baseline.sh
-run_step "Bước 6 - Nen SPAN (span_tiny)"    bash pipeline/06_improve_span.sh
-run_step "Bước 7 - Recognition sr_improved" bash pipeline/07_train_recognition_sr_improved.sh
-run_step "Bước 8 - Benchmark + aggregate"   bash pipeline/08_benchmark_and_aggregate.sh
+# run_step "Bước 1 - Chuẩn bị dữ liệu"        bash pipeline/01_survey_and_prepare_data.sh
+# run_step "Bước 2 - nêính thức"   bash pipeline/02_setup_span_official.sh
+# run_step "Bước 3 - Recognition baseline"    bash pipeline/03_train_baseline_recognition.sh
+# run_step "Bước 4 - EDSR + SPAN baseline"    bash pipeline/04_train_teacher_and_span_baseline.sh
+# run_step "Bước 5 - Recognition sr_baseline" bash pipeline/05_train_recognition_sr_baseline.sh
+# run_step "Bước 6 - Nen SPAN (span_tiny)"    bash pipeline/06_improve_span.sh
+# run_step "Bước 7 - Recognition sr_improved" bash pipeline/07_train_recognition_sr_improved.sh
+# run_step "Bước 8 - Benchmark + aggregate"   bash pipeline/08_benchmark_and_aggregate.sh
 
 STUDENT_ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 SR_ARCH=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['sr']['arch'])")
@@ -142,8 +142,8 @@ run_step "Bước 9 - Xuat anh so sanh" \
 # ---------------------------------------------------------------
 # [2] Kiểm chứng độ tin cậy — Bước 10.1-10.5 (bắt buộc cho journal Q1)
 # ---------------------------------------------------------------
-run_step "Buoc 10.1 - Ablation loss"                bash pipeline/run_ablation.sh
-run_step "Buoc 10.2 - Lambda identity sweep"        bash pipeline/run_lambda_sweep.sh
+# run_step "Buoc 10.1 - Ablation loss"                bash pipeline/run_ablation.sh
+# run_step "Buoc 10.2 - Lambda identity sweep"        bash pipeline/run_lambda_sweep.sh
 run_step "Buoc 10.3a - Multi-seed n=3"              bash pipeline/run_multi_seed.sh
 run_step "Buoc 10.3b - Multi-seed extra seeds n=5"  bash pipeline/run_multi_seed_extra_seeds.sh
 # [MỚI — phát hiện qua review Q1] Câu hỏi "distillation (KD) có thật sự giúp
