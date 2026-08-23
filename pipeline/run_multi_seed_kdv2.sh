@@ -11,7 +11,7 @@
 # **SỬA 2 THAM SỐ NÀY** trước khi chạy, khớp đúng cấu hình đã THẮNG ở
 # run_ablation_kd_v2.sh (mặc định để sẵn "kdv2_full" — cả 2 cơ chế cùng lúc):
 LAMBDA_FEAT=0.5
-LAMBDA_IDENTITY=0.1
+LAMBDA_IDENTITY=0.0
 # Nếu cấu hình thắng là "kdv2_feat" (chỉ feature-KD): LAMBDA_IDENTITY=0.0
 # Nếu cấu hình thắng là "kdv2_multijudge" (chỉ multi-judge): LAMBDA_FEAT=0.0
 
