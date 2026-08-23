@@ -133,11 +133,11 @@ run_step() {
 
 STUDENT_ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 SR_ARCH=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['sr']['arch'])")
-run_step "Bước 9 - Xuat anh so sanh" \
-    python export_sr_comparison_images.py --config "$CONFIG" \
-        --sr_baseline_ckpt "runs/sr_${SR_ARCH}/best.pt" --sr_baseline_arch "$SR_ARCH" \
-        --sr_improved_ckpt "runs/sr_improved_${STUDENT_ARCH}/best.pt" --sr_improved_arch "$STUDENT_ARCH" \
-        --n_samples 20 --out_dir "${RESULTS_DIR}/sr_comparison_images"
+# run_step "Bước 9 - Xuat anh so sanh" \
+#     python export_sr_comparison_images.py --config "$CONFIG" \
+#         --sr_baseline_ckpt "runs/sr_${SR_ARCH}/best.pt" --sr_baseline_arch "$SR_ARCH" \
+#         --sr_improved_ckpt "runs/sr_improved_${STUDENT_ARCH}/best.pt" --sr_improved_arch "$STUDENT_ARCH" \
+#         --n_samples 20 --out_dir "${RESULTS_DIR}/sr_comparison_images"
 
 # ---------------------------------------------------------------
 # [2] Kiểm chứng độ tin cậy — Bước 10.1-10.5 (bắt buộc cho journal Q1)
