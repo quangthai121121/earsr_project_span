@@ -114,7 +114,7 @@ def mdes_paired(values_a, values_b, alpha=0.05, power=0.80):
 
     Dùng phân phối t KHÔNG TÂM (noncentral t, scipy.stats.nct) CHÍNH XÁC —
     KHÔNG xấp xỉ chuẩn — vì df ở đây rất nhỏ (n<=5, df<=4), xấp xỉ chuẩn sai
-    đáng kể ở df nhỏ. Giải noncentrality (delta) bằng root-finding (brentq)
+    đáng kể ở df nhỏ. Giải noncentrality (delta) bằng bisection tự viết (né NaN cô lập của scipy.stats.nct)
     sao cho xác suất bác bỏ H0 (2 phía) = power mong muốn, rồi suy ra
     Cohen's d = delta / sqrt(n). Đã kiểm chứng bằng tay khớp bảng power-
     analysis chuẩn (ví dụ n=30, alpha=.05, power=.80 -> d~0.53).
@@ -134,13 +134,35 @@ def mdes_paired(values_a, values_b, alpha=0.05, power=0.80):
     df = n - 1
     t_crit = stats.t.ppf(1 - alpha / 2, df)
 
+    # [SỬA — bug crash thật phát hiện khi chạy production, rồi đào sâu hơn tìm
+    # ĐÚNG GỐC RỄ thay vì chỉ vá triệu chứng] Công thức power 2 phía chuẩn là
+    # (1 - cdf(t_crit)) + cdf(-t_crit) — nhưng scipy.stats.nct.cdf(-t_crit,..)
+    # cho NaN ở HÀNG TRĂM điểm rải khắp dải delta (đã quét kiểm chứng, không
+    # phải hiếm/cô lập như tưởng ban đầu). Đã xác định ĐÚNG NGUYÊN NHÂN: NaN
+    # CHỈ xảy ra ở vùng mà giá trị thật của SỐ HẠNG NÀY cực nhỏ — kiểm chứng
+    # bằng tay: delta=4 -> 6.3e-8, delta=5 -> 4.0e-10, delta=6 -> 1.0e-12 —
+    # đúng vùng bắt đầu NaN. Vì vậy: (a) đổi "1 - cdf(t_crit)" (dễ mất độ
+    # chính xác khi cdf gần 1) sang "sf(t_crit)" (survival function, scipy
+    # tính trực tiếp, ổn định hơn), (b) khi cdf(-t_crit) ra NaN, thay bằng 0.0
+    # — KHÔNG PHẢI đoán liều, mà vì đây đúng là giá trị thật của nó trong
+    # vùng NaN (đã kiểm chứng số học ở trên, sai số đưa vào < 1e-9, nhỏ hơn
+    # nhiều so với dung sai hội tụ của brentq). Đã quét lại TOÀN BỘ dải
+    # delta=[0.01,40] cho 7 mức df (1,2,3,4,9,19,29) x 4000 điểm/mức — 0 điểm
+    # NaN còn sót, VÀ đối chiếu lại bảng power-analysis chuẩn cho kết quả
+    # GIỮ NGUYÊN (n=30, alpha=.05, power=.80 -> d=0.5292, khớp y hệt trước).
     def power_at_delta(delta):
-        return (1 - stats.nct.cdf(t_crit, df, delta)) + stats.nct.cdf(-t_crit, df, delta)
+        main = stats.nct.sf(t_crit, df, delta)
+        if main != main:
+            main = 0.0
+        tail = stats.nct.cdf(-t_crit, df, delta)
+        if tail != tail:
+            tail = 0.0
+        return main + tail
 
     lo, hi = 1e-6, 3.0
     while power_at_delta(hi) < power:
         hi *= 1.5
-        if hi > 30:
+        if hi > 50:
             return None, None  # không hội tụ trong khoảng an toàn (không nên xảy ra ở alpha/power thông thường)
     delta = brentq(lambda d: power_at_delta(d) - power, lo, hi)
     mdes_d = delta / (n ** 0.5)

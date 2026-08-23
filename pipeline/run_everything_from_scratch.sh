@@ -72,6 +72,13 @@ run_step() {
         echo "- Log chi tiết: \`${step_log}\`"
     } >> "$MAIN_LOG"
 
+    # [MỚI — phát hiện qua chạy thật] TRƯỚC ĐÂY không in gì ra terminal cho tới
+    # khi bước xong — với các bước tốn hàng giờ (train 10 model...), terminal
+    # đứng yên trông như bị treo dù thực ra vẫn chạy (output nằm hết trong
+    # step_log). In ngay dòng "ĐANG CHẠY" kèm đường dẫn log cụ thể để biết theo
+    # dõi bằng `tail -f` ở đâu, không phải đoán/tính tay tên file đã bị tr biến đổi.
+    echo ">>> [ĐANG CHẠY] ${step_name} — theo dõi: tail -f ${step_log}"
+
     if "$@" > "$step_log" 2>&1; then
         end_ts=$(date '+%Y-%m-%d %H:%M:%S')
         dur=$(( $(date +%s) - start_epoch ))
