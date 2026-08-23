@@ -72,7 +72,7 @@ if [ ! -f "utils/metrics.py" ] || ! grep -q "compute_topk_accuracy" utils/metric
     echo "LỖI: ./utils/metrics.py chưa phải bản đã patch — copy đè bản đã patch vào trước."
     MISSING=1
 fi
-if [ ! -f "eval_recognition.py" ] || ! grep -q "compute_topk_accuracy" eval_recognition.py 2>/dev/null; then
+if [ ! -f "eval_recognition.py" ] || ! grep -q "all_id_rank5_hits" eval_recognition.py 2>/dev/null; then
     echo "LỖI: ./eval_recognition.py chưa phải bản đã patch — copy đè bản đã patch vào trước."
     MISSING=1
 fi

@@ -144,16 +144,16 @@ SR_ARCH=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['sr']['a
 # ---------------------------------------------------------------
 # run_step "Buoc 10.1 - Ablation loss"                bash pipeline/run_ablation.sh
 # run_step "Buoc 10.2 - Lambda identity sweep"        bash pipeline/run_lambda_sweep.sh
-run_step "Buoc 10.3a - Multi-seed n=3"              bash pipeline/run_multi_seed.sh
-run_step "Buoc 10.3b - Multi-seed extra seeds n=5"  bash pipeline/run_multi_seed_extra_seeds.sh
+# run_step "Buoc 10.3a - Multi-seed n=3"              bash pipeline/run_multi_seed.sh
+# run_step "Buoc 10.3b - Multi-seed extra seeds n=5"  bash pipeline/run_multi_seed_extra_seeds.sh
 # [MỚI — phát hiện qua review Q1] Câu hỏi "distillation (KD) có thật sự giúp
 # span_tiny không?" chỉ có bằng chứng n=1 (results/ablation.csv gốc) trước
 # đây — script này trả lời bằng n=5 seed THẬT (paired t-test + Cohen's d cho
 # cặp pixel_only vs pixel_distill), tái sử dụng checkpoint SR đã có từ Bước
 # 10.1 (không train lại SR). Cần Bước 10.1 + 10.3b (checkpoint recognition_lr
 # seed 44/999) đã xong trước đó — đúng thứ tự đã đặt ở trên.
-run_step "Buoc 10.1b - Ablation loss multi-seed n=5 (KD co giup khong)" \
-    bash pipeline/run_ablation_multiseed.sh
+# run_step "Buoc 10.1b - Ablation loss multi-seed n=5 (KD co giup khong)" \
+#     bash pipeline/run_ablation_multiseed.sh
 run_step "Buoc 10.4a - Span_large ablation n=3"     bash RUN_ALL_span_large_ablation.sh
 run_step "Buoc 10.4b - Span_large ablation n=5"     bash RUN_ALL_span_large_ablation_extra_seeds.sh
 run_step "Buoc 10.5 - SR-seed variance"             bash pipeline/run_sr_seed_variance.sh
