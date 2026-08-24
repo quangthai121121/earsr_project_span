@@ -30,15 +30,23 @@
 # "reconstruction prune" (xem đoạn giải thích ngay dưới). Không tắt cả 3 mặc
 # định — PHẢI tự sửa lại nếu muốn tắt.
 #
-# [SỬA — bổ sung sau đánh giá kết quả thật, đợt 9] LẦN CHẠY TRƯỚC (để 3 giá
-# trị này = 0) cho ra prune_metadata.json với identity_aware=false,
-# uses_feature_kd=false — nghĩa là ĐÃ chạy "reconstruction prune" thuần, KHÔNG
-# phải "identity-aware learned pruning" như bài báo claim. PIN CỨNG 2 giá trị
-# đã thắng ở ablation KDv2 (kdv2_full: lambda_feat=0.5, lambda_identity=0.1)
-# để lần chạy lại này thực sự test đúng cơ chế "identity-aware pruning".
-LAMBDA_FEAT=0.5
+# [SỬA — 2026-08-24, đảo ngược quyết định đợt 9 sau khi có bằng chứng đầy đủ]
+# Đợt 9 pin lambda_feat=0.5/lambda_identity=0.1 vì tin đó là cấu hình THẮNG ở
+# ablation KDv2 — niềm tin đó đã bị BÁC BỎ DỨT ĐIỂM: multi-seed n=5 x 5
+# backbone (results/multi_seed_kdv2/multi_seed_kdv2_summary_pairwise.csv) cho
+# thấy feature-KD KHÔNG giúp ích (chênh lệch -0.012..+0.0027, không backbone
+# nào p_raw<0.10), và lambda_identity>0 cũng đã bị bác bỏ độc lập ở lambda
+# sweep (Bước 10.2). Không còn cơ sở để giữ 2 giá trị cụ thể này — và không
+# có cơ sở nào để chọn 1 giá trị lambda_identity MỚI khác 0.1 (sẽ chỉ là đoán
+# tiếp). Đổi về recipe SẠCH (đúng span_tiny: pixel+distill thuần), để câu hỏi
+# CHÍNH của thí nghiệm này ("cơ chế học chọn khối có sánh ngang span_tiny ở
+# cùng kích thước không") được trả lời không bị nhiễu bởi cơ chế phụ đã biết
+# là không giúp ích. Hệ quả: điểm lambda_sparsity=0.2 ở sweep này giờ TRÙNG
+# LẶP với Mục 13.2b (confound-check) trong run_everything_from_scratch.sh —
+# có thể bỏ 13.2b để tiết kiệm GPU (xem comment ở đó).
+LAMBDA_FEAT=0.0
 LAMBDA_SALIENCY=0.0
-LAMBDA_IDENTITY=0.1
+LAMBDA_IDENTITY=0.0
 
 set -e
 

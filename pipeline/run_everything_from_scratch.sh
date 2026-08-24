@@ -154,56 +154,56 @@ SR_ARCH=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['sr']['a
 # seed 44/999) đã xong trước đó — đúng thứ tự đã đặt ở trên.
 # run_step "Buoc 10.1b - Ablation loss multi-seed n=5 (KD co giup khong)" \
 #     bash pipeline/run_ablation_multiseed.sh
-run_step "Buoc 10.4a - Span_large ablation n=3"     bash RUN_ALL_span_large_ablation.sh
-run_step "Buoc 10.4b - Span_large ablation n=5"     bash RUN_ALL_span_large_ablation_extra_seeds.sh
-run_step "Buoc 10.5 - SR-seed variance"             bash pipeline/run_sr_seed_variance.sh
-
-# ---------------------------------------------------------------
-# [3] Bước 10.6 — Baseline SR ngoài họ SPAN, Track A + Track B (TỐN COMPUTE)
-# ---------------------------------------------------------------
-if [ "$RUN_TRACK_AB" = true ]; then
-    TRACK_A_ARCHS=(rlfn rlfn_adapted ecbsr safmn smfanet)
-    TRACK_B_ARCHS=(rlfn_adapted ecbsr safmn smfanet)
-
-    for ARCH in "${TRACK_A_ARCHS[@]}"; do
-        run_step "Buoc 10.6 Track A - ${ARCH} (n=3)" bash RUN_ALL_extra_sr_baseline.sh "$ARCH"
-        run_step "Buoc 10.6 Track A - ${ARCH} (n=5)" bash RUN_ALL_extra_sr_baseline_extra_seeds.sh "$ARCH"
-    done
-    for ARCH in "${TRACK_B_ARCHS[@]}"; do
-        run_step "Buoc 10.6 Track B - ${ARCH} (n=3)" bash RUN_ALL_extra_sr_baseline_distilled.sh "$ARCH"
-        run_step "Buoc 10.6 Track B - ${ARCH} (n=5)" bash RUN_ALL_extra_sr_baseline_distilled_extra_seeds.sh "$ARCH"
-    done
-else
-    echo "(RUN_TRACK_AB=false — bỏ qua Bước 10.6, xem RUNBOOK_EarVN1.0.md mục 10.6 để chạy tay sau)" | tee -a "$MAIN_LOG"
-fi
-
-# ---------------------------------------------------------------
-# [4] Mục 12 — KD v2 (multi-judge + feature-KD)
+#run_step "Buoc 10.4a - Span_large ablation n=3"     bash RUN_ALL_span_large_ablation.sh
+#run_step "Buoc 10.4b - Span_large ablation n=5"     bash RUN_ALL_span_large_ablation_extra_seeds.sh
+#run_step "Buoc 10.5 - SR-seed variance"             bash pipeline/run_sr_seed_variance.sh
 #
-# [SỬA — bug phát hiện qua review Q1] TRƯỚC ĐÂY chạy sàng lọc rồi TỰ ĐỘNG
-# chạy thẳng multi-seed validate với LAMBDA_FEAT=0.5/LAMBDA_IDENTITY=0.1 PIN
-# CỨNG ngay trong pipeline/run_multi_seed_kdv2.sh — đây là cấu hình "thắng"
-# từ lần chạy TRƯỚC (trên split/code CŨ, trước các bản vá NaN/split/flip),
-# KHÔNG có gì đảm bảo vẫn là cấu hình thắng trên code/dữ liệu MỚI. Tự động
-# chạy tiếp với giá trị pin cũ có thể validate NHẦM recipe — cùng loại lỗi
-# đã tránh đúng cho learned pruning (mục 13.2) nhưng bị bỏ sót ở đây. Sửa:
-# CHỈ chạy sàng lọc, DỪNG lại để người dùng tự xem + sửa 2 tham số trong
-# pipeline/run_multi_seed_kdv2.sh trước khi chạy tay bước multi-seed.
-# ---------------------------------------------------------------
-if [ "$RUN_KD_V2" = true ]; then
-    run_step "Muc 12 - KD v2 ablation (sang loc)" bash pipeline/run_ablation_kd_v2.sh
-
-    echo "" | tee -a "$MAIN_LOG"
-    echo "!!! DỪNG TỰ ĐỘNG ở mục 12 — xem results/ablation_kd_v2.csv (hoặc" | tee -a "$MAIN_LOG"
-    echo "    ablation_kd_v2_summary.csv nếu đã tổng hợp), xác nhận LAMBDA_FEAT/" | tee -a "$MAIN_LOG"
-    echo "    LAMBDA_IDENTITY nào thắng trên dữ liệu MỚI (có thể KHÁC 0.5/0.1 cũ" | tee -a "$MAIN_LOG"
-    echo "    vì code/split đã thay đổi), sửa 2 dòng đầu pipeline/run_multi_seed_kdv2.sh" | tee -a "$MAIN_LOG"
-    echo "    cho khớp, rồi mới chạy tay:" | tee -a "$MAIN_LOG"
-    echo "        bash pipeline/run_multi_seed_kdv2.sh" | tee -a "$MAIN_LOG"
-    echo "        bash pipeline/run_multi_seed_kdv2_extra_seeds.sh" | tee -a "$MAIN_LOG"
-else
-    echo "(RUN_KD_V2=false — bỏ qua mục 12)" | tee -a "$MAIN_LOG"
-fi
+## ---------------------------------------------------------------
+## [3] Bước 10.6 — Baseline SR ngoài họ SPAN, Track A + Track B (TỐN COMPUTE)
+## ---------------------------------------------------------------
+#if [ "$RUN_TRACK_AB" = true ]; then
+#    TRACK_A_ARCHS=(rlfn rlfn_adapted ecbsr safmn smfanet)
+#    TRACK_B_ARCHS=(rlfn_adapted ecbsr safmn smfanet)
+#
+#    for ARCH in "${TRACK_A_ARCHS[@]}"; do
+#        run_step "Buoc 10.6 Track A - ${ARCH} (n=3)" bash RUN_ALL_extra_sr_baseline.sh "$ARCH"
+#        run_step "Buoc 10.6 Track A - ${ARCH} (n=5)" bash RUN_ALL_extra_sr_baseline_extra_seeds.sh "$ARCH"
+#    done
+#    for ARCH in "${TRACK_B_ARCHS[@]}"; do
+#        run_step "Buoc 10.6 Track B - ${ARCH} (n=3)" bash RUN_ALL_extra_sr_baseline_distilled.sh "$ARCH"
+#        run_step "Buoc 10.6 Track B - ${ARCH} (n=5)" bash RUN_ALL_extra_sr_baseline_distilled_extra_seeds.sh "$ARCH"
+#    done
+#else
+#    echo "(RUN_TRACK_AB=false — bỏ qua Bước 10.6, xem RUNBOOK_EarVN1.0.md mục 10.6 để chạy tay sau)" | tee -a "$MAIN_LOG"
+#fi
+#
+## ---------------------------------------------------------------
+## [4] Mục 12 — KD v2 (multi-judge + feature-KD)
+##
+## [SỬA — bug phát hiện qua review Q1] TRƯỚC ĐÂY chạy sàng lọc rồi TỰ ĐỘNG
+## chạy thẳng multi-seed validate với LAMBDA_FEAT=0.5/LAMBDA_IDENTITY=0.1 PIN
+## CỨNG ngay trong pipeline/run_multi_seed_kdv2.sh — đây là cấu hình "thắng"
+## từ lần chạy TRƯỚC (trên split/code CŨ, trước các bản vá NaN/split/flip),
+## KHÔNG có gì đảm bảo vẫn là cấu hình thắng trên code/dữ liệu MỚI. Tự động
+## chạy tiếp với giá trị pin cũ có thể validate NHẦM recipe — cùng loại lỗi
+## đã tránh đúng cho learned pruning (mục 13.2) nhưng bị bỏ sót ở đây. Sửa:
+## CHỈ chạy sàng lọc, DỪNG lại để người dùng tự xem + sửa 2 tham số trong
+## pipeline/run_multi_seed_kdv2.sh trước khi chạy tay bước multi-seed.
+## ---------------------------------------------------------------
+#if [ "$RUN_KD_V2" = true ]; then
+#    run_step "Muc 12 - KD v2 ablation (sang loc)" bash pipeline/run_ablation_kd_v2.sh
+#
+#    echo "" | tee -a "$MAIN_LOG"
+#    echo "!!! DỪNG TỰ ĐỘNG ở mục 12 — xem results/ablation_kd_v2.csv (hoặc" | tee -a "$MAIN_LOG"
+#    echo "    ablation_kd_v2_summary.csv nếu đã tổng hợp), xác nhận LAMBDA_FEAT/" | tee -a "$MAIN_LOG"
+#    echo "    LAMBDA_IDENTITY nào thắng trên dữ liệu MỚI (có thể KHÁC 0.5/0.1 cũ" | tee -a "$MAIN_LOG"
+#    echo "    vì code/split đã thay đổi), sửa 2 dòng đầu pipeline/run_multi_seed_kdv2.sh" | tee -a "$MAIN_LOG"
+#    echo "    cho khớp, rồi mới chạy tay:" | tee -a "$MAIN_LOG"
+#    echo "        bash pipeline/run_multi_seed_kdv2.sh" | tee -a "$MAIN_LOG"
+#    echo "        bash pipeline/run_multi_seed_kdv2_extra_seeds.sh" | tee -a "$MAIN_LOG"
+#else
+#    echo "(RUN_KD_V2=false — bỏ qua mục 12)" | tee -a "$MAIN_LOG"
+#fi
 
 # ---------------------------------------------------------------
 # [5] Mục 13.1 — Saliency-weighted loss sweep
@@ -221,50 +221,22 @@ fi
 # đây là quyết định con người, không tự động hoá được).
 # ---------------------------------------------------------------
 if [ "$RUN_LEARNED_PRUNE_SCREEN" = true ]; then
-    run_step "Muc 13.2a - Sang loc lambda_sparsity (pin feat/identity kdv2_full)" \
+    run_step "Muc 13.2a - Sang loc lambda_sparsity (recipe sach: feat=0/identity=0)" \
         bash pipeline/run_prune_sparsity_screen.sh
 
-    # [MỚI — thí nghiệm tách nhiễu bàn ở lượt trước] cùng lambda_sparsity=0.2
-    # nhưng TẮT feat-KD/saliency/identity — cô lập đúng biến "cách chọn khối"
-    # so với span_tiny (không lẫn hiệu ứng KD v2 đang trend yếu).
-    PRUNE_CONFOUND_DIR="${RESULTS_DIR}/prune_confound_check"
-    PRUNE_CONFOUND_TAG="lsp0.2_purepixel"
-    mkdir -p "$PRUNE_CONFOUND_DIR"
-    run_step "Muc 13.2b - Confound-check (pure pixel+distill, lambda_sparsity=0.2)" \
-        python train_sr_learned_prune.py --config "$CONFIG" \
-            --lambda_feat 0 --lambda_saliency 0 --lambda_identity 0 \
-            --lambda_sparsity 0.2 --run_suffix "_${PRUNE_CONFOUND_TAG}"
-
-    PRUNE_CONFOUND_NBLOCKS=$(python -c "import json; print(json.load(open('runs/sr_learned_prune_${PRUNE_CONFOUND_TAG}/prune_metadata.json'))['n_blocks_kept'])")
-    echo "Confound-check: lambda_sparsity=0.2 (pure pixel+distill) giữ lại ${PRUNE_CONFOUND_NBLOCKS} khối (kỳ vọng 3, khớp span_tiny)" | tee -a "$MAIN_LOG"
-
-    run_step "Muc 13.2b - Sinh anh SR (confound-check)" \
-        python data/build_sr.py --lr_dir splits/lr \
-            --sr_ckpt "runs/sr_learned_prune_${PRUNE_CONFOUND_TAG}/best.pt" \
-            --arch span_pruned --n_blocks "$PRUNE_CONFOUND_NBLOCKS" \
-            --scale "$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")" \
-            --out_dir "splits/sr_prune_${PRUNE_CONFOUND_TAG}"
-
-    run_step "Muc 13.2b - Recognition (confound-check)" \
-        python train_recognition.py --config "$CONFIG" --domain "sr_prune_${PRUNE_CONFOUND_TAG}" \
-            --backbone mobilenet_v2 --init_ckpt "runs/recognition_lr_mobilenet_v2/best.pt"
-
-    run_step "Muc 13.2b - Eval accuracy (confound-check)" \
-        python eval_recognition.py --config "$CONFIG" \
-            --ckpt "runs/recognition_sr_prune_${PRUNE_CONFOUND_TAG}_mobilenet_v2/best.pt" \
-            --backbone mobilenet_v2 --train_domain "sr_prune_${PRUNE_CONFOUND_TAG}" \
-            --test_domain "sr_prune_${PRUNE_CONFOUND_TAG}" \
-            --out_json "${PRUNE_CONFOUND_DIR}/acc_${PRUNE_CONFOUND_TAG}_nblocks${PRUNE_CONFOUND_NBLOCKS}.json"
-
-    run_step "Muc 13.2b - Eval SR quality (confound-check)" \
-        python eval_sr_quality.py --config "$CONFIG" --arch span_pruned --n_blocks "$PRUNE_CONFOUND_NBLOCKS" \
-            --ckpt "runs/sr_learned_prune_${PRUNE_CONFOUND_TAG}/best.pt" \
-            --label "prune_${PRUNE_CONFOUND_TAG}_nblocks${PRUNE_CONFOUND_NBLOCKS}" \
-            --out_csv "${PRUNE_CONFOUND_DIR}/sr_quality_confound_check.csv"
-
+    # [SỬA — 2026-08-24] Mục 13.2b (confound-check riêng, pure pixel+distill,
+    # lambda_sparsity=0.2) đã BỎ — từ khi phát hiện 13.2a tự nó cũng đang
+    # hardcode feat=0.5/identity=0.1 (cấu hình KDv2 đã bị bác bỏ dứt điểm bằng
+    # multi-seed thật), 13.2a đã được sửa dùng CHÍNH recipe sạch (feat=0/
+    # identity=0) mà 13.2b từng làm riêng để "tách nhiễu". Giờ 2 bước là MỘT —
+    # điểm lambda_sparsity=0.2 trong sweep của 13.2a (xem
+    # ${RESULTS_DIR}/prune_sparsity_screen/) chính là kết quả confound-check,
+    # không cần chạy lại riêng, tiết kiệm ~1-2h GPU.
     echo "" | tee -a "$MAIN_LOG"
-    echo "!!! DỪNG TỰ ĐỘNG ở mục 13.2 — xem ${RESULTS_DIR}/prune_sparsity_screen/ VÀ ${PRUNE_CONFOUND_DIR}/," | tee -a "$MAIN_LOG"
-    echo "    tự chọn lambda_sparsity (+ có dùng feat/identity hay không) rồi mới chạy tay:" | tee -a "$MAIN_LOG"
+    echo "!!! DỪNG TỰ ĐỘNG ở mục 13.2 — xem ${RESULTS_DIR}/prune_sparsity_screen/" | tee -a "$MAIN_LOG"
+    echo "    (đã dùng recipe sạch feat=0/identity=0, điểm lambda_sparsity=0.2 CHÍNH" | tee -a "$MAIN_LOG"
+    echo "    LÀ confound-check với span_tiny), tự chọn lambda_sparsity gần 3 khối" | tee -a "$MAIN_LOG"
+    echo "    nhất rồi điền vào pipeline/run_multi_seed_learned_prune.sh, mới chạy tay:" | tee -a "$MAIN_LOG"
     echo "    bash pipeline/run_multi_seed_learned_prune.sh" | tee -a "$MAIN_LOG"
 else
     echo "(RUN_LEARNED_PRUNE_SCREEN=false — bỏ qua mục 13.2)" | tee -a "$MAIN_LOG"

@@ -27,32 +27,27 @@
 # sẽ LẶP LẠI ĐÚNG lỗi cũ, tốn lại hàng giờ GPU. Đổi thành rỗng + fail-fast:
 # BẮT BUỘC phải tự điền giá trị (đọc từ Bước 1 —
 # pipeline/run_prune_sparsity_screen.sh bản mới) trước khi script chạy được.
-# [ĐIỀN — đợt 9, từ kết quả run_prune_sparsity_screen.sh bản identity-aware
-# (lambda_feat=0.5, lambda_identity=0.1), xem results/prune_sparsity_screen/
-# sr_quality_screen.csv]: dải quét cho n_blocks_kept đơn điệu giảm theo
-# lambda_sparsity: 0.0/0.05/0.08/0.1 -> 6 khối, 0.13 -> 5, 0.16 -> 4,
-# 0.2 -> 3 khối (PSNR-ROI 24.629dB, params_deploy=0.23M). CHỈ mức 0.2 cho
-# đúng 3 khối (khớp kích thước span_tiny) — không có mức nào khác trùng để
-# so sánh, nên không cần cân nhắc thêm.
-LAMBDA_SPARSITY=0.2
+# [SỬA — 2026-08-24] Đợt 9 pin lambda_feat=0.5/lambda_identity=0.1 vì tin đó
+# là cấu hình THẮNG ở ablation KDv2 — niềm tin đó đã bị BÁC BỎ DỨT ĐIỂM bằng
+# multi-seed n=5 x 5 backbone thật (xem giải thích đầy đủ trong
+# pipeline/run_prune_sparsity_screen.sh, cùng ngày sửa). Đã đổi
+# run_prune_sparsity_screen.sh về recipe SẠCH (feat=0/identity=0) — nghĩa là
+# QUAN HỆ lambda_sparsity -> n_blocks_kept của LẦN SÀNG LỌC CŨ (0.2 -> 3 khối)
+# KHÔNG còn đảm bảo đúng nữa (recipe khác thì gate học khác, có thể lệch mốc
+# giống hệt lần "reconstruction thuần" trước đó: 0.1->5 khối, 0.2->2 khối,
+# KHÔNG mốc nào ra đúng 3). BẮT BUỘC chạy lại pipeline/run_prune_sparsity_screen.sh
+# (bản đã sửa) TRƯỚC, đọc n_blocks_kept mới ở từng mức, rồi mới điền lại giá
+# trị cho ra khối GẦN 3 NHẤT vào đây — để trống + fail-fast, không đoán lại.
+LAMBDA_SPARSITY=
 
-# [SỬA — bổ sung sau code review, vòng 2, điểm 3; LÀM RÕ THÊM ở vòng 5]
-# **SỬA 3 THAM SỐ NÀY** khớp ĐÚNG cấu hình (lambda_feat/saliency/identity) đã
-# dùng khi chạy run_prune_sparsity_screen.sh để chọn LAMBDA_SPARSITY ở trên —
-# PHẢI NHẤT QUÁN giữa 2 bước (screen -> validate), nếu không kết quả
-# multi-seed sẽ không phản ánh đúng cấu hình đã sàng lọc. LƯU Ý: LAMBDA_FEAT
-# KHÔNG phải tín hiệu nhận dạng (chỉ so khớp feature SR teacher) — chỉ
-# LAMBDA_SALIENCY/LAMBDA_IDENTITY mới quyết định cờ "identity-aware" (xem
-# prune_metadata.json::identity_aware, tách riêng khỏi uses_feature_kd).
-#
-# [SỬA — bổ sung sau đánh giá kết quả thật, đợt 9] LẦN CHẠY TRƯỚC để cả 3 =0
-# → prune_metadata.json ghi identity_aware=false, uses_feature_kd=false —
-# ĐÚNG như cảnh báo runtime đã có, nhưng đây KHÔNG phải cơ chế bài báo muốn
-# claim. PIN CỨNG giống recipe đã thắng ở KDv2 (kdv2_full) để lần này thực sự
-# là "identity-aware pruning":
-LAMBDA_FEAT=0.5
+# [SỬA — 2026-08-24] Đồng bộ với run_prune_sparsity_screen.sh: bỏ hẳn nhánh
+# "identity-aware" (lambda_feat=0.5/identity=0.1, dựa trên cấu hình KDv2 đã bị
+# bác bỏ) — dùng recipe SẠCH (đúng span_tiny: pixel+distill thuần), PHẢI khớp
+# CHÍNH XÁC với cấu hình đã dùng ở run_prune_sparsity_screen.sh để chọn
+# LAMBDA_SPARSITY ở trên (2 bước screen -> validate bắt buộc nhất quán).
+LAMBDA_FEAT=0.0
 LAMBDA_SALIENCY=0.0
-LAMBDA_IDENTITY=0.1
+LAMBDA_IDENTITY=0.0
 
 # SR model (pruning) CHỈ train 1 LẦN ở seed cố định — ĐÚNG protocol thống kê
 # đã dùng xuyên suốt project (train SR nhiều seed bị đánh giá không khả thi
@@ -77,8 +72,8 @@ set -e
 # đầu, trước khi tốn bất kỳ giờ GPU nào để train SR.
 if [ -z "$LAMBDA_SPARSITY" ]; then
     echo "LỖI: LAMBDA_SPARSITY chưa được điền (đang rỗng)." >&2
-    echo "     -> chạy 'bash pipeline/run_prune_sparsity_screen.sh' (bản mới, đã pin" >&2
-    echo "        lambda_feat=0.5/lambda_identity=0.1) TRƯỚC, đọc n_blocks_kept ở" >&2
+    echo "     -> chạy 'bash pipeline/run_prune_sparsity_screen.sh' (bản mới, recipe" >&2
+    echo "        SẠCH feat=0/identity=0) TRƯỚC, đọc n_blocks_kept ở" >&2
     echo "        mỗi mức lambda_sparsity trong results/prune_sparsity_screen/" >&2
     echo "        rồi sửa dòng 'LAMBDA_SPARSITY=' đầu file này thành giá trị cho ra" >&2
     echo "        số khối GẦN 3 NHẤT, sau đó chạy lại." >&2

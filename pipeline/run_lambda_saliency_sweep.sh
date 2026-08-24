@@ -4,10 +4,17 @@
 # run_lambda_sweep.sh (đã dùng cho lambda_identity) — nhiều mức giá trị x
 # nhiều seed, có paired t-test + Cohen's d ngay khi tìm điểm tối ưu.
 #
-# CHẠY SAU KHI đã chốt được cấu hình thắng ở run_ablation_kd_v2.sh (feat +
-# multi-judge) — SỬA 2 biến LAMBDA_FEAT_FIXED/LAMBDA_IDENTITY_FIXED bên dưới
-# khớp đúng cấu hình đó trước khi chạy, vì saliency loss cộng THÊM vào cùng
-# công thức tổng, cần biết rõ đang cộng vào nền nào.
+# [SỬA — confound phát hiện 2026-08-24] TRƯỚC ĐÂY pin cứng
+# LAMBDA_FEAT_FIXED=0.5/LAMBDA_IDENTITY_FIXED=0.1 ("kdv2_full" — cấu hình
+# TƯỞNG thắng ở run_ablation_kd_v2.sh khi đó). Sau đó multi-seed n=5 x 5
+# backbone (results/multi_seed_kdv2/multi_seed_kdv2_summary_pairwise.csv) xác
+# nhận DỨT ĐIỂM: cả feat-KD lẫn identity=0.1 đều KHÔNG giúp ích (chênh lệch
+# -0.012..+0.0027, không backbone nào đạt p_raw<0.10). Tiếp tục quét
+# lambda_saliency TRÊN NỀN 1 cấu hình đã biết là kém sẽ làm nhiễu (confound)
+# kết quả — không đo được saliency loss có tác dụng RIÊNG hay không. Đổi về
+# nền sạch (chỉ pixel+distill, đúng recipe span_tiny mặc định) để cô lập đúng
+# biến lambda_saliency, cùng triết lý với confound-check đã làm cho learned
+# pruning (Mục 13.2b trong pipeline/run_everything_from_scratch.sh).
 #
 # Backbone: mobilenet_v2 (đại diện, giữ tốc độ chạy hợp lý cho bước TÌM cấu
 # hình — sau khi chốt lambda_saliency mới mở rộng sang multi-seed x 5 backbone
@@ -21,9 +28,9 @@ BACKBONE="mobilenet_v2"
 SEEDS=(42 123 2024)
 LAMBDA_SALIENCY_VALUES=(0.0 0.15 0.3 0.6 1.0)
 
-# **SỬA 2 THAM SỐ NÀY** khớp đúng cấu hình đã THẮNG ở run_ablation_kd_v2.sh
-LAMBDA_FEAT_FIXED=0.5
-LAMBDA_IDENTITY_FIXED=0.1
+# Nền SẠCH (đúng recipe span_tiny mặc định) — xem giải thích ở trên.
+LAMBDA_FEAT_FIXED=0.0
+LAMBDA_IDENTITY_FIXED=0.0
 
 mkdir -p "$RESULTS_DIR"
 
