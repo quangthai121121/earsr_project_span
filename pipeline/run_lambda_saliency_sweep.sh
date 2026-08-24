@@ -34,6 +34,27 @@ LAMBDA_IDENTITY_FIXED=0.0
 
 mkdir -p "$RESULTS_DIR"
 
+# [MỚI — 2026-08-24, sự cố thật phát hiện khi chạy] eval_sr_quality.py ghi
+# APPEND (không overwrite) vào $RESULTS_DIR/sr_quality_sweep.csv, và TAG
+# ("lsal<λ>_seed<seed>") KHÔNG hề chứa thông tin lambda_feat/lambda_identity.
+# Nếu $RESULTS_DIR còn dữ liệu từ 1 lần chạy TRƯỚC (recipe feat/identity
+# KHÁC — ví dụ đã xảy ra thật: 1 lần chạy dở dang dùng feat=0.5/identity=0.1
+# bị dừng giữa chừng, sau đó chạy lại với feat=0/identity=0), CSV sẽ có 2
+# DÒNG TRÙNG NHÃN với giá trị khác nhau mà KHÔNG có cột nào phân biệt — làm
+# sai lệch tổng hợp thống kê mà không có cảnh báo nào. Cùng loại kiểm tra đã
+# có ở pipeline/run_prune_sparsity_screen.sh — chặn NGAY từ đầu, bắt buộc dọn
+# sạch thư mục cũ trước khi chạy lại.
+if [ -d "$RESULTS_DIR" ] && [ -n "$(ls -A "$RESULTS_DIR" 2>/dev/null)" ]; then
+    echo "LỖI: $RESULTS_DIR đã tồn tại và không rỗng." >&2
+    echo "     eval_sr_quality.py ghi APPEND vào sr_quality_sweep.csv — nếu thư mục" >&2
+    echo "     này còn dữ liệu từ lần chạy TRƯỚC (có thể dùng recipe feat/identity" >&2
+    echo "     KHÁC lần này), số liệu cũ/mới sẽ LẪN VÀO NHAU (trùng nhãn, khác giá trị)." >&2
+    echo "     -> di chuyển thư mục cũ đi trước, ví dụ:" >&2
+    echo "        mv $RESULTS_DIR ${RESULTS_DIR}_$(date +%Y%m%d_%H%M%S)" >&2
+    echo "     rồi chạy lại script này." >&2
+    exit 1
+fi
+
 STUDENT_ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")
 

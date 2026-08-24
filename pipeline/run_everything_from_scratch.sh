@@ -245,6 +245,22 @@ fi
 # ---------------------------------------------------------------
 # [7] Tổng hợp báo cáo cuối cùng
 # ---------------------------------------------------------------
+# [MỚI — 2026-08-24, sự cố thật] Cổng chặn BẮT BUỘC trước khi tổng hợp báo
+# cáo cuối — phát hiện qua sự cố thật: 1 script bị dừng giữa chừng rồi chạy
+# lại (do sửa lỗi confound) đã làm results/lambda_saliency_sweep/sr_quality_
+# sweep.csv có NHÃN TRÙNG LẶP (2 giá trị khác nhau cho cùng 1 label) mà không
+# có cảnh báo nào — vì eval_sr_quality.py ghi APPEND, không overwrite, và
+# hầu hết script gọi nó không có chốt chặn re-run. Thay vì vá tay từng script
+# gọi eval_sr_quality.py (11/13 script thiếu chốt, dễ sót — đã xảy ra 1 lần),
+# quét TRIỆU CHỨNG (nhãn trùng) ở BẤT KỲ CSV nào trong results/ ngay trước khi
+# tin dùng để tổng hợp — bắt được lỗi này dù xảy ra ở script nào, kể cả script
+# mới thêm sau này chưa được rà lại thủ công. Cùng tinh thần với
+# data/check_nan_in_results.py (kiểm tra NaN/Inf thật).
+run_step "Kiem tra nhan trung lap truoc khi tong hop" \
+    python data/check_duplicate_labels.py --root "$RESULTS_DIR"
+run_step "Kiem tra NaN/Inf that truoc khi tong hop" \
+    python data/check_nan_in_results.py --root "$RESULTS_DIR" runs
+
 run_step "Tong hop REPORT.md cuoi cung" \
     python data/generate_final_report.py --config "$CONFIG" --results_dir "$RESULTS_DIR" \
         --out_dir "${RESULTS_DIR}/final_report"
