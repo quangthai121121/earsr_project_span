@@ -30,6 +30,7 @@ RUN_TRACK_AB=true          # Bước 10.6: RLFN/ECBSR/SAFMN/SMFANet Track A+B �
 RUN_KD_V2=true             # Mục 12: multi-judge + feature-KD — nhẹ (CHỈ sàng lọc, DỪNG lại chờ bạn chọn lambda trước khi multi-seed)
 RUN_SALIENCY=true          # Mục 13.1: saliency-weighted loss sweep — vừa (6 mức x 3 seed)
 RUN_LEARNED_PRUNE_SCREEN=true  # Mục 13.2: sàng lọc lambda_sparsity (screen + confound-check) — nhẹ, KHÔNG tự chạy multi-seed đầy đủ (cần quyết định người dùng sau khi xem kết quả sàng lọc)
+RUN_ATTENTION_PARAM_ABLATION=true  # Mục 13.3: attention-parameterization (SAFMN/SMFANet nửa độ sâu vs SPAN) — dùng lại số liệu Track B đã có (RUN_TRACK_AB), CẦN Track B đã chạy xong TRƯỚC bước này (đúng thứ tự bên dưới)
 
 CONFIG="configs/config.yaml"
 RESULTS_DIR="results"
@@ -240,6 +241,29 @@ if [ "$RUN_LEARNED_PRUNE_SCREEN" = true ]; then
     echo "    bash pipeline/run_multi_seed_learned_prune.sh" | tee -a "$MAIN_LOG"
 else
     echo "(RUN_LEARNED_PRUNE_SCREEN=false — bỏ qua mục 13.2)" | tee -a "$MAIN_LOG"
+fi
+
+# ---------------------------------------------------------------
+# [6b] Mục 13.3 — Attention-parameterization ablation (SAFMN/SMFANet nửa độ
+# sâu vs SPAN) — kiểm định trực tiếp giả thuyết "attention không tham số học
+# chịu nén sâu tốt hơn attention có tham số học" (xem docstring đầy đủ trong
+# RUN_ALL_attention_param_ablation.sh). Code đã có sẵn từ trước (build_sr_model
+# hỗ trợ --student_n_blocks cho safmn/smfanet), chỉ chưa từng được CHẠY — đây
+# là bảng "planned" (Table~\ref{tab:attn-ablation}) trong paper/main.tex, giờ
+# điền số liệu thật. CHỈ áp dụng cho safmn/smfanet (ECBSR suy biến sau
+# reparameterize, không phải phép thử công bằng — xem cảnh báo trong chính
+# script). Yêu cầu Track B (RUN_TRACK_AB) đã chạy xong cho 2 kiến trúc này —
+# đã thoả mãn trong lần chạy này (xem Bước 10.6 Track B ở trên).
+# ---------------------------------------------------------------
+if [ "$RUN_ATTENTION_PARAM_ABLATION" = true ]; then
+    for ARCH in safmn smfanet; do
+        run_step "Muc 13.3 - Attention-param ablation - ${ARCH} (n=3)" \
+            bash RUN_ALL_attention_param_ablation.sh "$ARCH"
+        run_step "Muc 13.3 - Attention-param ablation - ${ARCH} (n=5)" \
+            bash RUN_ALL_attention_param_ablation_extra_seeds.sh "$ARCH"
+    done
+else
+    echo "(RUN_ATTENTION_PARAM_ABLATION=false — bỏ qua mục 13.3)" | tee -a "$MAIN_LOG"
 fi
 
 # ---------------------------------------------------------------

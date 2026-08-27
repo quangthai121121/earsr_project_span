@@ -719,6 +719,14 @@ def main():
                           "(dùng cho ablation)")
     ap.add_argument("--lambda_identity", type=float, default=None,
                      help="ghi đè sr_improve.lambda_identity trong config (dùng cho ablation)")
+    ap.add_argument("--min_delta", type=float, default=0.0,
+                     help="[MỚI — 2026-08-25, sự cố thật] ngưỡng cải thiện tối thiểu trên "
+                          "val_total để tính là 'tốt hơn' cho early-stopping (xem "
+                          "utils/early_stopping.py::EarlyStopping). Mặc định 0.0 giữ NGUYÊN "
+                          "hành vi cũ (bất kỳ cải thiện nào dù nhỏ cũng reset patience) — chỉ "
+                          "cần đặt >0 khi loss có xu hướng giảm đơn điệu cực nhỏ dần không hồi "
+                          "kết (quan sát thấy với lambda_saliency>0, khiến training chạy gần hết "
+                          "max_epochs thay vì dừng sớm thật, xem pipeline/run_lambda_saliency_sweep.sh).")
     ap.add_argument("--student_arch", default=None,
                      help="ghi đè sr_improve.student_arch trong config (dùng cho ablation kiến "
                           "trúc, ví dụ --student_arch span_large)")
@@ -809,7 +817,7 @@ def main():
     lambda_saliency = ci.get("lambda_saliency", 0.0)
     logger.info(f"Student architecture: {student_arch} | Lambda: pixel={ci['lambda_pixel']} "
                 f"distill={ci['lambda_distill']} feat={lambda_feat} saliency={lambda_saliency} "
-                f"identity={ci['lambda_identity']}")
+                f"identity={ci['lambda_identity']} | early_stop_min_delta={args.min_delta}")
     device_mgr = DeviceManager(logger=logger)
     device = device_mgr.preferred
     logger.info(f"=== Bắt đầu cải tiến SPAN (distillation + feature-KD + saliency-weighted loss "
@@ -872,7 +880,7 @@ def main():
 
     max_epochs = ci["max_epochs"]
     patience = ci["patience"]
-    stopper = EarlyStopping(patience=patience, mode="min")  # total loss: càng thấp càng tốt
+    stopper = EarlyStopping(patience=patience, mode="min", min_delta=args.min_delta)  # total loss: càng thấp càng tốt
 
     for epoch in range(max_epochs):
         train_stats = run_epoch(student, teacher, judges, train_loader,

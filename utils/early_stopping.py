@@ -7,14 +7,30 @@ import torch
 
 
 class EarlyStopping:
-    def __init__(self, patience: int = 10, mode: str = "max"):
+    def __init__(self, patience: int = 10, mode: str = "max", min_delta: float = 0.0):
         """
         mode="max": metric càng cao càng tốt (ví dụ accuracy)
         mode="min": metric càng thấp càng tốt (ví dụ loss)
+
+        [MỚI — 2026-08-25, sự cố thật] `min_delta` (mặc định 0.0, TƯƠNG THÍCH
+        NGƯỢC HOÀN TOÀN — mọi lời gọi cũ không truyền tham số này giữ NGUYÊN
+        hành vi trước đây): trước đây BẤT KỲ cải thiện nào, dù nhỏ tới đâu
+        (ví dụ val_total giảm 0.1261->0.1259, ~0.16%), đều reset bộ đếm
+        patience về 0 — với 1 tổ hợp λ_saliency>0 thật (xem
+        pipeline/run_lambda_saliency_sweep.sh), việc này khiến training chạy
+        gần hết 500 epoch (thay vì dừng sớm thật như các tổ hợp λ=0.0, ~vài
+        chục epoch) vì loss dao động nhiễu liên tục tạo ra các "cải thiện" vi
+        mô không phản ánh hội tụ thật. `min_delta` yêu cầu cải thiện phải VƯỢT
+        NGƯỠNG này mới được tính là "tốt hơn" (và mới lưu checkpoint/reset bộ
+        đếm) — chuẩn kỹ thuật phổ biến (Keras/PyTorch Lightning EarlyStopping
+        đều có tham số tương đương). CHỈ áp dụng cho lời gọi nào chủ động
+        truyền giá trị >0; mọi lời gọi khác trong project (train_recognition.py,
+        train_sr.py, train_sr_learned_prune.py) không đổi.
         """
         assert mode in ("max", "min")
         self.patience = patience
         self.mode = mode
+        self.min_delta = min_delta
         self.best = None
         self.counter = 0
         self.should_stop = False
@@ -49,7 +65,8 @@ class EarlyStopping:
 
         is_better = (
             self.best is None
-            or (value > self.best if self.mode == "max" else value < self.best)
+            or (value > self.best + self.min_delta if self.mode == "max"
+                else value < self.best - self.min_delta)
         )
         if is_better:
             self.best = value

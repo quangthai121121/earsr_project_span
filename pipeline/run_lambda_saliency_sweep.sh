@@ -34,27 +34,16 @@ LAMBDA_IDENTITY_FIXED=0.0
 
 mkdir -p "$RESULTS_DIR"
 
-# [MỚI — 2026-08-24, sự cố thật phát hiện khi chạy] eval_sr_quality.py ghi
-# APPEND (không overwrite) vào $RESULTS_DIR/sr_quality_sweep.csv, và TAG
-# ("lsal<λ>_seed<seed>") KHÔNG hề chứa thông tin lambda_feat/lambda_identity.
-# Nếu $RESULTS_DIR còn dữ liệu từ 1 lần chạy TRƯỚC (recipe feat/identity
-# KHÁC — ví dụ đã xảy ra thật: 1 lần chạy dở dang dùng feat=0.5/identity=0.1
-# bị dừng giữa chừng, sau đó chạy lại với feat=0/identity=0), CSV sẽ có 2
-# DÒNG TRÙNG NHÃN với giá trị khác nhau mà KHÔNG có cột nào phân biệt — làm
-# sai lệch tổng hợp thống kê mà không có cảnh báo nào. Cùng loại kiểm tra đã
-# có ở pipeline/run_prune_sparsity_screen.sh — chặn NGAY từ đầu, bắt buộc dọn
-# sạch thư mục cũ trước khi chạy lại.
-if [ -d "$RESULTS_DIR" ] && [ -n "$(ls -A "$RESULTS_DIR" 2>/dev/null)" ]; then
-    echo "LỖI: $RESULTS_DIR đã tồn tại và không rỗng." >&2
-    echo "     eval_sr_quality.py ghi APPEND vào sr_quality_sweep.csv — nếu thư mục" >&2
-    echo "     này còn dữ liệu từ lần chạy TRƯỚC (có thể dùng recipe feat/identity" >&2
-    echo "     KHÁC lần này), số liệu cũ/mới sẽ LẪN VÀO NHAU (trùng nhãn, khác giá trị)." >&2
-    echo "     -> di chuyển thư mục cũ đi trước, ví dụ:" >&2
-    echo "        mv $RESULTS_DIR ${RESULTS_DIR}_$(date +%Y%m%d_%H%M%S)" >&2
-    echo "     rồi chạy lại script này." >&2
-    exit 1
-fi
-
+# [SỬA — 2026-08-25] TRƯỚC ĐÂY (2026-08-24) chặn cứng nếu $RESULTS_DIR không
+# rỗng, để tránh 2 recipe khác nhau lẫn nhãn trong sr_quality_sweep.csv (xem
+# sự cố đã xảy ra thật, đã dọn dữ liệu bị lẫn). Chốt đó giờ MÂU THUẪN trực
+# tiếp với logic "bỏ qua tổ hợp đã xong" thêm bên dưới (cần $RESULTS_DIR có
+# sẵn dữ liệu từ lần chạy TRƯỚC ĐÓ, đúng recipe, để biết tổ hợp nào khỏi train
+# lại) — giữ cả 2 sẽ khiến script LUÔN thoát lỗi ngay từ đầu, không bao giờ
+# resume được. Bỏ chặn cứng ở đây: rủi ro nhãn trùng lẫn recipe giờ đã được
+# data/check_duplicate_labels.py đảm nhiệm — cổng chặn CHUNG, bắt buộc, chạy
+# ngay trước khi tổng hợp báo cáo cuối (xem pipeline/run_everything_from_scratch.sh),
+# bắt được ở BẤT KỲ CSV/script nào, không chỉ riêng script này.
 STUDENT_ARCH=$(python -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg['sr_improve'].get('student_arch', cfg['sr']['arch']))")
 SCALE=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['image']['scale'])")
 
@@ -78,16 +67,49 @@ check_hr_judges
 for LAMBDA_SAL in "${LAMBDA_SALIENCY_VALUES[@]}"; do
     for SEED in "${SEEDS[@]}"; do
         TAG="lsal${LAMBDA_SAL}_seed${SEED}"
+
+        # [MỚI — 2026-08-25, sự cố thật] Bỏ qua tổ hợp ĐÃ CHẠY XONG THẬT SỰ —
+        # script này chạy rất lâu (early-stopping thiếu min_delta khiến 1 tổ
+        # hợp có thể chạy gần hết max_epochs, xem utils/early_stopping.py),
+        # nếu phải dừng giữa chừng thì KHÔNG được train lại từ đầu các tổ hợp
+        # đã xong — số liệu của chúng vẫn ĐÚNG, train lại là lãng phí GPU.
+        #
+        # [SỬA — 2026-08-25, review lại] Bước 3 (eval_recognition.py, ghi
+        # acc_<TAG>.json) và Bước 4 (eval_sr_quality.py, ghi APPEND vào
+        # sr_quality_sweep.csv) là 2 LỆNH PYTHON RIÊNG — nếu 1 lần dừng trước
+        # đó rơi đúng giữa 2 lệnh này, acc_<TAG>.json tồn tại nhưng THIẾU dòng
+        # CSV tương ứng, chỉ kiểm tra 1 file sẽ bỏ qua NHẦM tổ hợp còn thiếu
+        # nửa dữ liệu mà không cảnh báo. Kiểm tra ĐỦ CẢ 2: acc JSON tồn tại VÀ
+        # có dòng nhãn khớp trong sr_quality_sweep.csv (cột đầu tiên, đúng
+        # label="lsal<λ>_seed<seed>" mà eval_sr_quality.py ghi ở Bước 4).
+        if [ -f "$RESULTS_DIR/acc_${TAG}.json" ] \
+           && [ -f "$RESULTS_DIR/sr_quality_sweep.csv" ] \
+           && grep -q "^lsal${LAMBDA_SAL}_seed${SEED}," "$RESULTS_DIR/sr_quality_sweep.csv"; then
+            echo ">>> Bỏ qua $TAG (đã có đủ acc_${TAG}.json + dòng CSV từ lần chạy trước)"
+            continue
+        fi
+
         echo "################################################################"
         echo "# lambda_saliency=$LAMBDA_SAL (feat=$LAMBDA_FEAT_FIXED identity=$LAMBDA_IDENTITY_FIXED) | seed=$SEED"
         echo "################################################################"
 
         # 1) Train student với đúng seed + lambda_saliency này, giữ nguyên
         # feat/identity ở cấu hình đã chốt từ run_ablation_kd_v2.sh.
+        # --min_delta 0.001: xem utils/early_stopping.py — với lambda_saliency>0,
+        # val_total có thể giảm đơn điệu cực nhỏ dần (diminishing returns) khiến
+        # early-stop KHÔNG BAO GIỜ kích hoạt thật (counter luôn reset về 0 dù cải
+        # thiện không đáng kể), chạy tới tận max_epochs=500 thay vì dừng sớm thật
+        # như đã thấy với lambda_saliency=0.0 (~25-40 epoch). Xác nhận bằng mô
+        # phỏng lại đúng pattern quan sát được (val_total giảm 0.1261->0.1259 ở
+        # epoch 398->400): với min_delta=0.001, dừng ở epoch 99 thay vì chạy hết
+        # 500; với chuỗi hội tụ thật (không phải diminishing-returns giả), KHÔNG
+        # cắt ngang quá trình hội tụ (dừng đúng patience epoch sau khi thật sự
+        # không còn cải thiện đáng kể). min_delta mặc định 0.0 ở MỌI script khác
+        # trong project — thay đổi này CHỈ áp dụng ở đây.
         python train_sr_distill.py --config "$CONFIG" \
             --lambda_pixel 1.0 --lambda_distill 1.0 \
             --lambda_feat "$LAMBDA_FEAT_FIXED" --lambda_identity "$LAMBDA_IDENTITY_FIXED" \
-            --lambda_saliency "$LAMBDA_SAL" \
+            --lambda_saliency "$LAMBDA_SAL" --min_delta 0.001 \
             --seed "$SEED" --run_suffix "_${TAG}"
 
         # 2) Sinh ảnh SR từ student vừa train
