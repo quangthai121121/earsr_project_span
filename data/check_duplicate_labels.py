@@ -49,7 +49,16 @@ def main():
     for root_name in args.root:
         root = repo_root / root_name
         if root.exists():
-            csv_files.extend(sorted(root.rglob("*.csv")))
+            # [MỚI — 2026-08-27, sự cố thật] Bỏ qua các thư mục đã CỐ TÌNH cách ly
+            # dữ liệu hỏng (đổi tên thêm hậu tố "_CONTAMINATED..." khi phát hiện
+            # nhiễm, xem RUNBOOK — giữ lại để đối chiếu, KHÔNG xoá hẳn). Nếu không
+            # loại trừ, quét đệ quy sẽ bắt lại đúng những nhãn trùng ĐÃ BIẾT trong
+            # các thư mục cách ly này mỗi lần chạy, chặn nhầm bước tổng hợp báo cáo
+            # dù dữ liệu ĐANG HOẠT ĐỘNG THẬT sự sạch.
+            csv_files.extend(sorted(
+                p for p in root.rglob("*.csv")
+                if "CONTAMINATED" not in str(p)
+            ))
 
     if not csv_files:
         print(f"[CANH BAO] Khong tim thay file CSV nao trong: {args.root}")

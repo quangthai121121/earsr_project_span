@@ -108,7 +108,16 @@ def main():
     for root_name in args.root:
         root = repo_root / root_name
         if root.exists():
-            csv_files.extend(sorted(root.rglob("*.csv")))
+            # [MỚI — 2026-08-27, cùng sự cố đã sửa ở check_duplicate_labels.py]
+            # Bỏ qua thư mục đã cố tình cách ly dữ liệu hỏng (hậu tố
+            # "_CONTAMINATED...") — dữ liệu dở dang từ tiến trình bị kill giữa
+            # chừng nhiều khả năng có ô trống/NaN thật, nhưng đây là NaN đã BIẾT
+            # và CỐ TÌNH bỏ qua (không dùng), không phải lỗi mới trong dữ liệu
+            # đang hoạt động — quét cả thư mục này sẽ chặn nhầm mỗi lần chạy.
+            csv_files.extend(sorted(
+                p for p in root.rglob("*.csv")
+                if "CONTAMINATED" not in str(p)
+            ))
 
     if not csv_files:
         print(f"[CANH BAO] Khong tim thay file CSV nao trong: {args.root}")
