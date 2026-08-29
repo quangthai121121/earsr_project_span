@@ -51,31 +51,38 @@ for BACKBONE in "${BACKBONES[@]}"; do
         fi
     done
 done
-# [MỚI — bổ sung sau code review, đợt 10, điểm 3] Script này KHÔNG tự biết
-# domain "sr_learned_prune" hiện có trên đĩa là model đã được sửa (identity-
-# aware, đúng recipe pin mới) hay vẫn là model CŨ (đợt 8, 6 khối, không
-# identity-aware) — nếu chạy nhầm trên model cũ, 10 JSON seed 44/999 sinh ra
-# sẽ ứng với model INVALID, rồi bị trộn với 15 JSON seed 42/123/2024 (có thể
-# đã được train lại đúng, hoặc cũng vẫn cũ) mà không có cảnh báo gì. Đọc trực
-# tiếp prune_metadata.json (nguồn sự thật duy nhất, ghi lại lúc train SR) để
-# xác nhận đây LÀ model identity-aware trước khi cho phép chạy tiếp.
+# [SỬA — 2026-08-29] Chốt kiểm tra CŨ (đợt 10) yêu cầu identity_aware=true,
+# dựa trên niềm tin "cấu hình identity-aware (feat=0.5/identity=0.1) là đúng"
+# — niềm tin đó đã bị BÁC BỎ DỨT ĐIỂM bằng multi-seed thật (xem
+# pipeline/run_prune_sparsity_screen.sh, cùng ngày sửa). Recipe ĐÚNG hiện tại
+# (feat=0/identity=0/saliency=0, khớp span_tiny) tất yếu cho identity_aware=
+# FALSE — đây là kỳ vọng ĐÚNG, không phải dấu hiệu model cũ/hỏng. Đảo lại
+# chiều kiểm tra: xác nhận model hiện tại ĐÚNG recipe sạch (identity_aware=
+# false, uses_feature_kd=false) VÀ đúng n_blocks_kept=3 (khớp
+# LAMBDA_SPARSITY=0.095 đã chốt trong run_multi_seed_learned_prune.sh) —
+# vẫn giữ tinh thần gốc: phát hiện sớm nếu model trên đĩa là 1 lần chạy
+# KHÁC (recipe khác hoặc lambda_sparsity khác) trước khi trộn nhầm JSON.
 if [ -f "runs/sr_learned_prune_final/prune_metadata.json" ]; then
-    IS_IDENTITY_AWARE=$(python -c "
+    METADATA_CHECK=$(python -c "
 import json
 m = json.load(open('runs/sr_learned_prune_final/prune_metadata.json'))
-print('1' if m.get('identity_aware') else '0')
+identity_aware = bool(m.get('identity_aware'))
+uses_feature_kd = bool(m.get('uses_feature_kd'))
+n_blocks = m.get('n_blocks_kept')
+ok = (not identity_aware) and (not uses_feature_kd) and (n_blocks == 3)
+print(f'{1 if ok else 0}|{identity_aware}|{uses_feature_kd}|{n_blocks}')
 ")
-    N_BLOCKS_CHECK=$(python -c "import json; print(json.load(open('runs/sr_learned_prune_final/prune_metadata.json'))['n_blocks_kept'])")
-    if [ "$IS_IDENTITY_AWARE" != "1" ]; then
-        echo "LỖI: runs/sr_learned_prune_final/prune_metadata.json ghi identity_aware=false" >&2
-        echo "     (n_blocks_kept=$N_BLOCKS_CHECK) — RẤT CÓ THỂ đây là model CŨ (đợt 8," >&2
-        echo "     reconstruction prune, không identity-aware) chứ KHÔNG PHẢI model đã" >&2
-        echo "     sửa (pin lambda_feat=0.5/lambda_identity=0.1). Chạy lại (bản mới)" >&2
-        echo "     pipeline/run_multi_seed_learned_prune.sh trước khi thêm seed 44/999," >&2
+    IFS='|' read -r METADATA_OK META_IA META_FKD META_NBLOCKS <<< "$METADATA_CHECK"
+    if [ "$METADATA_OK" != "1" ]; then
+        echo "LỖI: runs/sr_learned_prune_final/prune_metadata.json không khớp recipe SẠCH" >&2
+        echo "     mong đợi (identity_aware=false, uses_feature_kd=false, n_blocks_kept=3)." >&2
+        echo "     Hiện tại: identity_aware=$META_IA, uses_feature_kd=$META_FKD, n_blocks_kept=$META_NBLOCKS." >&2
+        echo "     -> Chạy lại pipeline/run_multi_seed_learned_prune.sh (bản hiện tại, đã pin" >&2
+        echo "        LAMBDA_SPARSITY=0.095/feat=0/identity=0) trước khi thêm seed 44/999," >&2
         echo "     để không trộn 2 model khác nhau vào cùng bảng tổng hợp." >&2
         MISSING=1
     else
-        echo "OK — prune_metadata.json xác nhận identity_aware=true (n_blocks_kept=$N_BLOCKS_CHECK)."
+        echo "OK — prune_metadata.json khớp đúng recipe sạch (n_blocks_kept=3, identity_aware=false, uses_feature_kd=false)."
     fi
 else
     echo "LỖI: chưa thấy runs/sr_learned_prune_final/prune_metadata.json." >&2
