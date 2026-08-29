@@ -222,6 +222,22 @@ def main():
         "SMFANet",
         results_dir / "attention_param_ablation_smfanet_half4" / "depth_delta_comparison_smfanet.csv")
 
+    # [MỚI — 2026-08-30] Riêng cho AWEx (dataset thứ 2): kết quả CHÍNH là
+    # transfer-learning từ EarVN1.0 (xem RUNBOOK_AWEx.md Bước 4 — "treated as
+    # the primary AWEx result"), KHÔNG PHẢI from-scratch (Mục 6 ở trên, vốn
+    # đọc results_dir/multi_seed/, chỉ có ý nghĩa đối chiếu cho AWEx). Dùng
+    # CHUNG data/aggregate_multi_seed_results.py (đã xác nhận cùng schema cột
+    # với Mục 6-9) nên tái sử dụng thẳng add_pairwise_section(). Với EarVN1.0
+    # (không có thư mục multi_seed_transfer*/), 2 mục này tự động không xuất
+    # hiện trong REPORT.md — không cần cờ bật/tắt theo dataset.
+    add_pairwise_section(
+        "11. [AWEx] Kết quả CHÍNH: transfer-learning từ EarVN1.0, n=5 x 5 backbone",
+        results_dir / "multi_seed_transfer" / "multi_seed_summary_transfer_pairwise.csv")
+    add_pairwise_section(
+        "12. [AWEx] Transfer-learning + freeze-backbone (giảm phương sai, "
+        "chỉ chạy nếu Bước 4 cho phương sai còn cao — xem RUNBOOK_AWEx.md Bước 5)",
+        results_dir / "multi_seed_transfer_frozen" / "multi_seed_summary_transfer_frozen_pairwise.csv")
+
     with open(out_dir / "REPORT.md", "w", encoding="utf-8") as f:
         f.write("\n".join(report_lines))
 
