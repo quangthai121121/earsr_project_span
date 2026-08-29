@@ -193,6 +193,35 @@ def main():
         results_dir / "multi_seed_saliency" / "multi_seed_saliency_summary_pairwise.csv",
         filter_domain_a="sr_improved")
 
+    # [MỚI — 2026-08-29] Mục 13.3 (attention-parameterization ablation, xem
+    # data/compare_depth_deltas.py) dùng schema KHÁC hẳn 4 mục trên (không
+    # phải cặp domain_a/domain_b, mà là "so 2 delta với nhau": Δ_arch (SAFMN/
+    # SMFANet full->half) vs Δ_SPAN (span_large->span_tiny)) — không dùng
+    # chung add_pairwise_section() được, viết riêng.
+    DEPTH_DELTA_COLS = ["backbone", "n_seeds_matched", "delta_arch_mean",
+                         "delta_span_mean", "diff_of_diffs_mean", "cohens_d",
+                         "p_bonferroni", "verdict"]
+
+    def add_depth_delta_section(title, arch_label, csv_path):
+        rows = read_csv(csv_path)
+        if not rows:
+            return
+        report_lines.append(f"\n## {title}\n")
+        report_lines.append(
+            f"Δ_{arch_label} = accuracy(đầy đủ) - accuracy(nửa độ sâu) | "
+            f"Δ_SPAN = accuracy(span_large) - accuracy(span_tiny) | cùng seed, cùng backbone.\n")
+        report_lines.append(md_table(rows, columns=DEPTH_DELTA_COLS))
+        shutil.copy(csv_path, out_dir / Path(csv_path).name)
+
+    add_depth_delta_section(
+        "10a. Ablation attention-parameterization: SAFMN nửa độ sâu vs SPAN",
+        "SAFMN",
+        results_dir / "attention_param_ablation_safmn_half4" / "depth_delta_comparison_safmn.csv")
+    add_depth_delta_section(
+        "10b. Ablation attention-parameterization: SMFANet nửa độ sâu vs SPAN",
+        "SMFANet",
+        results_dir / "attention_param_ablation_smfanet_half4" / "depth_delta_comparison_smfanet.csv")
+
     with open(out_dir / "REPORT.md", "w", encoding="utf-8") as f:
         f.write("\n".join(report_lines))
 
