@@ -97,6 +97,75 @@ def filter_training_summary_false_positives(path: Path, df, bad_cells):
     return kept, notes
 
 
+# [MỚI — 2026-08-29, phong ngua chu dong] data/aggregate_results.py (sinh
+# results/summary.csv, file generate_final_report.py doc truc tiep) dung
+# r.get(k, "NA") cho 3 cot BO SUNG SAU (identity_auc, identity_eer,
+# n_genuine_pairs) de gop duoc JSON CU (chay truoc dot bo sung verification-
+# setting, chua co 3 truong nay) voi JSON MOI trong cung results_dir, khong
+# KeyError. Day la "NA" CO CHU DICH cho 3 cot NAY, KHAC voi cac cot BAT BUOC
+# (backbone/identity_accuracy/...) — neu cac cot bat buoc do cung NaN thi VAN
+# la loi that, phai giu lai.
+_SUMMARY_OPTIONAL_COLS = ("identity_auc", "identity_eer", "n_genuine_pairs")
+
+
+def filter_summary_optional_cols_false_positives(path: Path, df, bad_cells):
+    """Bo NaN o 3 cot xac minh (AUC/EER/n_genuine_pairs) trong summary.csv khi
+    dong do la JSON cu chua co truong nay — giu lai NaN o bat ky cot BAT BUOC
+    nao khac (that su dang ngo). Tra ve (bad_cells_that, ghi_chu)."""
+    if path.name != "summary.csv":
+        return bad_cells, []
+    if not any(c in df.columns for c in _SUMMARY_OPTIONAL_COLS):
+        return bad_cells, []
+
+    kept = [(idx, col, val) for idx, col, val in bad_cells if col not in _SUMMARY_OPTIONAL_COLS]
+    n_benign = len(bad_cells) - len(kept)
+    notes = []
+    if n_benign:
+        notes.append(f"[da loc {n_benign} o NaN trong cot xac minh tuy chon "
+                      f"({', '.join(_SUMMARY_OPTIONAL_COLS)}) — 'NA' co chu dich khi gop "
+                      f"JSON cu (chua co 3 truong nay) voi JSON moi, khong phai loi]")
+    return kept, notes
+
+
+# [MỚI — 2026-08-29, sự cố thật] Cac file tong hop kieu "sweep" (vd
+# data/aggregate_lambda_sweep.py, data/aggregate_saliency_sweep.py) CO Y loai
+# tru dong baseline (lambda_*=0.0) khoi vong lap so sanh "vs_baseline"
+# (candidate_lambdas = [lam for lam in lambdas_sorted if lam != "0.0"]) — vi so
+# sanh 1 gia tri voi CHINH NO khong co y nghia. Dong baseline vi vay LUON de
+# trong (-> NaN khi doc bang pandas) o toan bo cac cot p-value/Cohen's d/CI95/
+# MDES — DUNG NHU THIET KE, khong phai loi. Chi NHUNG DONG KHAC (lambda>0)
+# neu cung NaN toan bo cac cot nay moi la dau hieu that su dang ngo (vd khong
+# du seed chung voi baseline de ghep cap, xem canh bao "khong cung bo seed day
+# du" trong chinh script tong hop).
+_SWEEP_COMPARISON_COL_MARKERS = ("vs_baseline", "mdes_", "ci95_diff_")
+
+
+def filter_sweep_baseline_false_positives(df, bad_cells):
+    """Bo cac o NaN o dong baseline (lambda_*=0.0) cua file tong hop sweep —
+    NaN o day la CHU DICH (khong so sanh 1 gia tri voi chinh no), chi giu lai
+    NaN o nhung dong KHAC (lambda>0) that su dang ngo. Tra ve (bad_cells_that,
+    ghi_chu)."""
+    lambda_cols = [c for c in df.columns if c.startswith("lambda_") and c not in
+                   ("lambda_pixel", "lambda_distill", "lambda_feat", "lambda_sparsity")]
+    comparison_cols = [c for c in df.columns
+                        if any(m in c for m in _SWEEP_COMPARISON_COL_MARKERS)]
+    if not lambda_cols or not comparison_cols:
+        return bad_cells, []
+
+    lambda_col = lambda_cols[0]
+    baseline_idx = {idx for idx in df.index if str(df.loc[idx, lambda_col]) == "0.0"}
+
+    notes = []
+    kept = [(idx, col, val) for idx, col, val in bad_cells
+            if not (idx in baseline_idx and col in comparison_cols)]
+    n_benign = len(bad_cells) - len(kept)
+    if n_benign:
+        notes.append(f"[da loc {n_benign} dong baseline ({lambda_col}=0.0) co cac cot "
+                      f"so sanh 'vs_baseline' de trong theo thiet ke (khong so sanh 1 gia "
+                      f"tri voi chinh no) — khong phai loi]")
+    return kept, notes
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--root", nargs="+", default=["results", "runs"],
@@ -139,6 +208,9 @@ def main():
             total_bad_files += 1
             continue
         bad_cells, notes = filter_training_summary_false_positives(path, df, bad_cells)
+        bad_cells, summary_notes = filter_summary_optional_cols_false_positives(path, df, bad_cells)
+        bad_cells, sweep_notes = filter_sweep_baseline_false_positives(df, bad_cells)
+        notes = notes + summary_notes + sweep_notes
         if notes:
             for n in notes:
                 print(f"[GHI CHU] {rel}: {n}")
