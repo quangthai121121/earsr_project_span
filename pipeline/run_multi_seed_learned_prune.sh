@@ -38,7 +38,14 @@
 # KHÔNG mốc nào ra đúng 3). BẮT BUỘC chạy lại pipeline/run_prune_sparsity_screen.sh
 # (bản đã sửa) TRƯỚC, đọc n_blocks_kept mới ở từng mức, rồi mới điền lại giá
 # trị cho ra khối GẦN 3 NHẤT vào đây — để trống + fail-fast, không đoán lại.
-LAMBDA_SPARSITY=
+#
+# [ĐIỀN — 2026-08-29, tu ket qua run_prune_sparsity_screen.sh + fine-grain
+# (0.085/0.09/0.095), recipe sach feat=0/identity=0]: lambda_sparsity=0.095 cho
+# DUNG 3 khoi (params_deploy=0.230M, KHOP CHINH XAC voi span_tiny). So sanh so
+# bo (n=1, mobilenet_v2): PSNR 25.204dB (kem span_tiny 1.85dB), accuracy 0.4652
+# (kem span_tiny 0.0293) — can multi-seed x 5 backbone (chay o day) de xac nhan
+# chac chan truoc khi ket luan.
+LAMBDA_SPARSITY=0.095
 
 # [SỬA — 2026-08-24] Đồng bộ với run_prune_sparsity_screen.sh: bỏ hẳn nhánh
 # "identity-aware" (lambda_feat=0.5/identity=0.1, dựa trên cấu hình KDv2 đã bị
