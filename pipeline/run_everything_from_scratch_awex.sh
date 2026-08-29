@@ -64,6 +64,30 @@ fi
 
 mkdir -p "$LOG_DIR"
 
+# [MỚI — 2026-08-30, phòng ngừa sự cố thật đã xảy ra với EarVN1.0] `kill <PID>`
+# lên tiến trình bash CHA không tự động diệt tiến trình con Python đang chạy
+# bên trong `run_step()` — đã gây tích luỹ nhiều `train_sr_distill.py` mồ côi
+# tranh chấp cùng 1 GPU qua nhiều lần restart (xem RUNBOOK_EarVN1.0.md mục
+# #25). Thay vì chỉ dựa vào việc LUÔN NHỚ dùng `pkill -f` đúng cách, thêm
+# `trap` ở đây: khi script này nhận SIGTERM/SIGINT (dù bị dừng bằng cách nào,
+# kể cả lỡ tay `kill <PID>` đúng lên PID này) — tự động diệt HẾT tiến trình
+# con trực tiếp (`pkill -P $$`, dựa theo PID cha, không phụ thuộc tên lệnh cụ
+# thể) trước khi thoát. Không thay thế được `pkill -f` khi CẦN diệt tiến
+# trình cháu (con của con, ví dụ DataLoader worker) — vẫn nên dùng `pkill -f`
+# khi có thể — nhưng đây là lưới an toàn cuối cùng nếu ai đó (kể cả tương lai)
+# lỡ quên.
+cleanup_children() {
+    echo "" >&2
+    echo "!!! Nhận tín hiệu dừng — đang diệt tiến trình con (tránh mồ côi tranh chấp GPU)..." >&2
+    pkill -P $$ 2>/dev/null
+    sleep 2
+    pkill -9 -P $$ 2>/dev/null
+    echo "!!! Đã dọn xong tiến trình con trực tiếp. Nếu vẫn còn tiến trình Python treo," >&2
+    echo "    dùng: pkill -f train_sr_distill.py; pkill -f train_recognition.py; ..." >&2
+    exit 1
+}
+trap cleanup_children SIGTERM SIGINT
+
 # Hàm log — giống hệt bản EarVN1.0 (xem pipeline/run_everything_from_scratch.sh
 # để biết lý do từng chi tiết: in "ĐANG CHẠY" ngay từ đầu để không tưởng bị
 # treo, log riêng mỗi bước, dừng ngay khi có bước fail).
