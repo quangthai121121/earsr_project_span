@@ -149,6 +149,50 @@ def main():
         report_lines.append(f"Xem thư mục `sr_comparison_images/` ({n_images} ảnh mẫu, "
                              f"mỗi ảnh gồm LR | SPAN baseline | {student_arch} | HR).\n")
 
+    # [MỚI — 2026-08-29, khoảng trống phát hiện qua review] Script này viết TỪ
+    # TRƯỚC khi có KD v2/learned pruning/saliency multi-seed và trước cả bảng
+    # multi-seed chính (results/multi_seed/) — REPORT.md trước đây HOÀN TOÀN
+    # THIẾU các kết quả này (chỉ có Bước 1-9 gốc, n=1), dù đây là bằng chứng
+    # thống kê nghiêm ngặt nhất (n=5 x 5 backbone) và là câu trả lời chính cho
+    # câu hỏi novelty. Thêm 4 mục pairwise (đọc trực tiếp từ
+    # data/aggregate_multi_seed_results.py, mỗi mục CHỈ VỀ 1 THƯ MỤC, KHÔNG
+    # đụng logic đã có ở trên) — mỗi mục tự bỏ qua nếu file chưa tồn tại
+    # (không bắt buộc phải có đủ cả 4, ví dụ chạy dataset mới chưa tới bước
+    # ablation nào).
+    PAIRWISE_COLS = ["backbone", "domain_a", "domain_b", "n_common_seeds",
+                      "mean_diff_b_minus_a", "cohens_d", "p_raw", "p_bonferroni", "note"]
+
+    def add_pairwise_section(title, csv_path, filter_domain_a=None):
+        rows = read_csv(csv_path)
+        if not rows:
+            return
+        if filter_domain_a is not None:
+            rows = [r for r in rows if r.get("domain_a") == filter_domain_a]
+        if not rows:
+            return
+        report_lines.append(f"\n## {title}\n")
+        report_lines.append(md_table(rows, columns=PAIRWISE_COLS))
+        shutil.copy(csv_path, out_dir / Path(csv_path).name)
+
+    add_pairwise_section(
+        "6. Kiểm chứng multi-seed (n=5): lr vs sr_baseline vs sr_improved",
+        results_dir / "multi_seed" / "multi_seed_summary_pairwise.csv")
+    add_pairwise_section(
+        "7. Ablation: KD v2 (multi-judge + feature-KD), n=5 x 5 backbone — "
+        "so với sr_improved (span_tiny)",
+        results_dir / "multi_seed_kdv2" / "multi_seed_kdv2_summary_pairwise.csv",
+        filter_domain_a="sr_improved")
+    add_pairwise_section(
+        "8. Ablation: Learned block pruning, n=5 x 5 backbone — "
+        "so với sr_improved (span_tiny, cùng kích thước)",
+        results_dir / "multi_seed_learned_prune" / "multi_seed_learned_prune_summary_pairwise.csv",
+        filter_domain_a="sr_improved")
+    add_pairwise_section(
+        "9. Ablation: Saliency-weighted identity-critical loss, n=5 x 5 backbone — "
+        "so với sr_improved (span_tiny)",
+        results_dir / "multi_seed_saliency" / "multi_seed_saliency_summary_pairwise.csv",
+        filter_domain_a="sr_improved")
+
     with open(out_dir / "REPORT.md", "w", encoding="utf-8") as f:
         f.write("\n".join(report_lines))
 
