@@ -193,7 +193,8 @@ for VARIANT in "${!VARIANT_TEACHER_IDX[@]}"; do
             python eval_recognition.py --config "$CONFIG" \
                 --ckpt "runs/recognition_${DOMAIN}_${BACKBONE}_seed${SEED}/best.pt" \
                 --backbone "$BACKBONE" --train_domain "$DOMAIN" --test_domain "$DOMAIN" \
-                --out_json "$RESULTS_DIR/${DOMAIN}_${BACKBONE}_seed${SEED}.json"
+                --out_json "$RESULTS_DIR/${DOMAIN}_${BACKBONE}_seed${SEED}.json" \
+                --num_workers "$NUM_WORKERS"
         done
     done
 done

@@ -11,6 +11,7 @@ Chạy ví dụ:
 import argparse
 import csv
 import json
+import os
 from pathlib import Path
 
 import torch
@@ -40,6 +41,10 @@ def main():
     ap.add_argument("--test_domain", required=True,
                      help="hr | lr | sr_baseline | sr_improved | sr_ablation_<tên>")
     ap.add_argument("--out_json", default=None)
+    ap.add_argument("--num_workers", type=int, default=4,
+                     help="[MỚI — 2026-08-30, sự cố thật] số DataLoader worker — mặc định 4 "
+                          "(giữ NGUYÊN hành vi cũ). Đặt 0 khi server dùng chung bị job khác chiếm "
+                          "gần hết /dev/shm, xem giải thích trong train_sr_distill.py.")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -56,7 +61,7 @@ def main():
 
     test_set = EarDataset(domain_root, "test", splits_json, label_map, image_size, train=False)
     test_loader = DataLoader(test_set, batch_size=cfg["recognition"]["batch_size"],
-                              shuffle=False, num_workers=4)
+                              shuffle=False, num_workers=args.num_workers)
 
     model = EarRecognitionNet(
         num_identities=cfg["num_identities"],
@@ -169,9 +174,25 @@ def main():
     print(f"{'=' * 60}\n")
 
     if args.out_json:
-        Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.out_json, "w", encoding="utf-8") as f:
+        # [SỬA — 2026-08-30, rủi ro phát hiện qua review] Ghi ATOMIC (file
+        # tạm cùng thư mục rồi os.replace) thay vì ghi thẳng vào out_json —
+        # nếu process bị kill/crash giữa lúc json.dump() đang ghi (đã xảy ra
+        # thật trong project này: DataLoader worker crash do server dùng
+        # chung hết /dev/shm), ghi trực tiếp để lại file JSON HỎNG/dở dang
+        # tại ĐÚNG đường dẫn out_json — các script pipeline dùng skip-check
+        # kiểu "os.path.exists(out_json)" (xem pipeline/run_block_position_
+        # ablation*.sh) sẽ THẤY CÓ FILE rồi bỏ qua nhầm tổ hợp này ở lần chạy
+        # sau, để lại dữ liệu thiếu mà không báo lỗi — cùng loại "silent data
+        # corruption" đã từng sửa ở data/build_sr.py. os.replace() là atomic
+        # trên cùng filesystem (POSIX rename) nên out_json luôn hoặc là bản
+        # ghi ĐẦY ĐỦ trước đó, hoặc bản MỚI đầy đủ — không bao giờ ở trạng
+        # thái dở dang.
+        out_path = Path(args.out_json)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = out_path.with_name(out_path.name + ".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, out_path)
 
 
 if __name__ == "__main__":
