@@ -94,16 +94,16 @@ def _run_recognition_eval(model, loader, device):
 
 
 @torch.no_grad()
-def eval_no_sr(cfg, label_map, backbone, device):
+def eval_no_sr(cfg, label_map, backbone, device, run_suffix="", num_workers=4):
     splits_root = cfg["paths"]["splits_root"]
     hr_size = cfg["image"]["hr_size"]
     lr_size = hr_size // cfg["image"]["scale"]
 
     dataset = RealLRHoldoutDataset(f"{splits_root}/real_lr_holdout.json", label_map,
                                     hr_size, lr_size, mode="no_sr")
-    loader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=4)
+    loader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=num_workers)
 
-    ckpt_path = f"{cfg['paths']['runs_root']}/recognition_lr_{backbone}/best.pt"
+    ckpt_path = f"{cfg['paths']['runs_root']}/recognition_lr_{backbone}{run_suffix}/best.pt"
     model = EarRecognitionNet(
         num_identities=cfg["num_identities"], num_genders=cfg["num_genders"],
         embedding_dim=cfg["recognition"]["embedding_dim"], backbone=backbone,
@@ -116,7 +116,8 @@ def eval_no_sr(cfg, label_map, backbone, device):
 
 
 @torch.no_grad()
-def eval_with_sr(cfg, label_map, backbone, device, sr_arch, sr_ckpt, recognition_domain):
+def eval_with_sr(cfg, label_map, backbone, device, sr_arch, sr_ckpt, recognition_domain,
+                  run_suffix="", num_workers=4):
     splits_root = cfg["paths"]["splits_root"]
     hr_size = cfg["image"]["hr_size"]
     scale = cfg["image"]["scale"]
@@ -124,13 +125,13 @@ def eval_with_sr(cfg, label_map, backbone, device, sr_arch, sr_ckpt, recognition
 
     dataset = RealLRHoldoutDataset(f"{splits_root}/real_lr_holdout.json", label_map,
                                     hr_size, lr_size, mode="sr")
-    loader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=4)
+    loader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=num_workers)
 
     sr_model = build_sr_model(sr_arch, scale)
     sr_model.load_state_dict(torch.load(sr_ckpt, map_location=device))
     sr_model.to(device).eval()
 
-    ckpt_path = f"{cfg['paths']['runs_root']}/recognition_{recognition_domain}_{backbone}/best.pt"
+    ckpt_path = f"{cfg['paths']['runs_root']}/recognition_{recognition_domain}_{backbone}{run_suffix}/best.pt"
     rec_model = EarRecognitionNet(
         num_identities=cfg["num_identities"], num_genders=cfg["num_genders"],
         embedding_dim=cfg["recognition"]["embedding_dim"], backbone=backbone,
@@ -165,6 +166,18 @@ def main():
     ap.add_argument("--sr_improved_ckpt", required=True)
     ap.add_argument("--sr_improved_arch", required=True)
     ap.add_argument("--out_csv", required=True)
+    ap.add_argument("--run_suffix", default="",
+                     help="[MỚI] hậu tố seed cho checkpoint RECOGNITION (ví dụ '_seed123'), để "
+                          "chạy multi-seed thay vì chỉ n=1 mặc định. Checkpoint SR (--sr_*_ckpt) "
+                          "KHÔNG đổi theo seed, đúng quy ước 'SR train 1 lần, chỉ recognition lặp "
+                          "seed' đã dùng xuyên suốt project.")
+    ap.add_argument("--seed_label", default=None,
+                     help="[MỚI] giá trị seed để ghi vào cột 'seed' trong CSV (chỉ để hiển thị/"
+                          "gộp kết quả sau này, không ảnh hưởng đường dẫn checkpoint).")
+    ap.add_argument("--num_workers", type=int, default=4,
+                     help="[MỚI — 2026-08-30, sự cố thật] số DataLoader worker — mặc định 4 "
+                          "(giữ NGUYÊN hành vi cũ). Đặt 0 khi server dùng chung bị job khác chiếm "
+                          "gần hết /dev/shm, xem giải thích trong train_sr_distill.py.")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -173,28 +186,30 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     splits_root = cfg["paths"]["splits_root"]
     label_map = build_label_map(f"{splits_root}/splits.json")
+    seed_label = args.seed_label if args.seed_label is not None else (args.run_suffix or "default")
 
     rows = []
 
     print(">>> [no_sr] đánh giá trên real_lr_holdout...")
-    (id_acc, gender_acc), n, ckpt = eval_no_sr(cfg, label_map, args.backbone, device)
-    rows.append({"condition": "no_sr", "backbone": args.backbone,
+    (id_acc, gender_acc), n, ckpt = eval_no_sr(cfg, label_map, args.backbone, device,
+                                                args.run_suffix, args.num_workers)
+    rows.append({"condition": "no_sr", "backbone": args.backbone, "seed": seed_label,
                  "identity_accuracy": round(id_acc, 4), "gender_accuracy": round(gender_acc, 4),
                  "n_images": n, "recognition_ckpt": ckpt})
 
     print(">>> [sr_baseline] đánh giá trên real_lr_holdout...")
     (id_acc, gender_acc), n, ckpt = eval_with_sr(
         cfg, label_map, args.backbone, device,
-        args.sr_baseline_arch, args.sr_baseline_ckpt, "sr_baseline")
-    rows.append({"condition": "sr_baseline", "backbone": args.backbone,
+        args.sr_baseline_arch, args.sr_baseline_ckpt, "sr_baseline", args.run_suffix, args.num_workers)
+    rows.append({"condition": "sr_baseline", "backbone": args.backbone, "seed": seed_label,
                  "identity_accuracy": round(id_acc, 4), "gender_accuracy": round(gender_acc, 4),
                  "n_images": n, "recognition_ckpt": ckpt})
 
     print(">>> [sr_improved] đánh giá trên real_lr_holdout...")
     (id_acc, gender_acc), n, ckpt = eval_with_sr(
         cfg, label_map, args.backbone, device,
-        args.sr_improved_arch, args.sr_improved_ckpt, "sr_improved")
-    rows.append({"condition": "sr_improved", "backbone": args.backbone,
+        args.sr_improved_arch, args.sr_improved_ckpt, "sr_improved", args.run_suffix, args.num_workers)
+    rows.append({"condition": "sr_improved", "backbone": args.backbone, "seed": seed_label,
                  "identity_accuracy": round(id_acc, 4), "gender_accuracy": round(gender_acc, 4),
                  "n_images": n, "recognition_ckpt": ckpt})
 
