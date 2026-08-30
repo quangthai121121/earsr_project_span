@@ -66,11 +66,11 @@ for SEED in "${SEEDS[@]}"; do
 done
 
 echo ""
-echo ">>> Tổng hợp multi-seed (paired t-test, Cohen's d, Wilcoxon, CI95%, MDES)..."
+echo ">>> Tổng hợp multi-seed (identity_accuracy + gender_accuracy; paired t-test, Cohen's d, Wilcoxon, CI95%, MDES)..."
 python data/aggregate_real_lr_holdout_multiseed.py --results_dir "$RESULTS_DIR" \
-    --out_csv "$RESULTS_DIR/real_lr_holdout_multiseed_summary.csv"
+    --out_prefix "$RESULTS_DIR/real_lr_holdout_multiseed"
 
 echo ""
-echo "HOÀN TẤT. Xem $RESULTS_DIR/real_lr_holdout_multiseed_summary.csv và"
-echo "$RESULTS_DIR/real_lr_holdout_multiseed_summary_pairwise.csv để biết đảo ngược"
-echo "no-SR > span_tiny > span_baseline có LẶP LẠI qua nhiều seed hay chỉ là nhiễu n=1."
+echo "HOÀN TẤT. Xem \${RESULTS_DIR}/real_lr_holdout_multiseed_{identity,gender}.csv và"
+echo "_{identity,gender}_pairwise.csv để biết đảo ngược no-SR > span_tiny > span_baseline"
+echo "có LẶP LẠI qua nhiều seed hay chỉ là nhiễu n=1."
