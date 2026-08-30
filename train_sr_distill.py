@@ -881,11 +881,20 @@ def main():
                      help="[MỚI — 2026-08-30, sự cố thật] số DataLoader worker — mặc định 4 "
                           "(giữ NGUYÊN hành vi cũ). Đặt 0 khi server dùng chung bị job khác chiếm "
                           "gần hết /dev/shm (quan sát thực tế: tmpfs 32G bị 1 job federated-learning "
-                          "khác chiếm tới 90% trong vài phút) — num_workers=0 chạy DataLoader NGAY "
+                          "khác chiếm tới 90%% trong vài phút) — num_workers=0 chạy DataLoader NGAY "
                           "trong process chính, không sinh worker con, nên KHÔNG cần /dev/shm để "
                           "truyền tensor liên-process, loại bỏ hẳn rủi ro 'unable to allocate shared "
                           "memory' bất kể job khác chiếm bao nhiêu. Đổi lại nạp ảnh chậm hơn (không "
                           "còn prefetch song song), không ảnh hưởng logic/độ chính xác training.")
+    ap.add_argument("--degradation_augment", action="store_true",
+                     help="[MỚI — Mục 5.9 bài báo, giải pháp cho Boundary Condition real_lr_holdout] "
+                          "Bật để sinh LR lúc train bằng suy giảm THẬT ngẫu nhiên (blur+noise+JPEG, "
+                          "xem utils/degradation.py::random_degrade()) THAY vì đọc file LR tĩnh "
+                          "(bicubic sạch) — mục tiêu: học tính robust với suy giảm thật, không chỉ "
+                          "suy giảm bicubic sạch. CHỈ áp dụng cho train_set; val_set giữ NGUYÊN LR "
+                          "tĩnh để early-stopping ổn định/so sánh được (đúng nguyên tắc chỉ đổi "
+                          "training signal, không đổi protocol đánh giá). Mặc định False (giữ NGUYÊN "
+                          "hành vi cũ) — KHÔNG ảnh hưởng bất kỳ checkpoint nào đã train trước đây.")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -972,7 +981,12 @@ def main():
             f"Chạy `python data/prepare_splits.py` (Bước 1 pipeline) trước để sinh file này.")
 
     train_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "train",
-                                 return_bbox=True, return_label=True, splits_json=splits_json)
+                                 return_bbox=True, return_label=True, splits_json=splits_json,
+                                 degradation_augment=args.degradation_augment, scale=scale)
+    # [MỚI — Mục 5.9] val_set KHÔNG bật degradation_augment dù train_set có
+    # bật -- xem giải thích trong help của --degradation_augment và docstring
+    # HRLRPairDataset: giữ protocol đánh giá (early-stopping) ổn định, chỉ
+    # đổi tín hiệu training.
     val_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "val",
                                return_bbox=True, return_label=True, splits_json=splits_json)
     _validate_identity_labels(train_set, cfg["num_identities"])
@@ -1005,6 +1019,8 @@ def main():
                 f"{' + feature-level KD' if lambda_feat > 0 else ''}"
                 f"{' + saliency-weighted identity-critical loss' if lambda_saliency > 0 else ''}"
                 f"{f' + position-targeted feature-hint (teacher block {args.teacher_block_idx})' if ci.get('lambda_position', 0.0) > 0 else ''})")
+    logger.info(f"Degradation train_set: "
+                f"{'THẬT ngẫu nhiên (blur+noise+JPEG, xem utils/degradation.py)' if args.degradation_augment else 'bicubic sạch (LR tĩnh, mặc định cũ)'}")
 
     # --- Student: kiến trúc NÉN (student_arch, ví dụ span_tiny) — model sẽ được deploy ---
     # [MỚI — Mục 5.7(i)] truyền student_n_blocks xuống build_sr_model(); hàm

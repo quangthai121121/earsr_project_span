@@ -173,6 +173,14 @@ def main():
                           "--seed 123 --run_suffix _seed123) — CHƯA tự động chạy multi-seed SR trong "
                           "pipeline nào (cần bổ sung script điều phối + tốn thêm compute đáng kể, "
                           "là quyết định nghiên cứu/ngân sách GPU, không tự ý bật mặc định).")
+    ap.add_argument("--degradation_augment", action="store_true",
+                     help="[MỚI — Mục 5.9 bài báo, giải pháp cho Boundary Condition real_lr_holdout] "
+                          "Bật để sinh LR lúc train bằng suy giảm THẬT ngẫu nhiên (blur+noise+JPEG, "
+                          "xem utils/degradation.py::random_degrade()) THAY vì đọc file LR tĩnh "
+                          "(bicubic sạch) — dùng để train span_baseline_robust làm đối chứng so với "
+                          "span_tiny_robust (train_sr_distill.py), xem cờ tương ứng ở đó. CHỈ áp "
+                          "dụng cho train_set; val_set giữ NGUYÊN LR tĩnh. Mặc định False (giữ "
+                          "NGUYÊN hành vi cũ).")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -187,7 +195,11 @@ def main():
     scale = cfg["image"]["scale"]
 
     splits_root = cfg["paths"]["splits_root"]
-    train_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "train")
+    train_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "train",
+                                 degradation_augment=args.degradation_augment, scale=scale)
+    # [MỚI — Mục 5.9] val_set KHÔNG bật degradation_augment dù train_set có
+    # bật -- giữ protocol đánh giá ổn định, xem train_sr_distill.py cho giải
+    # thích đầy đủ (cùng nguyên tắc áp dụng ở đây).
     val_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "val")
 
     loader_kwargs = dict(num_workers=4, pin_memory=torch.cuda.is_available(),

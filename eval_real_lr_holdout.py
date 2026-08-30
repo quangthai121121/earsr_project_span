@@ -178,6 +178,15 @@ def main():
                      help="[MỚI — 2026-08-30, sự cố thật] số DataLoader worker — mặc định 4 "
                           "(giữ NGUYÊN hành vi cũ). Đặt 0 khi server dùng chung bị job khác chiếm "
                           "gần hết /dev/shm, xem giải thích trong train_sr_distill.py.")
+    ap.add_argument("--domain_suffix", default="",
+                     help="[MỚI — Mục 5.9 bài báo] hậu tố nối vào tên domain 'sr_baseline'/"
+                          "'sr_improved' khi tra checkpoint RECOGNITION (ví dụ '_robust' -> "
+                          "'sr_baseline_robust'/'sr_improved_robust') -- dùng để đánh giá checkpoint "
+                          "train với degradation_augment (train_sr.py/train_sr_distill.py) mà KHÔNG "
+                          "cần sửa code, chỉ cần checkpoint recognition đã fine-tune trên đúng domain "
+                          "tương ứng tồn tại sẵn. Cột 'condition' trong CSV output vẫn giữ nguyên "
+                          "'sr_baseline'/'sr_improved' (không đổi theo suffix) để so sánh trực tiếp "
+                          "được với kết quả gốc bằng aggregate_real_lr_holdout_multiseed.py.")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -200,7 +209,8 @@ def main():
     print(">>> [sr_baseline] đánh giá trên real_lr_holdout...")
     (id_acc, gender_acc), n, ckpt = eval_with_sr(
         cfg, label_map, args.backbone, device,
-        args.sr_baseline_arch, args.sr_baseline_ckpt, "sr_baseline", args.run_suffix, args.num_workers)
+        args.sr_baseline_arch, args.sr_baseline_ckpt, f"sr_baseline{args.domain_suffix}",
+        args.run_suffix, args.num_workers)
     rows.append({"condition": "sr_baseline", "backbone": args.backbone, "seed": seed_label,
                  "identity_accuracy": round(id_acc, 4), "gender_accuracy": round(gender_acc, 4),
                  "n_images": n, "recognition_ckpt": ckpt})
@@ -208,7 +218,8 @@ def main():
     print(">>> [sr_improved] đánh giá trên real_lr_holdout...")
     (id_acc, gender_acc), n, ckpt = eval_with_sr(
         cfg, label_map, args.backbone, device,
-        args.sr_improved_arch, args.sr_improved_ckpt, "sr_improved", args.run_suffix, args.num_workers)
+        args.sr_improved_arch, args.sr_improved_ckpt, f"sr_improved{args.domain_suffix}",
+        args.run_suffix, args.num_workers)
     rows.append({"condition": "sr_improved", "backbone": args.backbone, "seed": seed_label,
                  "identity_accuracy": round(id_acc, 4), "gender_accuracy": round(gender_acc, 4),
                  "n_images": n, "recognition_ckpt": ckpt})
