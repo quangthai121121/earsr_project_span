@@ -1047,6 +1047,79 @@ class SRFeatureHook:
         self.feat = None
 
 
+class SPANBlockHook:
+    """[MỚI — Mục 5.7.2 bài báo, block-removal position ablation] Bắt output
+    của ĐÚNG 1 khối SPAB theo index trong `model.body` (ModuleList) — khác
+    với SRFeatureHook ở trên (luôn bắt feature TRƯỚC conv chiếu cuối, tức là
+    output của khối SPAB CUỐI CÙNG, bất kể model có bao nhiêu khối).
+
+    ĐỘNG LỰC: câu hỏi "vị trí khối bị bỏ có quan trọng không" (span_tiny giữ
+    khối 1-3, bỏ 4-6 — có tối ưu hơn giữ khối 4-6 hay giữ khối xen kẽ 1,3,5
+    không?) KHÔNG THỂ trả lời có ý nghĩa nếu chỉ train 1 model 3-khối từ đầu
+    (random init) rồi gắn nhãn "coi như giữ khối 4-6" — với distillation chỉ
+    ở mức OUTPUT cuối cùng (loss_distill hiện tại), 1 mạng 3-khối train từ
+    đầu KHÔNG có khái niệm nội tại nào về "tôi đang đóng vai trò khối số mấy
+    của 1 mạng 6-khối ảo" — 3 biến thể "giữ khối 1-3 / 4-6 / 1-3-5" sẽ cho ra
+    kết quả GIỐNG HỆT nhau về mặt kỳ vọng (chỉ khác nhiễu random seed), vì
+    kiến trúc/loss/dữ liệu đều như nhau.
+
+    Để "vị trí" thực sự có ý nghĩa, cần 1 tín hiệu giám sát RIÊNG cho từng vị
+    trí: feature-hint distillation (giống SRFeatureHook, cùng công thức L1 +
+    chuẩn hoá zero-mean/unit-std trong compute_total_loss) nhưng nhắm vào
+    OUTPUT của khối teacher tại ĐÚNG index tương ứng với "vai trò" được gán
+    cho biến thể đó, thay vì luôn nhắm vào feature cuối cùng:
+      - "keep-first" (span_tiny hiện tại, giữ khối 1-3)  -> hint = teacher khối 3 (index 2)
+      - "keep-last"  (coi như giữ khối 4-6)              -> hint = teacher khối 6 (index 5, cuối)
+      - "interleaved" (coi như giữ khối 1,3,5)           -> hint = teacher khối 5 (index 4)
+    Cả 3 biến thể (kể cả biến thể lặp lại của span_tiny cho ablation này) đều
+    PHẢI dùng CÙNG cơ chế hint (không được để 1 biến thể "trần" không hint
+    trong khi 2 biến thể kia có hint) — nếu không, ablation so sánh nhầm
+    "có hint hay không" thay vì "hint ở vị trí nào", một confound giống hệt
+    loại lỗi đã phát hiện và sửa ở learned-pruning/KD-v2 trước đây trong
+    project này. Xem pipeline/run_block_position_ablation.sh cho đúng 3 lệnh
+    (mỗi lệnh 1 giá trị --teacher_block_idx khác nhau).
+
+    Chỉ áp dụng cho kiến trúc họ SPAN tự viết (SPAN/span_tiny/span_large —
+    có thuộc tính `.body` là nn.ModuleList các SPAB) — KHÔNG dùng được cho
+    span_official (import ngoài, không đảm bảo có `.body` cùng cấu trúc) hay
+    các kiến trúc khác (RLFN/ECBSR/SAFMN/SMFANet), vì ablation này chỉ đặt ra
+    câu hỏi về SPAN family. Giữ tách biệt hoàn toàn với SRFeatureHook (không
+    tái sử dụng/kế thừa) để không làm phức tạp thêm class đã kiểm chứng kỹ
+    và đang dùng cho 3 cơ chế khác (KD v2, learned pruning, saliency)."""
+
+    def __init__(self, model: nn.Module, block_index: int):
+        # [SỬA — lỗi phát hiện qua code review] Trước đây chỉ kiểm tra
+        # `.body` là nn.ModuleList, KHÔNG kiểm tra phần tử bên trong là SPAB —
+        # RLFN (models/sr_models.py::RLFN) CŨNG có `self.body = nn.ModuleList
+        # ([RLFB(...), ...])`, nên guard cũ pass NHẦM nếu lỡ dùng ablation này
+        # với --student_arch rlfn, rồi crash mù mờ ở `.conv3` phía dưới
+        # (RLFB dùng tên thuộc tính c1/c2/c3, không phải conv1/conv2/conv3) —
+        # AttributeError chung chung, không rõ nguyên nhân gốc. Giờ kiểm tra
+        # tường minh phần tử là SPAB thật, báo lỗi rõ ràng ngay tại đây.
+        if not hasattr(model, "body") or not isinstance(model.body, nn.ModuleList) \
+                or len(model.body) == 0 or not isinstance(model.body[0], SPAB):
+            raise RuntimeError(
+                f"SPANBlockHook: {type(model).__name__} không có `.body` dạng "
+                f"nn.ModuleList[SPAB] — chỉ dùng được với SPAN/span_tiny/span_large. "
+                f"(Một số kiến trúc khác, ví dụ RLFN, cũng có thuộc tính `.body` là "
+                f"ModuleList nhưng chứa khối khác loại (RLFB) — không tương thích.)")
+        n_blocks = len(model.body)
+        if not (0 <= block_index < n_blocks):
+            raise ValueError(
+                f"SPANBlockHook: block_index={block_index} nằm ngoài phạm vi hợp lệ "
+                f"[0, {n_blocks - 1}] (model có {n_blocks} khối SPAB).")
+        self.block_index = block_index
+        self.feat = None
+        self._handle = model.body[block_index].register_forward_hook(self._hook)
+
+    def _hook(self, _module, _inputs, output):
+        self.feat = output
+
+    def remove(self):
+        self._handle.remove()
+        self.feat = None
+
+
 def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
                     feature_channels: int = None, n_blocks: int = None,
                     gate_init: float = 3.0) -> nn.Module:

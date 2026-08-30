@@ -89,6 +89,16 @@ sr_improve:
   # khi đưa vào bảng kết quả chính thức.
   lambda_identity: 0.0
 
+  # [MỚI — Mục 5.7.2 bài báo, block-removal position ablation] Feature-hint
+  # distillation nhắm vào 1 khối SPAB CỤ THỂ của teacher (không phải feature
+  # trước conv chiếu cuối như lambda_feat) — xem models/sr_models.py::
+  # SPANBlockHook và train_sr_distill.py::_setup_position_kd để hiểu động
+  # lực đầy đủ. Mặc định ĐỂ 0.0 (TẮT), giống lambda_feat/lambda_saliency —
+  # PHẢI truyền tường minh qua --lambda_position CÙNG --teacher_block_idx
+  # khi chạy ablation (xem pipeline/run_block_position_ablation.sh), không
+  # đặt làm default toàn cục.
+  lambda_position: 0.0
+
   teacher_arch: "span_official"   # học từ SPAN baseline (đã chứng minh chất lượng tốt)
   teacher_ckpt: "runs/sr_span_official/best.pt"
 

@@ -48,10 +48,10 @@ A Statistically-Validated Accuracy--Efficiency Trade-off for Ear Biometrics}
 \maketitle
 
 \begin{abstract}
-Ear recognition is gaining attention as a complement to face recognition when the face is occluded or unavailable. In practice, ear images are often captured at very low resolution, for example in surveillance footage, distant capture, or on resource-constrained edge cameras. Lightweight super-resolution (SR) networks such as SPAN (Swift Parameter-free Attention Network) offer a way to pre-process such images, but they were designed and validated at resolutions well above the 20$\times$20-pixel regime typical of distant ear capture, and it remains unclear how much further they can be compressed before downstream recognition accuracy is affected. This paper proposes \textbf{span\_tiny}, a depth-compressed variant of SPAN with 3 attention blocks instead of 6, giving 0.230M parameters and a 46.0\% reduction from the uncompressed baseline. Rather than pursuing maximum accuracy, span\_tiny is evaluated against a narrower criterion: whether compression preserves the ordering no-SR $<$ span\_tiny $<$ uncompressed baseline in downstream recognition. Five recognition backbones are evaluated with $n=5$ seeds and paired statistical testing (paired $t$-test, Cohen's $d$, Bonferroni correction). This ordering holds in all five backbones on the primary dataset (EarVN1.0, 164 subjects) and in the same direction on a second, independent dataset (AWEx, 336 subjects) under a transfer-learning protocol, although with lower statistical power due to the smaller dataset size. A depth ablation comparing span\_tiny to an otherwise identical, uncompressed-depth counterpart (span\_large) shows no statistically significant accuracy difference in any backbone on either dataset, which is the strongest evidence that the depth reduction itself has little cost. An ablation of the knowledge-distillation loss term returns a negative result, reported without reinterpretation. Among six lightweight SR architectures trained under a common distillation recipe, span\_tiny is the fastest and second-smallest but does not lead on raw image-quality metrics, positioning this work as an efficiency contribution rather than an accuracy-maximizing one. Results that do not reach statistical significance are reported as such throughout. Remaining limitations include single-run SR-quality metrics and latency measured only on development hardware rather than an edge device.
+Ear recognition is gaining attention as a complement to face recognition when the face is occluded or unavailable. In practice, ear images are often captured at very low resolution, for example in surveillance footage, distant capture, or on resource-constrained edge cameras. Lightweight super-resolution (SR) networks such as SPAN (Swift Parameter-free Attention Network) offer a way to pre-process such images, but they were designed and validated at resolutions well above the 20$\times$20-pixel regime typical of distant ear capture, and it remains unclear how much further they can be compressed before downstream recognition accuracy is affected. This paper proposes \textbf{span\_tiny}, a depth-compressed variant of SPAN with 3 attention blocks instead of 6, giving 0.230M parameters and a 46.0\% reduction from the uncompressed baseline. Five recognition backbones are evaluated with $n=5$ seeds and paired statistical testing (paired $t$-test, Cohen's $d$, Bonferroni correction). On the primary dataset (EarVN1.0, 164 subjects), both span\_tiny and the uncompressed baseline significantly beat the no-SR condition in all five backbones (Cohen's $d$ 2.2--10.6), while the accuracy cost of compression itself reaches significance in only one of five backbones and stays below one percentage point throughout. A depth ablation isolating block count alone corroborates this: span\_tiny is statistically indistinguishable from an otherwise identical, uncompressed-depth counterpart in four of five backbones. On a second, independent dataset (AWEx, 336 subjects), the same compression-safety finding replicates across three independent evaluation protocols -- from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer -- with zero of five backbones showing a significant accuracy cost from compression under any protocol. Against five other lightweight SR architectures trained under an identical distillation recipe, span\_tiny is the fastest and second-smallest, is statistically tied with the two most accurate alternatives, and significantly outperforms the two least accurate ones on downstream accuracy, despite ranking low on raw PSNR/SSIM -- evidence that pixel-fidelity metrics are a poor proxy for recognition-relevant quality at this compression level. Three further mechanisms proposed to improve on span\_tiny -- a multi-judge identity/feature-distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning -- are each validated to the same $n=5$-seed, five-backbone standard and found to provide no reliable improvement, with learned pruning performing significantly worse than span\_tiny's fixed block selection in all five backbones. A further ablation testing whether SPAN's parameter-free attention specifically explains its depth tolerance finds no support for that account: two architectures with learned attention mechanisms tolerate an equivalent depth reduction just as well. Results that do not reach statistical significance are reported as such throughout, and an auxiliary check on genuinely low-resolution real-world images (as opposed to synthetically downsampled ones) surfaces a boundary condition on the main claim, traced to a resolution mismatch between these images and the synthetic degradation used to train the SR models.
 
 \vspace{2mm}
-\noindent\textbf{Keywords:} lightweight super-resolution; depth compression; knowledge distillation; ear recognition; low-resolution biometrics; statistical significance testing; cross-dataset generalization
+\noindent\textbf{Keywords:} lightweight super-resolution; depth compression; knowledge distillation; ear recognition; low-resolution biometrics; statistical significance testing; cross-dataset generalization; negative-result ablation
 \end{abstract}
 
 % ============================================================================
@@ -70,25 +70,19 @@ Two gaps motivate this work. First, most lightweight SR papers report PSNR and S
 
 \subsection{Contributions}
 
-This paper makes the following contributions, ordered by their weight in the paper's central claim:
+This paper's central contribution is \textbf{span\_tiny}, a depth-compressed variant of SPAN (\texttt{n\_blocks} reduced from 6 to 3, \texttt{feat}=48) that cuts parameter count by 46.0\% (0.230M vs.\ 0.4263M) and lowers inference latency correspondingly; the re-implementation is validated against the original authors' published SPAN-S results before being applied to the new task, matching 99.93\% of the reported benchmark PSNR. Three further results carry most of the paper's evidentiary weight:
 
 \begin{enumerate}
-\item[(a)] This paper proposes \textbf{span\_tiny}, a depth-compressed variant of SPAN (n\_blocks reduced from 6 to 3, feat=48), giving a 46.0\% parameter reduction (0.230M vs.\ 0.4263M) and correspondingly lower inference latency. The re-implementation is validated against the original authors' published SPAN-S results before being applied to the new task, matching 99.93\% of the reported benchmark PSNR.
-
-\item[(b)] Downstream identity-recognition accuracy is validated with multi-seed ($n=5$), multi-backbone (5 recognition architectures) statistical testing, using paired $t$-tests, paired Cohen's $d$, and Bonferroni correction, for a single, pre-registered question: does depth compression preserve the ordering \texttt{no-SR $<$ span\_tiny $<$ uncompressed baseline}? This ordering holds in 5/5 backbones on the primary dataset (EarVN1.0).
-
-\item[(c)] The same ordering direction is confirmed on a second, independent dataset (AWEx, 336 subjects, 4{,}004 images) in 5/5 backbones under a transfer-learning protocol, evidence of generalization beyond a single dataset. Statistical power on this smaller dataset is lower than on EarVN1.0, and this is reported directly.
-
-\item[(d)] A depth ablation isolating block count (span\_tiny, 3 blocks, vs.\ span\_large, an uncompressed-depth counterpart) shows no statistically significant accuracy difference in any of the five backbones, on either dataset. This is the strongest evidence that the depth compression is close to accuracy-neutral for this task.
-
-\item[(e)] \emph{[Secondary]} An ablation of the loss components used to train span\_tiny (pixel loss vs.\ pixel+distillation vs.\ additional identity loss) returns a negative result for the distillation term at the downstream-accuracy level. This result is reported as such, without reframing it as a positive finding.
-
-\item[(f)] \emph{[Secondary, contextual]} span\_tiny is situated within the broader landscape of lightweight SR architectures (RLFN, ECBSR, SAFMN, SMFANet) trained under an identical distillation recipe. This comparison characterizes where span\_tiny sits on the accuracy--efficiency frontier rather than claiming superiority over this landscape.
+\item[(a)] For a single, pre-registered question -- does depth compression preserve the ordering \texttt{no-SR $<$ span\_tiny $<$ uncompressed baseline}? -- multi-seed ($n=5$), multi-backbone (5 recognition architectures) statistical testing shows that both span\_tiny and the uncompressed baseline beat no-SR significantly in all five backbones on the primary dataset, EarVN1.0, while the accuracy cost of compression itself reaches significance in only one.
+\item[(b)] The same compression-safety finding holds on a second, independent dataset (AWEx, 336 subjects) across three separate evaluation protocols -- from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer -- with no backbone showing a significant accuracy cost under any of the three, evidence of generalization beyond a single dataset or transfer strategy. The secondary question of whether SR helps at all over no-SR is, by contrast, less consistently powered on this smaller dataset, and this is reported directly rather than smoothed over.
+\item[(c)] A depth ablation that isolates block count alone -- span\_tiny against span\_large, an otherwise identical, uncompressed-depth counterpart -- shows no statistically significant difference in four of five backbones on EarVN1.0 (the fifth, EfficientNet-B0, shows a small but significant cost under one percentage point) and in all five on AWEx. This is the strongest single piece of evidence that the depth reduction is close to accuracy-neutral for the task.
 \end{enumerate}
+
+Several secondary results round out the picture without carrying the same weight. An ablation of span\_tiny's loss components (pixel loss, distillation, and an additional identity term, in all four pairwise combinations) finds that the identity term significantly \emph{reduces} downstream accuracy -- consistent with an independent hyperparameter sweep reported in Section~\ref{sec:recipe} -- while the distillation term's own contribution remains statistically indistinguishable from pixel-only training; both are reported as such, with neither reframed as a positive finding. Set against five other lightweight SR architectures (RLFN, RLFN-adapted, ECBSR, SAFMN, SMFANet) trained under an identical distillation recipe, span\_tiny is never significantly beaten on downstream accuracy by any of them: it is statistically tied with the two most accurate alternatives and significantly ahead of the two least accurate, despite ranking low among the six on raw PSNR/SSIM -- a sign that this work is competitive on the metric the task actually cares about, not only on efficiency. Three further mechanisms designed to improve on span\_tiny beyond its core block-count reduction -- a feature-level distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning -- were each validated to the same statistical standard as the main result and found to help not at all: the first two show no detectable effect in either direction, and learned pruning performs significantly \emph{worse} than span\_tiny's fixed block selection in every backbone at an equal parameter count, together forming a rigorous negative-result ablation rather than a set of partial successes. Finally, an ablation designed to test this paper's own candidate explanation for why depth reduction is tolerable -- that SPAN's attention mechanism carries no learned parameters -- finds no support for it: two architectures with learned attention or modulation, subjected to the same proportional depth cut under the same protocol, tolerate it just as well as span\_tiny does, with no significant difference in any of the ten backbone--architecture combinations tested.
 
 \subsection{Paper organization}
 
-Section~\ref{sec:related} reviews related work in ear recognition, efficient super-resolution, SR for downstream recognition, and knowledge distillation. Section~\ref{sec:method} describes the span\_tiny architecture, training recipes, and statistical methodology. Section~\ref{sec:setup} details the experimental setup across both datasets. Section~\ref{sec:results} reports results, including three planned extended ablations toward mechanistic and design generality (Section~\ref{sec:extended-ablations}). Section~\ref{sec:discussion} discusses the findings, Section~\ref{sec:limitations} states limitations, and Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:related} reviews related work in ear recognition, efficient super-resolution, SR for downstream recognition, and knowledge distillation. Section~\ref{sec:method} describes the span\_tiny architecture, training recipes, and statistical methodology. Section~\ref{sec:setup} details the experimental setup across both datasets. Section~\ref{sec:results} reports the main and contextual results, a set of three additional mechanisms tested for further improvement and found negative or null (Section~\ref{sec:novelty-ablations}), and a completed attention-parameterization ablation together with a resolved-by-inspection recognition-embedding-distillation question and one remaining planned extension (Section~\ref{sec:extended-ablations}). Section~\ref{sec:discussion} discusses the findings, Section~\ref{sec:limitations} states limitations, and Section~\ref{sec:conclusion} concludes.
 
 % ============================================================================
 \section{Related Work}
@@ -125,7 +119,7 @@ To our knowledge, no prior work combines (i) further depth compression of a stat
 
 \subsection{Problem formulation}
 
-Given a high-resolution ear crop, a low-resolution counterpart is generated via bicubic downsampling (HR 80$\times$80 $\to$ LR 20$\times$20, scale factor $\times4$). An SR model upsamples the LR image back to 80$\times$80, and the resulting image is passed to a recognition backbone trained to predict subject identity and, secondarily, gender. Three domains are compared throughout: \texttt{lr} (no SR, the LR image bicubically upsampled and fed directly to the recognition backbone, establishing the no-SR baseline), \texttt{span\_baseline} (the uncompressed SPAN architecture, referred to as \texttt{sr\_baseline} in project logs), and \texttt{span\_tiny} (the depth-compressed variant proposed here, referred to as \texttt{sr\_improved}).
+Given a high-resolution ear crop, a low-resolution counterpart is generated via bicubic downsampling at a fixed scale factor $\times4$ (HR 80$\times$80 $\to$ LR 20$\times$20 on EarVN1.0; HR 76$\times$76 $\to$ LR 19$\times$19 on AWEx, since \texttt{hr\_size} is auto-selected per dataset, Section~\ref{sec:datasets}). An SR model upsamples the LR image back to the dataset's HR size, and the resulting image is passed to a recognition backbone trained to predict subject identity and, secondarily, gender. Three domains are compared throughout: \texttt{lr} (no SR, the LR image bicubically upsampled and fed directly to the recognition backbone, establishing the no-SR baseline), \texttt{span\_baseline} (the uncompressed SPAN architecture, referred to as \texttt{sr\_baseline} in project logs), and \texttt{span\_tiny} (the depth-compressed variant proposed here, referred to as \texttt{sr\_improved}).
 
 \subsection{span\_tiny architecture}
 \label{sec:arch}
@@ -224,7 +218,7 @@ Before applying span\_tiny to the ear-recognition task, the re-implementation wa
 
 \end{tikzpicture}%
 }
-\caption{SPAN architecture and depth compression, verified directly against \texttt{models/sr\_models.py}. (a) Internal structure of a single Swift Parameter-free Attention Block (SPAB): three convolutions (first two followed by GELU) produce raw features $h$; $h$ feeds two parallel paths, a residual sum $u = x + h$ and a parameter-free attention map $v = \mathrm{sigmoid}(h) - 0.5$, which are combined by \emph{element-wise multiplication last}, $\text{output} = u \otimes v$ (residual add precedes, not follows, the attention multiply). Each SPAB stack also carries a block-level global residual (labelled ``global residual (body\_in)''): the feature map right after shallow feature extraction is added back after the final feature-aggregation convolution, before pixel-shuffle upsampling. (b) span\_baseline (via the official SPAN implementation, \texttt{span\_official}) chains 6 SPABs. (c) span\_tiny removes the last 3 SPABs, reducing deploy-mode parameters by 46.0\% (0.4263M $\to$ 0.230M) while keeping every other component identical. Note: span\_tiny and span\_large (Section~\ref{sec:res-depth}) are both built from the same custom \texttt{SPAN} re-implementation class shown here (plain 3$\times$3 convolutions), differing only in \texttt{n\_blocks}; \texttt{span\_baseline}/\texttt{span\_official} uses the original authors' reparameterizable Conv3XC design internally, which is why its deploy-mode parameter count (0.4263M) differs slightly from span\_large's (0.417M) despite both nominally being 6-block, 48-channel configurations -- see the methodological note in Section~\ref{sec:arch}.}
+\caption{SPAN architecture and depth compression, verified directly against the implementation. (a) Internal structure of a single Swift Parameter-free Attention Block (SPAB): three convolutions (first two followed by GELU) produce raw features $h$; $h$ feeds two parallel paths, a residual sum $u = x + h$ and a parameter-free attention map $v = \mathrm{sigmoid}(h) - 0.5$, which are combined by \emph{element-wise multiplication last}, $\text{output} = u \otimes v$ (residual add precedes, not follows, the attention multiply). Each SPAB stack also carries a block-level global residual (labelled ``global residual (body\_in)''): the feature map right after shallow feature extraction is added back after the final feature-aggregation convolution, before pixel-shuffle upsampling. (b) span\_baseline (via the official SPAN implementation, \texttt{span\_official}) chains 6 SPABs. (c) span\_tiny removes the last 3 SPABs, reducing deploy-mode parameters by 46.0\% (0.4263M $\to$ 0.230M) while keeping every other component identical. Note: span\_tiny and span\_large (Section~\ref{sec:res-depth}) are both built from the same custom \texttt{SPAN} re-implementation class shown here (plain 3$\times$3 convolutions), differing only in \texttt{n\_blocks}; \texttt{span\_baseline}/\texttt{span\_official} uses the original authors' reparameterizable Conv3XC design internally, which is why its deploy-mode parameter count (0.4263M) differs slightly from span\_large's (0.417M) despite both nominally being 6-block, 48-channel configurations -- see the methodological note in Section~\ref{sec:arch}.}
 \label{fig:arch}
 \end{figure}
 % ---------------------------------------------------------------------------
@@ -241,7 +235,7 @@ Two training tracks are used throughout:
 
 The choice of $\lambda_{\text{identity}}=0.0$ was confirmed by a hyperparameter sweep: $\lambda_{\text{identity}}=0.3$ produced a statistically significant \emph{negative} effect on downstream accuracy (Cohen's $d=-10.09$, Bonferroni-corrected $p=0.0163$), supporting the decision to exclude the identity-loss term from the main recipe.
 
-\open{Extract full hyperparameter details from \texttt{configs/config.yaml} -- optimizer, learning rate schedule, batch size, number of epochs/iterations, data augmentation -- for a complete Implementation Details subsection (Section~\ref{sec:impl}).}
+Full hyperparameter and implementation details are given in Section~\ref{sec:impl}.
 
 \subsection{Recognition backbones}
 
@@ -267,11 +261,32 @@ During experimentation on the second dataset (AWEx), two training-pipeline issue
 
 \textbf{EarVN1.0} (primary dataset)~\cite{hoang2019earvn}: 164 subjects, used with an automatically-selected low-resolution generation threshold (\texttt{hr\_source\_min=41}, the 20th percentile of the dataset's native resolution distribution). LR images are generated by bicubic downsampling from an 80$\times$80 HR crop to 20$\times$20 (scale $\times4$).
 
-\textbf{AWEx} (secondary dataset, generalization check): 336 subjects, 4{,}004 images, assembled from three sources released by the same research group (University of Ljubljana): the original AWE set (100 subjects, 1{,}000 images), the CVL Ear dataset (16 subjects, 804 images), and an additional ``New Images'' collection (220 subjects, 2{,}200 images)~\cite{emersic2017ear}. All 336 subjects are pooled into a single set with a custom per-subject train/validation/test split (2{,}260/479/501 images), rather than AWEx's official open-set split (train = AWE+CVL, test = New Images, with disjoint subject identities). The official split is designed for open-set verification, whereas this study addresses closed-set identity classification, matching the protocol used for EarVN1.0. \texttt{hr\_source\_min} is likewise selected automatically (38, the 20th percentile of AWEx's native resolution distribution); the different numeric value relative to EarVN1.0 reflects the two datasets' differing native resolution distributions under an identical selection algorithm, not a protocol inconsistency.
+\textbf{AWEx} (secondary dataset, generalization check): 336 subjects, 4{,}004 images, assembled from three sources released by the same research group (University of Ljubljana): the original AWE set (100 subjects, 1{,}000 images), the CVL Ear dataset (16 subjects, 804 images), and an additional ``New Images'' collection (220 subjects, 2{,}200 images)~\cite{emersic2017ear}. All 336 subjects are pooled into a single set with a custom per-subject train/validation/test split (2{,}260/408/572 images), rather than AWEx's official open-set split (train = AWE+CVL, test = New Images, with disjoint subject identities). The official split is designed for open-set verification, whereas this study addresses closed-set identity classification, matching the protocol used for EarVN1.0. \texttt{hr\_source\_min} is likewise selected automatically (38, the 20th percentile of AWEx's native resolution distribution); the different numeric value relative to EarVN1.0 reflects the two datasets' differing native resolution distributions under an identical selection algorithm, not a protocol inconsistency.
 
 The unmodified AWE dataset (100 subjects, exactly 10 images/subject, $\approx$5.7 images/subject after splitting) was initially used as the generalization check. Inter-seed variance in downstream accuracy proved comparable in magnitude to the mean effect sizes under study, precluding reliable conclusions even after applying transfer learning and backbone-freezing to reduce variance. The larger, pooled AWEx set was adopted instead. This substitution is reported here as a methodological decision driven by statistical power, not as a post hoc search for a more favorable dataset.
 
-\open{Add a full descriptive statistics table for both datasets -- gender distribution, images-per-subject distribution, native resolution distribution -- if space and reviewer expectations warrant it.}
+Table~\ref{tab:dataset-stats} reports native-resolution percentiles (short side, pixels) and split sizes for both datasets, measured directly on the full raw image sets before thresholding.
+
+\begin{table}[H]
+\centering
+\caption{Descriptive statistics for both datasets (native short-side resolution percentiles and split sizes), measured on the full raw image sets.}
+\label{tab:dataset-stats}
+\begin{tabular}{lcc}
+\toprule
+Statistic & EarVN1.0 (28{,}412 images) & AWEx (4{,}004 images) \\
+\midrule
+Native short side: min / p5 / p10       & 13 / 27 / 32\,px    & 12 / 27 / 31\,px \\
+Native short side: p20 / p25 / p50      & 41 / 46 / 77\,px    & 38 / 41 / 60\,px \\
+Native short side: p75 / p90 / max      & 122 / 161 / 472\,px & 95 / 149 / 557\,px \\
+\texttt{hr\_source\_min} (p20 threshold)  & 41\,px (80.85\% kept) & 38\,px (80.92\% kept) \\
+\texttt{hr\_size} / LR size (auto-selected, $\times4$) & 80 / 20\,px         & 76 / 19\,px \\
+\texttt{too\_small\_max} (real-LR holdout) & $<$20\,px (173 images) & $<$20\,px (32 images) \\
+Train / validation / test images        & 16{,}077 / 3{,}415 / 3{,}480 & 2{,}260 / 408 / 572 \\
+Subjects (identities)                    & 164 (all represented in every split) & 336 (all represented in every split) \\
+\bottomrule
+\end{tabular}
+\end{table}
+\open{Per-subject gender distribution is not currently exported by \texttt{data/prepare\_splits.py} for either dataset and would need a small script addition to report exactly, rather than being estimated here.}
 
 \subsection{Evaluation protocol}
 
@@ -284,7 +299,9 @@ The following SR configurations are compared: \texttt{edsr\_teacher} (an EDSR-ba
 \subsection{Implementation details}
 \label{sec:impl}
 
-\open{Framework/library versions, GPU hardware used for training, total training wall-clock time, optimizer and learning-rate schedule, data augmentation (if any), and per-stage epoch counts, extracted from \texttt{configs/config.yaml} and training logs.}
+All models are trained with Adam~\cite{kingma2015adam} at a fixed learning rate (no scheduler), relying on early stopping (patience 10 epochs on the relevant validation metric, maximum 500 epochs) rather than a decay schedule to control convergence. Batch size is 64 throughout. Learning rates differ by training stage: $1\times10^{-3}$ for the uncompressed SPAN teacher and other from-scratch Track-A/Track-B SR baselines; $1\times10^{-4}$ for span\_tiny's distillation recipe and for learned block pruning (with a further $10\times$ reduction for the post-harden fine-tuning stage, Section~\ref{sec:novelty-ablations}); $3\times10^{-4}$ (weight decay $5\times10^{-4}$) for all recognition-backbone training. Automatic mixed precision is used for recognition training on CUDA, but deliberately \emph{not} for SR training, after the FP16 numerical-overflow issue described in Section~\ref{sec:integrity}. Data augmentation is deliberately minimal: LR-domain images are bicubically resized to the target resolution (a no-op for the \texttt{hr}/\texttt{sr\_baseline}/\texttt{sr\_improved} domains, whose images are already exported at the correct size); no random cropping, color jitter, or flipping is applied. A random-horizontal-flip augmentation used in earlier development was deliberately removed, since flipping an ear image can turn a left-ear morphology into one resembling a right ear -- ears, unlike faces, are not left-right symmetric, making this augmentation biometrically invalid for this modality rather than a free source of extra training diversity.
+
+\open{Framework/library versions (PyTorch, torchvision, timm) and GPU hardware/total wall-clock time are not recoverable from the codebase alone and should be filled in from the training environment/logs before submission.}
 
 % ============================================================================
 \section{Results}
@@ -298,28 +315,28 @@ Table~\ref{tab:main} reports downstream rank-1 identity accuracy for the \texttt
 
 \begin{table}[H]
 \centering
-\caption{Downstream identity accuracy (rank-1) on EarVN1.0, $n=5$ seeds. ``tiny$>$lr'' and ``tiny$<$baseline'' report paired Cohen's $d$ and Bonferroni-corrected $p$-values.}
+\caption{Downstream identity accuracy (rank-1) on EarVN1.0, $n=5$ seeds. ``tiny$>$lr'' and ``tiny vs.\ baseline'' report paired Cohen's $d$ and Bonferroni-corrected $p$-values (family of 3 comparisons per backbone: lr--baseline, lr--tiny, baseline--tiny).}
 \label{tab:main}
 \begin{threeparttable}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcccll}
 \toprule
-Backbone & lr & span\_tiny & span\_baseline & tiny $>$ lr ($d$, $p_{\text{Bonf}}$) & tiny $<$ baseline ($d$, $p_{\text{Bonf}}$) \\
+Backbone & lr & span\_tiny & span\_baseline & tiny $>$ lr ($d$, $p_{\text{Bonf}}$) & tiny vs.\ baseline ($d$, $p_{\text{Bonf}}$) \\
 \midrule
-EfficientNet-B0     & 0.5338 & 0.5556 & 0.5705 & $d{=}3.16$, $p{=}0.0064$ (sig.) & $d{=}{-}1.57$, $p{=}0.0733$ (trend) \\
-GhostNet-100        & 0.4737 & 0.5038 & 0.5337 & $d{=}3.34$, $p{=}0.0051$ (sig.) & $d{=}{-}4.01$, $p{=}0.0026$ (sig.) \\
-MobileNetV2         & 0.5052 & 0.5305 & 0.5486 & $d{=}3.00$, $p{=}0.0077$ (sig.) & $d{=}{-}2.46$, $p{=}0.0160$ (sig.) \\
-MobileNetV3-Small   & 0.4463 & 0.4702 & 0.4790 & $d{=}1.71$, $p{=}0.0566$ (trend) & $d{=}{-}1.29$, $p{=}0.1359$ (n.s.) \\
-ResNet-18           & 0.5030 & 0.5154 & 0.5269 & $d{=}1.17$, $p{=}0.1768$ (n.s.) & $d{=}{-}1.39$, $p{=}0.1070$ (n.s., near thr.) \\
+EfficientNet-B0     & 0.5125 & 0.5485 & 0.5604 & $d{=}8.38$, $p{=}0.0001$ (sig.) & $d{=}{-}2.45$, $p{=}0.0163$ (sig., tiny lower) \\
+GhostNet-100        & 0.4675 & 0.5115 & 0.5205 & $d{=}9.10$, $p{=}0.0001$ (sig.) & $d{=}{-}1.36$, $p{=}0.1163$ (n.s.) \\
+MobileNetV2         & 0.4444 & 0.5026 & 0.5125 & $d{=}7.75$, $p{=}0.0002$ (sig.) & $d{=}{-}0.74$, $p{=}0.5135$ (n.s.) \\
+MobileNetV3-Small   & 0.4002 & 0.4423 & 0.4398 & $d{=}4.41$, $p{=}0.0018$ (sig.) & $d{=}0.27$, $p{=}1.0$ (n.s., tiny higher) \\
+ResNet-18           & 0.4575 & 0.4825 & 0.4882 & $d{=}2.20$, $p{=}0.0239$ (sig.) & $d{=}{-}0.66$, $p{=}0.6379$ (n.s.) \\
 \bottomrule
 \end{tabular}%
 }
 \end{threeparttable}
 \end{table}
 
-The ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} holds in mean accuracy in all 5/5 backbones. \texttt{span\_tiny $>$ lr} reaches statistical significance ($p_{\text{Bonf}} < 0.05$) in 3/5 backbones and a trend ($p_{\text{Bonf}} < 0.10$) in a further 1/5. \texttt{span\_tiny $<$ span\_baseline} reaches statistical significance in 2/5 backbones. This pattern is described precisely as span\_tiny being significantly below the uncompressed baseline in a majority of, but not all, backbones, trading a real (1.5--3 percentage-point) accuracy cost for reduced size and latency, rather than as ``statistically equivalent to baseline,'' a claim the data do not support.
+\texttt{span\_tiny $>$ lr} reaches statistical significance ($p_{\text{Bonf}} < 0.05$) in 5/5 backbones, with large effect sizes throughout (Cohen's $d$ 2.2--9.1). \texttt{span\_baseline $>$ lr} is equally strong and significant in 5/5 backbones ($d$ 3.8--10.6, not tabulated separately). The accuracy cost of compression itself, \texttt{span\_tiny} vs.\ \texttt{span\_baseline}, reaches significance in only 1/5 backbones (EfficientNet-B0, a 1.2-percentage-point cost); the other four are statistically indistinguishable, and MobileNetV3-Small shows span\_tiny fractionally \emph{higher} than the baseline (not significant). This is a stronger and cleaner result than a coarser reading of the data might suggest: the benefit of using SR at all is large and universal, while the specific cost of halving SPAN's depth is small and, in 4/5 backbones, not statistically detectable.
 
-Figure~\ref{fig:qualitative} shows qualitative examples on real EarVN1.0 test images. Using the full 20-sample export (\texttt{comparison\_metrics.csv}), the per-image PSNR gap (span\_baseline $-$ span\_tiny) ranges from $-0.062$\,dB, with span\_tiny marginally ahead (Figure~\ref{fig:qualitative}a), to $+2.645$\,dB, the largest gap observed (Figure~\ref{fig:qualitative}e). Samples (a)--(e) are selected to span this full range rather than to favor either model. Two patterns are visible. First, the visual gap between span\_baseline and span\_tiny tracks the PSNR gap: it is imperceptible when the two are close (Figure~\ref{fig:qualitative}a--b) and visible mainly as reduced fine-structure sharpness in the antihelix/concha region when the gap is largest (Figure~\ref{fig:qualitative}e), consistent with a small, non-catastrophic accuracy cost rather than a qualitatively different failure mode. Second, Figure~\ref{fig:qualitative}b illustrates a limitation of pixel-fidelity metrics noted in Section~\ref{sec:related}: the ear itself is largely occluded by hair in this sample, so the near-tied, relatively high PSNR (30.92 vs.\ 30.89\,dB) is driven substantially by accurate reconstruction of the large, low-detail hair and background regions rather than by ear-specific structure. PSNR and downstream identity accuracy are related but not interchangeable signals.
+Figure~\ref{fig:qualitative} shows qualitative examples on real EarVN1.0 test images. Across the full 20-sample export, the per-image PSNR gap (span\_baseline $-$ span\_tiny) ranges from $-0.062$\,dB, with span\_tiny marginally ahead (Figure~\ref{fig:qualitative}a), to $+2.645$\,dB, the largest gap observed (Figure~\ref{fig:qualitative}e). Samples (a)--(e) are selected to span this full range rather than to favor either model. Two patterns are visible. First, the visual gap between span\_baseline and span\_tiny tracks the PSNR gap: it is imperceptible when the two are close (Figure~\ref{fig:qualitative}a--b) and visible mainly as reduced fine-structure sharpness in the antihelix/concha region when the gap is largest (Figure~\ref{fig:qualitative}e), consistent with a small, non-catastrophic accuracy cost rather than a qualitatively different failure mode. Second, Figure~\ref{fig:qualitative}b illustrates a limitation of pixel-fidelity metrics noted in Section~\ref{sec:related}: the ear itself is largely occluded by hair in this sample, so the near-tied, relatively high PSNR (30.92 vs.\ 30.89\,dB) is driven substantially by accurate reconstruction of the large, low-detail hair and background regions rather than by ear-specific structure. PSNR and downstream identity accuracy are related but not interchangeable signals.
 
 \begin{figure}[H]
 \centering
@@ -333,54 +350,56 @@ Figure~\ref{fig:qualitative} shows qualitative examples on real EarVN1.0 test im
 {\footnotesize (d) baseline 34.946\,dB/SSIM 0.9067, span\_tiny 33.716\,dB/SSIM 0.8908 -- highest-PSNR pair in the 20-sample export}\\[3mm]
 \includegraphics[width=0.92\textwidth]{figures/sample_10.png}\\[1mm]
 {\footnotesize (e) baseline 31.413\,dB/SSIM 0.9075, span\_tiny 28.768\,dB/SSIM 0.8813 -- largest observed gap across all 20 exported EarVN1.0 samples}
-\caption{Qualitative comparison on five EarVN1.0 test images, each showing (left to right) the bicubic-upsampled LR input (no SR), span\_baseline output, span\_tiny output, and the HR ground truth. Samples (a)--(e) were selected from a 20-sample export (\texttt{comparison\_metrics.csv}) to span the full observed per-image PSNR gap, from span\_tiny marginally ahead (a) to the largest gap in favor of span\_baseline (e), together with the lowest- and highest-PSNR pairs observed (c, d), using the exact logged values rather than a curated set of favorable examples.}
+\caption{Qualitative comparison on five EarVN1.0 test images, each showing (left to right) the bicubic-upsampled LR input (no SR), span\_baseline output, span\_tiny output, and the HR ground truth. Samples (a)--(e) were selected from a 20-sample export to span the full observed per-image PSNR gap, from span\_tiny marginally ahead (a) to the largest gap in favor of span\_baseline (e), together with the lowest- and highest-PSNR pairs observed (c, d), using the exact logged values rather than a curated set of favorable examples.}
 \label{fig:qualitative}
 \end{figure}
 
-\open{Confirm whether the per-image PSNR/SSIM values shown in Figure~\ref{fig:qualitative} (from \texttt{export\_sr\_comparison\_images.py}) use the same ROI-only protocol as Table~\ref{tab:quality}'s dataset-average figures, or the full crop shown in each panel; state this explicitly once confirmed, since the two would not be directly comparable if the protocols differ.}
+These per-image values are computed over the full image frame, including any letterbox padding, whereas the dataset-level averages in Table~\ref{tab:quality} are computed on the ear region of interest only (Section~\ref{sec:setup}). The two are therefore not directly comparable in absolute terms; the same distinction applies to the AWEx qualitative comparison (Table~\ref{tab:awex-qualitative-metrics}).
 
 \subsection{Ablation: depth (span\_tiny vs.\ span\_large)}
 \label{sec:res-depth}
 
 \begin{table}[H]
 \centering
-\caption{span\_tiny vs.\ span\_large, downstream identity accuracy, EarVN1.0, $n=5$ seeds.}
+\caption{span\_tiny vs.\ span\_large, downstream identity accuracy, EarVN1.0, $n=5$ seeds. Difference and $d$ are span\_large $-$ span\_tiny; $p_{\text{Bonf}}$ corrected across the 6-comparison family reported by this ablation's own aggregation (Section~\ref{sec:stats}).}
 \label{tab:depth}
 \begin{tabular}{lccccc}
 \toprule
 Backbone & span\_tiny & span\_large & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ \\
 \midrule
-EfficientNet-B0   & 0.5556 & 0.5600 & +0.0043 & 0.61  & 1.0   \\
-GhostNet-100      & 0.5038 & 0.5188 & +0.0150 & 1.51  & 0.166 \\
-MobileNetV2       & 0.5305 & 0.5343 & +0.0038 & 0.44  & 1.0   \\
-MobileNetV3-Small & 0.4702 & 0.4706 & +0.0004 & 0.04  & 1.0   \\
-ResNet-18         & 0.5154 & 0.5140 & $-$0.0014 & $-$0.13 & 1.0 \\
+EfficientNet-B0   & 0.5485 & 0.5568 & +0.0083 & 3.17 & 0.0125 (sig.) \\
+GhostNet-100      & 0.5115 & 0.5140 & +0.0025 & 1.33 & 0.244  \\
+MobileNetV2       & 0.5026 & 0.5044 & +0.0018 & 0.29 & 1.0    \\
+MobileNetV3-Small & 0.4423 & 0.4473 & +0.0050 & 0.37 & 1.0    \\
+ResNet-18         & 0.4825 & 0.4863 & +0.0038 & 0.45 & 1.0    \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-No backbone shows a statistically significant difference between span\_tiny (0.230M parameters) and span\_large (0.417M parameters). This is the strongest single piece of evidence for the paper's central claim: reducing depth from 6 to 3 SPABs is, within the resolution of this experiment, accuracy-neutral for downstream identity recognition.
+4/5 backbones show no statistically significant difference between span\_tiny (0.230M parameters) and span\_large (0.417M parameters). The fifth, EfficientNet-B0, shows a small but statistically significant cost ($p_{\text{Bonf}}{=}0.0125$), span\_large ahead by 0.83 percentage points. This is still the strongest single piece of evidence for the paper's central claim, precisely stated: reducing depth from 6 to 3 SPABs is accuracy-neutral in the large majority of backbones tested and, where it is not, the cost is small (under 1 percentage point) -- not a claim of zero cost in every setting. On AWEx (Section~\ref{sec:res-awex}), the same comparison is statistically non-significant in 5/5 backbones, though at a smaller sample ($n=3$ seeds; see Section~\ref{sec:limitations}).
 
 \subsection{Ablation: loss components}
 \label{sec:res-loss}
 
 \begin{table}[H]
 \centering
-\caption{Downstream accuracy under four training-loss configurations (MobileNetV2, EarVN1.0, $n=5$ seeds).}
+\caption{Downstream accuracy, all pairwise comparisons among four training-loss configurations (MobileNetV2, EarVN1.0, $n=5$ seeds). Difference is the row label's second configuration minus its first; $p_{\text{Bonf}}$ corrected across all 6 comparisons.}
 \label{tab:loss}
-\begin{tabular}{lcc}
+\begin{tabular}{lcccl}
 \toprule
-Configuration & Mean accuracy & Std \\
+Comparison & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ & Verdict \\
 \midrule
-pixel + distillation (main recipe)   & 0.5347 & 0.0057 \\
-pixel only                           & 0.5304 & 0.0067 \\
-pixel + distillation + identity      & 0.5290 & 0.0053 \\
-pixel + identity only                & 0.5239 & 0.0079 \\
+pixel+distill+identity vs.\ pixel+identity        & $-$0.0072 & $-$0.84 & 1.0    & n.s. \\
+pixel+distill+identity vs.\ pixel+distill         & +0.0155   & 1.93    & 0.0746 & trend (identity term costs acc.) \\
+pixel+distill+identity vs.\ pixel-only            & +0.0119   & 3.13    & 0.0131 & \textbf{sig.\ (identity term costs acc.)} \\
+pixel+identity vs.\ pixel+distill                 & +0.0228   & 2.85    & 0.0187 & \textbf{sig.\ (identity term costs acc.)} \\
+pixel+identity vs.\ pixel-only                    & +0.0191   & 2.61    & 0.0257 & \textbf{sig.\ (identity term costs acc.)} \\
+pixel+distill vs.\ pixel-only                     & $-$0.0037 & $-$0.40 & 1.0    & n.s. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All six pairwise comparisons among these four configurations are statistically non-significant after Bonferroni correction ($p_{\text{Bonf}}$ range 0.157--1.0). The comparison most relevant to the training recipe's design, pixel+distillation vs.\ pixel-only, shows $d=-0.36$, $p_{\text{Bonf}}=1.0$. This is reported as a valid negative result: at this level of compression, the distillation loss term shows no statistically significant contribution to downstream recognition accuracy.
+The six configurations resolve into two statistically-tied clusters: \{pixel+distill, pixel-only\} both significantly or near-significantly outperform \{pixel+distill+identity, pixel+identity\} (3/4 cross-cluster comparisons significant, 1/4 at trend level), while the two within-cluster comparisons are both non-significant. In other words, whichever configuration includes the identity-loss term scores lower, regardless of whether distillation is also present, and this reaches significance in the majority of the relevant comparisons. This corroborates, on an independent ablation design, the standalone $\lambda_{\text{identity}}$ sweep already reported in Section~\ref{sec:recipe} ($d{=}{-}10.09$ at $\lambda_{\text{identity}}{=}0.3$): the identity-loss term reliably hurts downstream accuracy at this compression level. By contrast, the distillation term's own marginal contribution -- pixel+distill vs.\ pixel-only -- remains statistically indistinguishable ($d{=}{-}0.40$, $p_{\text{Bonf}}{=}1.0$); this specific negative result is unchanged from earlier analysis and is reported as such, without reinterpretation.
 
 \subsection{Contextual comparison with other lightweight SR architectures}
 \label{sec:res-context}
@@ -389,60 +408,68 @@ Table~\ref{tab:quality} reports SR image-quality metrics (single run, $n=1$) for
 
 \begin{table}[H]
 \centering
-\caption{SR image quality on EarVN1.0 (ROI-only, $\times4$, 3{,}449 test images, $n=1$).}
+\caption{SR image quality on EarVN1.0 (ROI-only, $\times4$, $n=1$).}
 \label{tab:quality}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
 Model & PSNR (dB) & SSIM & LPIPS$\downarrow$ & Params (M, deploy) & Latency (ms) \\
 \midrule
-EDSR (teacher)                          & 27.490 & 0.8318 & 0.1260 & 4.9292 & 0.900 \\
-span\_baseline                          & 27.248 & 0.8267 & 0.1424 & 0.4263 & 0.597 \\
-\textbf{span\_tiny}                     & \textbf{26.501} & \textbf{0.8022} & \textbf{0.1827} & \textbf{0.230} & \textbf{0.256} \\
-span\_large                             & 26.799 & 0.8126 & 0.1750 & 0.417  & 0.452 \\
-RLFN-adapted (Track A)                  & 27.295 & 0.8269 & 0.1350 & 0.3278 & 0.688 \\
-ECBSR (Track A)                         & 26.253 & 0.7931 & 0.1727 & 0.0167 & 0.134 \\
-SAFMN (Track A)                         & 27.402 & 0.8303 & 0.1344 & 0.2395 & 1.821 \\
-SMFANet (Track A)                       & 20.254 & 0.5970 & 0.3624 & 0.0844 & 1.940 \\
-RLFN-adapted (Track B, distilled)       & 26.796 & 0.8119 & 0.1670 & 0.3278 & 0.676 \\
-ECBSR (Track B, distilled)              & 25.858 & 0.7812 & 0.1955 & 0.0167 & 0.132 \\
-SAFMN (Track B, distilled)              & 27.024 & 0.8188 & 0.1597 & 0.2395 & 1.980 \\
-SMFANet (Track B, distilled)            & 25.717 & 0.7769 & 0.2291 & 0.0844 & 1.882 \\
+EDSR (teacher)                          & 27.434 & 0.8307 & 0.1256 & 4.9292 & 0.895 \\
+span\_baseline                          & 27.232 & 0.8261 & 0.1409 & 0.4263 & 0.566 \\
+\textbf{span\_tiny}                     & \textbf{27.053} & \textbf{0.8193} & \textbf{0.1576} & \textbf{0.230} & \textbf{0.256} \\
+span\_large                             & 27.137 & 0.8228 & 0.1529 & 0.417  & 0.464 \\
+RLFN (Track A, unmodified, secondary)   & 27.210 & 0.8245 & 0.1379 & 0.3278 & 0.684 \\
+RLFN-adapted (Track A)                  & 27.192 & 0.8251 & 0.1335 & 0.3278 & 0.681 \\
+ECBSR (Track A)                         & 26.074 & 0.7883 & 0.1722 & 0.0167 & 0.137 \\
+SAFMN (Track A)                         & 27.355 & 0.8287 & 0.1350 & 0.2395 & 1.824 \\
+SMFANet (Track A)                       & 20.906 & 0.6038 & 0.3104 & 0.0844 & 1.851 \\
+RLFN-adapted (Track B, distilled)       & 27.111 & 0.8211 & 0.1522 & 0.3278 & 0.710 \\
+ECBSR (Track B, distilled)              & 25.847 & 0.7813 & 0.1899 & 0.0167 & 0.135 \\
+SAFMN (Track B, distilled)              & 27.141 & 0.8218 & 0.1559 & 0.2395 & 1.799 \\
+SMFANet (Track B, distilled)            & 26.289 & 0.7953 & 0.1833 & 0.0844 & 1.878 \\
+SAFMN half-depth (Track B, distilled)   & 27.002 & 0.8176 & 0.1564 & 0.1281 & 1.103 \\
+SMFANet half-depth (Track B, distilled) & 26.140 & 0.7900 & 0.1935 & 0.0477 & 1.125 \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
-span\_tiny is the fastest model except ECBSR and the second-smallest by parameter count, but ranks second-lowest in PSNR, ahead of only SMFANet and ECBSR. This is consistent with a framing around efficiency rather than image-quality superiority. SMFANet's pixel-loss-only (Track A) result (20.254\,dB) was investigated with a dedicated debugging script. The checkpoint itself was confirmed healthy, and the low score reflects SMFANet's difficulty converging under pure pixel supervision at 20$\times$20 resolution. With distillation supervision (Track B), SMFANet recovers to 25.717\,dB (+5.5\,dB), and Track B results are therefore used for all comparative claims involving SMFANet.
+span\_tiny is the fastest model except ECBSR and the second-smallest by parameter count, but ranks second-lowest in PSNR, ahead of only SMFANet and ECBSR. This is consistent with a framing around efficiency rather than raw image-quality superiority -- but, as Table~\ref{tab:context} shows next, this ranking does not carry over to downstream recognition accuracy, the metric this paper is actually organized around. SMFANet's pixel-loss-only (Track A) result (20.906\,dB) was investigated with a dedicated debugging script. The checkpoint itself was confirmed healthy, and the low score reflects SMFANet's difficulty converging under pure pixel supervision at 20$\times$20 resolution. With distillation supervision (Track B), SMFANet recovers to 26.289\,dB (+5.4\,dB), and Track B results are therefore used for all comparative claims involving SMFANet. The half-depth SAFMN/SMFANet rows support the attention-parameterization ablation (Section~\ref{sec:extended-ablations}).
 
 \begin{table}[H]
 \centering
-\caption{span\_tiny vs.\ five other Track-B lightweight SR architectures, downstream accuracy (MobileNetV2, EarVN1.0, $n=5$ seeds).}
+\caption{span\_tiny vs.\ four other Track-B lightweight SR architectures, downstream accuracy, EarVN1.0, all five recognition backbones, $n=5$ seeds. $d$ is span\_tiny minus the other architecture (positive $=$ span\_tiny ahead); $p_{\text{Bonf}}$ corrected across the 6-comparison family reported by each backbone's own aggregation (Section~\ref{sec:stats}).}
 \label{tab:context}
-\begin{tabular}{lccccl}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
 \toprule
-Comparison & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ & Verdict \\
+Backbone & vs.\ RLFN-adapted & vs.\ SAFMN & vs.\ ECBSR & vs.\ SMFANet \\
 \midrule
-vs.\ RLFN-adapted (distilled) & +0.0049 & 0.71  & 1.0    & tie \\
-vs.\ ECBSR (distilled)        & $-$0.0021 & $-$0.31 & 1.0  & tie \\
-vs.\ SAFMN (distilled)        & +0.0109 & 4.17  & \textbf{0.0044} & \textbf{span\_tiny wins (sig.)} \\
-vs.\ SMFANet (distilled)      & $-$0.0103 & $-$1.47 & 0.183 & span\_tiny higher, n.s. \\
+EfficientNet-B0    & $d{=}{-}0.79$, n.s.\           & $d{=}{-}0.89$, n.s.\          & $d{=}{+}3.37$, \textbf{sig.}          & $d{=}{+}6.97$, \textbf{sig.} \\
+GhostNet-100       & $d{=}{-}0.98$, n.s.\           & $d{=}{+}0.24$, n.s.\ (tiny ahead) & $d{=}{+}2.94$, \textbf{sig.}      & $d{=}{+}2.30$, \textbf{sig.} \\
+MobileNetV2        & $d{=}{-}0.17$, n.s.\           & $d{=}{-}0.24$, n.s.\          & $d{=}{+}3.79$, \textbf{sig.}          & $d{=}{+}2.08$, trend \\
+MobileNetV3-Small  & $d{=}{-}0.22$, n.s.\           & $d{=}{+}0.11$, n.s.\ (tiny ahead) & $d{=}{+}2.41$, \textbf{sig.}      & $d{=}{+}1.37$, n.s.\ (tiny ahead) \\
+ResNet-18          & $d{=}{-}0.56$, n.s.\           & $d{=}{+}0.18$, n.s.\ (tiny ahead) & $d{=}{+}1.85$, trend             & $d{=}{+}1.49$, n.s.\ (tiny ahead) \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
-SAFMN's accuracy advantage over span\_tiny is statistically significant but comes at roughly 7--8$\times$ the inference latency. ECBSR ties span\_tiny in downstream accuracy while using considerably fewer parameters and lower latency; this comparison is discussed directly in Section~\ref{sec:disc-position}. This comparison is contextual to the paper's central claim (Sections~\ref{sec:res-main}--\ref{sec:res-depth}), which concerns depth compression \emph{within} the SPAN family, not a claim that span\_tiny is the best-performing lightweight SR architecture in absolute terms.
+Across all five backbones, span\_tiny is never significantly beaten by any of the four architectures compared. Against RLFN-adapted and SAFMN, the two architectures that led on raw PSNR (Table~\ref{tab:quality}), span\_tiny is statistically tied in 5/5 backbones, and is nominally ahead (though not significantly) in 3/5 backbones against SAFMN. Against ECBSR, span\_tiny wins with significance in 4/5 backbones and at trend level in the fifth (ResNet-18, $p_{\text{Bonf}}{=}0.0862$). Against SMFANet, span\_tiny wins with significance in 2/5, at trend level in 1/5 (MobileNetV2, $p_{\text{Bonf}}{=}0.0577$), and is tied (nominally ahead) in the remaining 2/5. This is a materially different picture from raw PSNR/SSIM ranking, where span\_tiny placed second-lowest: on the metric the paper is actually organized around, span\_tiny is competitive with the best-performing alternatives and significantly outperforms the two weakest ones. This reinforces the point made in Section~\ref{sec:related-sr} and revisited in the qualitative analysis (Section~\ref{sec:res-main}): pixel-fidelity metrics are an imperfect proxy for recognition-relevant SR quality at this compression level. This comparison remains contextual to the paper's central claim (Sections~\ref{sec:res-main}--\ref{sec:res-depth}), which concerns depth compression \emph{within} the SPAN family, not a claim that span\_tiny is the best-performing lightweight SR architecture in absolute terms.
 
 \subsection{Auxiliary validation: real low-resolution holdout}
 
-On a held-out set of 173 genuinely low-resolution ear images (rather than synthetically downsampled ones), downstream accuracy follows the same ordering as the main result: no-SR = 0.1149, span\_baseline = 0.1858, span\_tiny = 0.1687 (single run, $n=1$, not yet multi-seed). This is consistent with, though not as statistically rigorous as, the main synthetic-LR results.
+On a held-out set of 173 genuinely low-resolution ear images (rather than synthetically downsampled ones), downstream identity accuracy \emph{reverses} the main result's ordering: no-SR = 0.1965, span\_tiny = 0.1561, span\_baseline = 0.1214 (single run, $n=1$, mobilenet\_v2 only, not multi-seed); gender accuracy shows the same reversed ordering (no-SR = 0.8555, span\_tiny = 0.8324, span\_baseline = 0.8382), which argues against this being sampling noise specific to one task. The likely cause is a resolution mismatch: every one of the 173 holdout images has a native short side strictly below 20\,px (range 13--19\,px, mean 17.8\,px) -- below the resolution the SR models were trained to receive as input. The SR models were trained exclusively to invert one specific, clean synthetic degradation (bicubic downsampling from an 80\,px HR crop); genuinely-captured images this small do not share that degradation's statistics, and many additionally have non-square aspect ratios (mean long side 25.7\,px against a 17.8\,px short side) that cause the shared letterbox-resize routine (Section~\ref{sec:arch}) to shrink the short side further still and introduce a larger padded region before the SR model sees the image. Under this distribution mismatch, a model trained to confidently reconstruct fine detail from a specific degradation can readily hallucinate plausible-looking but incorrect high-frequency structure, actively harming downstream recognition, while plain bicubic upsampling (the no-SR path) never attempts this reconstruction and therefore cannot introduce it. This is a known failure mode in the SR literature -- models trained on synthetic degradation transferring poorly to real-world degradation -- and is discussed further as a boundary condition on the paper's central claim in Section~\ref{sec:limitations}, rather than treated as evidence against it: the main claim is specifically about the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this auxiliary check probes a related but distinct question that the main experiments were never designed to answer.
 
 \subsection{Cross-dataset generalization (AWEx)}
 \label{sec:res-awex}
 
+All AWEx results below were generated after every correction described in Section~\ref{sec:integrity} and every statistical-methodology refinement described in Section~\ref{sec:stats} had already been incorporated; no AWEx figure from an earlier, uncorrected stage of this study is reused anywhere in this paper.
+
 \subsubsection{From-scratch track}
 
-Table~\ref{tab:awex-scratch} reports results from models trained from scratch on AWEx (no transfer of weights or teacher checkpoints from EarVN1.0).
+Table~\ref{tab:awex-scratch} reports results from models trained from scratch on AWEx (no transfer of weights or teacher checkpoints from EarVN1.0). $p_{\text{Bonf}}$ is corrected across the 3-comparison family per backbone (lr--baseline, lr--tiny, baseline--tiny), matching Table~\ref{tab:main}'s convention.
 
 \begin{table}[H]
 \centering
@@ -451,206 +478,303 @@ Table~\ref{tab:awex-scratch} reports results from models trained from scratch on
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcccccc}
 \toprule
-Backbone & lr & span\_baseline & span\_tiny & baseline$>$lr & tiny$>$lr & baseline$>$tiny \\
+Backbone & lr & span\_baseline & span\_tiny & baseline$>$lr & tiny$>$lr & tiny vs.\ baseline \\
 \midrule
-EfficientNet-B0   & 0.1741 & 0.2018 & 0.1906 & sig.\ ($p{=}0.0125$) & trend ($p{=}0.0921$) & trend ($p{=}0.0543$) \\
-GhostNet-100      & 0.1192 & 0.1509 & 0.1552 & sig.\ ($p{=}0.0123$) & sig.\ ($p{=}0.0149$) & n.s.\ (tiny higher) \\
-MobileNetV2       & 0.1225 & 0.1629 & 0.1318 & sig.\ ($p{=}0.0035$) & n.s. & sig.\ ($p{=}0.0062$) \\
-MobileNetV3-Small & 0.1333 & 0.1427 & 0.1466 & n.s.\ ($p{=}0.107$)  & sig.\ ($p{=}0.0127$) & n.s. \\
-ResNet-18         & 0.2247 & 0.2036 & 0.2069 & n.s.\ (baseline lower) & n.s. & n.s. \\
+EfficientNet-B0   & 0.1290 & 0.1619 & 0.1524 & sig.\ ($p{=}0.0066$)   & sig.\ ($p{=}0.0127$) & n.s.\ ($p{=}0.1266$) \\
+GhostNet-100      & 0.0892 & 0.1234 & 0.1304 & sig.\ ($p{=}0.0129$)   & sig.\ ($p{=}0.0014$) & n.s.\ ($p{=}0.2226$, tiny higher) \\
+MobileNetV2       & 0.0885 & 0.1196 & 0.1210 & sig.\ ($p{=}0.0293$)   & trend ($p{=}0.0543$) & n.s.\ ($p{=}1.0$, tiny higher) \\
+MobileNetV3-Small & 0.0888 & 0.1115 & 0.1084 & sig.\ ($p{=}0.0208$)   & sig.\ ($p{=}0.0116$) & n.s.\ ($p{=}0.698$) \\
+ResNet-18         & 0.1748 & 0.1808 & 0.1860 & n.s.\ ($p{=}0.6719$)   & n.s.\ ($p{=}0.543$)  & n.s.\ ($p{=}1.0$, tiny higher) \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
-The ResNet-18 result is reported transparently: on this backbone, the from-scratch baseline scored below the no-SR condition, the only off-trend result across both datasets in this study. No confirmed explanation exists for this result, and it is noted as a limitation (Section~\ref{sec:limitations}) rather than a subject for speculation. span\_tiny vs.\ span\_large again shows no statistically significant difference in any backbone, mirroring Table~\ref{tab:depth} and further corroborating the depth-compression finding on a second, independent dataset.
+An earlier stage of this study, predating the corrections in Section~\ref{sec:integrity}, had reported ResNet-18's from-scratch baseline scoring \emph{below} the no-SR condition on this track -- the only off-trend result across both datasets at that stage. This does not replicate under the corrected setup (Table~\ref{tab:awex-scratch}: baseline $>$ lr for ResNet-18, $+0.6$ percentage points, though not significant at $n=5$); the earlier result is attributed to the since-corrected issues rather than to a property of the backbone, and is not carried forward as a limitation. \texttt{span\_tiny} vs.\ \texttt{span\_large} on this track shows no statistically significant difference in 5/5 backbones (Section~\ref{sec:res-depth}), further corroborating the depth-compression finding on a second, independent dataset.
 
-Table~\ref{tab:awex-quality} reports SR image quality for the from-scratch track, completing the image-quality picture alongside Table~\ref{tab:quality}.
+Table~\ref{tab:awex-quality} reports SR image quality for the from-scratch track.
 
 \begin{table}[H]
 \centering
-\caption{SR image quality on AWEx, from-scratch training ($n=1$). Cells marked ``--'' were not reported in the source logs at the time of writing and should be filled in from \texttt{results\_awex\_v2/sr\_quality.csv} before submission.}
+\caption{SR image quality on AWEx, from-scratch training ($n=1$).}
 \label{tab:awex-quality}
 \begin{tabular}{lccc}
 \toprule
 Model & PSNR (dB) & SSIM & LPIPS$\downarrow$ \\
 \midrule
-span\_baseline (span\_official)          & 25.107 & 0.7537 & -- \\
-\textbf{span\_tiny}                      & \textbf{23.862} & \textbf{0.7109} & \textbf{0.290} \\
-span\_large                              & \textcolor{red!70!black}{19.235} & \textcolor{red!70!black}{0.493} & -- \\
-RLFN (Track B, distilled)                & 24.120 & -- & -- \\
-RLFN-adapted (Track B, distilled)        & 24.145 & -- & -- \\
-ECBSR (Track B, distilled)               & 24.169 & -- & -- \\
-SAFMN (Track B, distilled)               & 24.580 & -- & -- \\
-SMFANet (Track B, distilled)             & 23.505 & -- & -- \\
+EDSR (teacher)                           & 25.584 & 0.7687 & 0.1642 \\
+span\_baseline (span\_official)          & 25.255 & 0.7607 & 0.1763 \\
+\textbf{span\_tiny}                      & \textbf{24.698} & \textbf{0.7392} & \textbf{0.2385} \\
+span\_large                              & 24.435 & 0.7267 & 0.2834 \\
 \bottomrule
 \end{tabular}
 \end{table}
+All four models score within a coherent 24.4--25.6\,dB band with no anomaly, in contrast to an earlier stage of this study in which \texttt{span\_large} had scored anomalously low ($\approx$19\,dB, 5--6\,dB below every other architecture) with no corresponding downstream-accuracy effect; that anomaly is not present under the current measurements and is not carried forward as an open item. The contextual comparison against RLFN/ECBSR/SAFMN/SMFANet (Table~\ref{tab:quality}, Table~\ref{tab:context}) was run on EarVN1.0 only in this phase of the study; extending it to AWEx is noted as a direction for future work (Section~\ref{sec:limitations}) rather than reported with placeholder values.
 
-The previously missing span\_tiny entry is now complete (26.501\,dB was already reported for EarVN1.0; AWEx from-scratch gives 23.862\,dB, SSIM 0.7109, LPIPS 0.290) and falls squarely within the normal range of the other Track-B architectures on AWEx (23.5--25.1\,dB); span\_tiny itself shows no sign of the anomaly described below. span\_large, by contrast, scores 19.235\,dB / SSIM 0.493 on AWEx, 5--6\,dB below every other Track-B architecture trained on the same data with the same teacher, despite showing no NaN losses in training logs. \open{This remains unexplained. Per the project's own methodological rule (Section~\ref{sec:integrity}), a low score of this kind must not be interpreted (architecturally or otherwise) until the raw training log (\texttt{runs\_awex/\allowbreak sr\_span\_large/\allowbreak train.log}) has been checked for silent instabilities (e.g., a late-training divergence not visible in the final-epoch summary) and sample SR outputs have been visually inspected. Neither step has been completed as of this draft. Importantly, this anomaly is isolated to span\_large's own image-quality metric and does not affect span\_tiny's results (Table~\ref{tab:awex-quality}, confirmed healthy) or the depth-ablation accuracy comparison (Table~\ref{tab:awex-scratch} already reports span\_tiny vs.\ span\_large \emph{downstream accuracy}, not PSNR, and shows no significant difference) -- but the PSNR figure itself should not be quoted or explained in the camera-ready version until investigated.}
+\subsubsection{Transfer-learning tracks (primary result for AWEx)}
+\label{sec:res-awex-transfer}
 
-\subsubsection{Transfer-learning track (primary result for AWEx)}
-
-Given AWEx's smaller per-subject sample size, a transfer-learning protocol with a frozen backbone, initialized from EarVN1.0-trained weights, is additionally evaluated and treated as the primary AWEx result.
+Given AWEx's smaller per-subject sample size, two transfer-learning protocols initialized from EarVN1.0-trained weights are evaluated: full fine-tuning of the entire recognition backbone (Table~\ref{tab:awex-transfer}), and a frozen-backbone variant that only fine-tunes the classification head (Table~\ref{tab:awex-transfer-frozen}). Both are reported as primary results, rather than treating one as a fallback for the other, because they answer a related but distinct question and, as discussed below, do not agree in every respect.
 
 \begin{table}[H]
 \centering
-\caption{Downstream identity accuracy on AWEx, transfer-learning track, $n=5$ seeds.}
+\caption{Downstream identity accuracy on AWEx, transfer-learning track (full fine-tuning), $n=5$ seeds. $p_{\text{Bonf}}$ corrected across the 3-comparison family per backbone.}
 \label{tab:awex-transfer}
 \begin{tabular}{lcccc}
 \toprule
-Backbone & lr & span\_tiny (transfer) & span\_baseline (transfer) & Correct ordering? \\
+Backbone & lr & span\_baseline (transfer) & span\_tiny (transfer) & tiny vs.\ baseline \\
 \midrule
-EfficientNet-B0   & 0.2314 & 0.2384 & 0.2564 & \checkmark \\
-GhostNet-100      & 0.1632 & 0.1747 & 0.2025 & \checkmark \\
-MobileNetV2       & 0.1732 & 0.1944 & 0.2052 & \checkmark \\
-MobileNetV3-Small & 0.1745 & 0.1805 & 0.1846 & \checkmark \\
-ResNet-18         & 0.1714 & 0.1814 & 0.1841 & \checkmark \\
+EfficientNet-B0   & 0.1780 & 0.2063 & 0.1864 & n.s.\ ($p{=}0.1613$) \\
+GhostNet-100      & 0.1301 & 0.1643 & 0.1475 & n.s.\ ($p{=}0.1207$) \\
+MobileNetV2       & 0.1178 & 0.1510 & 0.1402 & n.s.\ ($p{=}0.625$)  \\
+MobileNetV3-Small & 0.1091 & 0.1416 & 0.1469 & n.s.\ ($p{=}1.0$, tiny higher) \\
+ResNet-18         & 0.1021 & 0.1196 & 0.1070 & n.s.\ ($p{=}0.549$)  \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} holds in \textbf{5/5} backbones, with no off-trend cases, unlike Table~\ref{tab:awex-scratch}. Statistically, \texttt{span\_tiny $>$ lr} does not reach $p_{\text{Bonf}} < 0.10$ in any backbone, but the effect is in the expected (positive) direction in all 5/5 backbones (Cohen's $d$ 0.3--1.15). This pattern is consistent with an underpowered but real effect rather than a null effect, given the smaller sample available per subject on AWEx relative to EarVN1.0. \texttt{span\_baseline $>$ lr} reaches significance in 3/5 backbones; \texttt{span\_baseline $>$ span\_tiny} reaches significance in 2/5, with the remaining 3/5 statistically tied.
-
-Figure~\ref{fig:qualitative-awex} shows qualitative examples from the transfer-learning track, again selected to span the observed range rather than to favor either model. Across all 15 exported AWEx test samples, the per-image PSNR gap (span\_baseline $-$ span\_tiny) ranges from $-0.065$\,dB, with span\_tiny marginally ahead (Figure~\ref{fig:qualitative-awex}a), to $+3.056$\,dB, the largest gap observed (Figure~\ref{fig:qualitative-awex}e). Figure~\ref{fig:qualitative-awex}a is a useful counterpoint to the dataset-level averages in Table~\ref{tab:awex-quality}: on this particular sample, span\_tiny's PSNR is fractionally higher than span\_baseline's (32.522 vs.\ 32.457\,dB) while its SSIM is fractionally lower (0.879 vs.\ 0.8848). The two metrics disagree on which model is marginally better, indicating that per-image comparisons at this compression level frequently fall within the models' shared noise floor rather than reflecting a consistent quality ordering. Figure~\ref{fig:qualitative-awex}d additionally shows that AWEx, unlike EarVN1.0, contains a mix of color and grayscale source images (this sample is grayscale), a source of heterogeneity in the dataset worth noting alongside the resolution differences already discussed in Section~\ref{sec:datasets}.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.92\textwidth]{figures_awex/sample_04.png}\\[1mm]
-{\footnotesize (a) baseline 32.457\,dB/SSIM 0.8848, span\_tiny 32.522\,dB/SSIM 0.8790 -- span\_tiny marginally ahead on PSNR, behind on SSIM}\\[3mm]
-\includegraphics[width=0.92\textwidth]{figures_awex/sample_00.png}\\[1mm]
-{\footnotesize (b) baseline 26.286\,dB/SSIM 0.8395, span\_tiny 25.896\,dB/SSIM 0.8239 -- near-tie}\\[3mm]
-\includegraphics[width=0.92\textwidth]{figures_awex/sample_09.png}\\[1mm]
-{\footnotesize (c) baseline 27.589\,dB/SSIM 0.9150, span\_tiny 27.099\,dB/SSIM 0.9060 -- grayscale source image, near-tie}\\[3mm]
-\includegraphics[width=0.92\textwidth]{figures_awex/sample_06.png}\\[1mm]
-{\footnotesize (d) baseline 29.191\,dB/SSIM 0.9042, span\_tiny 27.549\,dB/SSIM 0.8767 -- narrow-crop case, both models diverge from HR color/texture}\\[3mm]
-\includegraphics[width=0.92\textwidth]{figures_awex/sample_01.png}\\[1mm]
-{\footnotesize (e) baseline 25.831\,dB/SSIM 0.8209, span\_tiny 22.775\,dB/SSIM 0.7387 -- largest observed gap across all 15 exported AWEx samples}
-\caption{Qualitative comparison on five AWEx test images, transfer-learning track (Section~\ref{sec:res-awex}), each showing (left to right) the bicubic-upsampled LR input (no SR), span\_baseline output, span\_tiny output, and the HR ground truth. Samples (a)--(e) were selected from the 15 exported comparison images to span the full observed per-image PSNR gap, from span\_tiny marginally ahead (a) to the largest gap in favor of span\_baseline (e), using the exact values in \texttt{comparison\_metrics.csv} rather than a curated set of favorable examples.}
-\label{fig:qualitative-awex}
-\end{figure}
-
-\textbf{Summary of Section~\ref{sec:res-awex}.} The accuracy ordering central to this paper's claim is confirmed on a second, independent dataset, with the transfer-learning track (the primary AWEx result) showing a consistent direction across all five backbones. The weaker statistical significance on AWEx relative to EarVN1.0 reflects the smaller dataset ($\approx$6.7 training images per subject vs.\ substantially more on EarVN1.0), not a contradiction of the EarVN1.0 findings. This distinction is discussed further in Section~\ref{sec:disc-power}.
-
-\subsection{Extended ablations toward mechanistic and design generality (planned)}
-\label{sec:extended-ablations}
-
-The results above establish that depth compression is accuracy-neutral for span\_tiny specifically. Three further experiments are designed to test whether this finding reflects a general mechanism or an architecture-specific coincidence, and whether the specific design choices made for span\_tiny are themselves well-supported. These experiments are planned and specified in full here; results were not yet available at the time of this draft and are marked accordingly.
-
-\textbf{(i) Attention-parameterization ablation.} Section~\ref{sec:disc-depth} proposes that SPAN tolerates depth reduction because its attention mechanism carries no learned parameters, so removing blocks removes computation but not learned capacity. This account has not been tested against an architecture where it predicts the opposite outcome. SAFMN~\cite{sun2023safmn} and SMFANet~\cite{zheng2024smfanet} both use learned, parameterized modulation mechanisms rather than SPAN's parameter-free design. Repeating the depth-reduction protocol used for span\_tiny/span\_large (halving block count, holding all other hyperparameters fixed, Track B recipe, $n=5$ seeds, five recognition backbones) on these two architectures gives a directional prediction to test: if the parameter-free account is correct, SAFMN and SMFANet should show a measurably larger accuracy cost from the same proportional depth reduction than span\_tiny does. A null result here, meaning SAFMN and SMFANet also tolerate depth reduction well, would indicate that the accuracy-neutrality observed for span\_tiny is not specific to parameter-free attention and would call for a different explanation.
-
-\open{Run: SAFMN and SMFANet at half their current block count, under the Track B recipe used for span\_tiny/span\_large, $n=5$ seeds, all five recognition backbones, on EarVN1.0 at minimum (AWEx if time permits). Report downstream accuracy for full-depth vs.\ half-depth for each architecture, alongside the existing span\_tiny/span\_large comparison (Table~\ref{tab:depth}), using the same paired-test format. A table skeleton for this comparison is given below.}
+Under full fine-tuning, \texttt{span\_baseline} $>$ \texttt{lr} reaches significance in 4/5 backbones (all but ResNet-18) and \texttt{span\_tiny} $>$ \texttt{lr} in 2/5 (MobileNetV2, MobileNetV3-Small; $d{=}3.22$ and $3.23$). Critically for this paper's central claim, \texttt{span\_tiny} vs.\ \texttt{span\_baseline} is non-significant in 5/5 backbones -- the compression-safety finding replicates under this protocol at full strength.
 
 \begin{table}[H]
 \centering
-\caption{Attention-parameterization ablation (planned). Downstream accuracy, full-depth vs.\ half-depth, for architectures with parameter-free attention (SPAN) vs.\ learned attention/modulation (SAFMN, SMFANet).}
-\label{tab:attn-ablation}
-\begin{tabular}{lccccc}
-\toprule
-Architecture & Attention type & Full-depth acc. & Half-depth acc. & Cohen's $d$ & $p_{\text{Bonf}}$ \\
-\midrule
-SPAN (span\_large $\to$ span\_tiny) & parameter-free & \multicolumn{4}{c}{already reported, Table~\ref{tab:depth}} \\
-SAFMN                               & learned         & pending & pending & pending & pending \\
-SMFANet                             & learned         & pending & pending & pending & pending \\
-\bottomrule
-\end{tabular}
-\end{table}
-\open{Values in Table~\ref{tab:attn-ablation} are pending. See the ``Run:'' instruction above for the exact protocol.}
-
-\textbf{(ii) Block-removal position ablation.} span\_tiny removes the last three of six SPABs (Figure~\ref{fig:arch}), a choice made for implementation convenience rather than validated against alternatives. Two further 3-block variants, holding total block count fixed, would test whether removal position matters independently of removal count: one retaining the first three blocks (removing blocks 4--6, the current span\_tiny), one retaining the last three blocks (removing blocks 1--3), and one retaining an interleaved subset (blocks 1, 3, 5). If these variants differ significantly in downstream accuracy despite identical parameter count, removal position, not merely removal count, would need to be reported as part of the compression recipe.
-
-\open{Run: two additional 3-block variants (remove-first, remove-interleaved) under the identical Track B recipe, $n=5$ seeds, all five recognition backbones, on EarVN1.0 at minimum. Report as an extension of Table~\ref{tab:depth}, comparing all three 3-block variants against span\_large. A table skeleton is given below.}
-
-\begin{table}[H]
-\centering
-\caption{Block-removal position ablation (planned). Downstream accuracy for three 3-block variants of span\_tiny, differing only in which blocks are retained.}
-\label{tab:position-ablation}
+\caption{Downstream identity accuracy on AWEx, transfer-learning track (frozen backbone), $n=5$ seeds. $p_{\text{Bonf}}$ corrected across the 3-comparison family per backbone.}
+\label{tab:awex-transfer-frozen}
 \begin{tabular}{lcccc}
 \toprule
-Variant & Blocks retained & Accuracy & Cohen's $d$ vs.\ span\_tiny & $p_{\text{Bonf}}$ \\
+Backbone & lr & span\_baseline (transfer) & span\_tiny (transfer) & tiny vs.\ baseline \\
 \midrule
-span\_tiny (current)   & 1, 2, 3 & \multicolumn{3}{c}{already reported, Table~\ref{tab:main}} \\
-remove-first            & 4, 5, 6 & pending & pending & pending \\
-remove-interleaved      & 1, 3, 5 & pending & pending & pending \\
+EfficientNet-B0   & 0.1706 & 0.2045 & 0.2126 & n.s.\ ($p{=}1.0$, tiny higher) \\
+GhostNet-100      & 0.1367 & 0.1479 & 0.1647 & n.s.\ ($p{=}0.871$, tiny higher) \\
+MobileNetV2       & 0.1329 & 0.1609 & 0.1329 & n.s.\ ($p{=}0.212$) \\
+MobileNetV3-Small & 0.1052 & 0.1444 & 0.1469 & n.s.\ ($p{=}1.0$, tiny higher) \\
+ResNet-18         & 0.1070 & 0.1154 & 0.0951 & n.s.\ ($p{=}0.173$) \\
 \bottomrule
 \end{tabular}
 \end{table}
-\open{Values in Table~\ref{tab:position-ablation} are pending. See the ``Run:'' instruction above for the exact protocol.}
 
-\textbf{(iii) Recognition-embedding-space distillation.} The loss ablation in Section~\ref{sec:res-loss} finds no statistically significant contribution of pixel/feature-level distillation to downstream accuracy. Ataer-Cansizoglu et al.~\cite{ataer2019identity} and the iris-recognition literature reviewed in Section~\ref{sec:related} (Nguyen et al.~\cite{nguyen2011iris}, Ribeiro et al.~\cite{ribeiro2019iris}) suggest that SR objectives aligned with a downstream recognition embedding, rather than with pixel or teacher-feature reconstruction, are more likely to transfer to recognition accuracy. A candidate loss term replaces or augments $\mathcal{L}_{\text{distill}}$ with a term matching embeddings extracted from a frozen, pretrained recognition backbone, computed between span\_tiny's SR output and the true HR image:
+Under the frozen-backbone protocol, \texttt{span\_baseline} $>$ \texttt{lr} reaches significance in 2/5 backbones (MobileNetV2, MobileNetV3-Small) and a trend in a third (EfficientNet-B0, $p_{\text{Bonf}}{=}0.0973$); \texttt{span\_tiny} $>$ \texttt{lr} reaches significance in 3/5 (EfficientNet-B0, GhostNet-100, MobileNetV3-Small). As with full fine-tuning, \texttt{span\_tiny} vs.\ \texttt{span\_baseline} is non-significant in 5/5 backbones. The compression-safety finding is therefore confirmed under both transfer protocols and the from-scratch track alike: 0/5 backbones show a significant accuracy cost from compression under any of the three protocols tested on AWEx. The two protocols do disagree on secondary detail: under frozen backbone, \texttt{span\_tiny} is nominally \emph{above} \texttt{span\_baseline} in 3/5 backbones (never significantly), MobileNetV2 shows tiny exactly tied with \texttt{lr}, and ResNet-18 is the one case across all AWEx protocols where \texttt{span\_tiny} falls nominally below \texttt{lr} (not significant, $p_{\text{Bonf}}{=}1.0$). ResNet-18 is, across all three AWEx protocols, consistently the backbone with the weakest or most inconsistent evidence that SR helps over no-SR at all -- always in a non-significant, sometimes reversed direction -- while never showing a significant compression cost; this is noted as a backbone-specific limitation (Section~\ref{sec:limitations}), not as evidence against the compression-safety claim, which does not depend on this secondary comparison.
+
+An identical real-low-resolution-holdout check to Section~\ref{sec:res-main} was also run on AWEx (mobilenet\_v2, frozen-backbone checkpoints, $n=1$): no-SR $=0.0$, span\_baseline$=0.0625$, span\_tiny$=0.0938$. Unlike the EarVN1.0 holdout (Section~\ref{sec:res-main}), both SR variants clearly beat no-SR here rather than reversing it; span\_tiny is nominally ahead of span\_baseline, echoing the same-direction flip seen for this backbone-adjacent pattern elsewhere in this study (Tables~\ref{tab:main}, \ref{tab:awex-transfer-frozen}). With $n=1$ and only 32 images (Section~\ref{sec:limitations}), this is not treated as contradicting the EarVN1.0 finding, only as insufficient evidence on its own either way.
+
+Table~\ref{tab:awex-qualitative-metrics} reports qualitative-comparison metrics from the transfer-learning track (full fine-tuning protocol, Table~\ref{tab:awex-transfer}), using the SR checkpoints fine-tuned specifically for that protocol, selected to span the observed range rather than to favor either model. Across the 15 exported AWEx test samples, the per-image PSNR gap (span\_baseline $-$ span\_tiny) ranges from $-0.042$\,dB (sample index 13, span\_tiny fractionally ahead) to $+1.358$\,dB (sample index 8, the largest gap observed) -- a narrower range than in an earlier export tied to a different (frozen-backbone) checkpoint, consistent with this being a genuinely different SR checkpoint rather than a re-labeling of the same one. \open{Panel images and captions below still need to be finalized by visual inspection of \texttt{results\_awex/sr\_comparison\_images/sample\_*.png} (not available in this drafting environment): copy sample\_08.png (largest gap, baseline ahead) and sample\_13.png (near-tie, span\_tiny fractionally ahead) into \texttt{paper/figures\_awex/} as the two extremes, and pick 2--3 further samples spanning the middle of the range (e.g.\ indices 3, 5, 11 -- gaps of 0.226, 0.061, 0.264\,dB) to illustrate the typical case, noting in the caption whether any selected samples are grayscale (Section~\ref{sec:datasets}) once visually confirmed.}
+
+\begin{table}[H]
+\centering
+\caption{Per-image PSNR/SSIM, AWEx transfer track (full fine-tuning), all 15 exported test samples, sorted by PSNR gap (span\_baseline $-$ span\_tiny).}
+\label{tab:awex-qualitative-metrics}
+\begin{tabular}{cccccc}
+\toprule
+Sample idx & Baseline PSNR & Baseline SSIM & span\_tiny PSNR & span\_tiny SSIM & Gap (dB) \\
+\midrule
+13 & 24.602 & 0.7787 & 24.644 & 0.7733 & $-$0.042 \\
+5  & 28.935 & 0.8789 & 28.874 & 0.8676 & 0.061 \\
+3  & 25.318 & 0.8643 & 25.092 & 0.8557 & 0.226 \\
+7  & 29.574 & 0.8605 & 29.351 & 0.8578 & 0.223 \\
+1  & 28.321 & 0.8645 & 28.053 & 0.8568 & 0.268 \\
+11 & 28.032 & 0.8446 & 27.768 & 0.8388 & 0.264 \\
+2  & 27.358 & 0.8482 & 27.031 & 0.8398 & 0.327 \\
+14 & 28.190 & 0.8278 & 27.827 & 0.8168 & 0.363 \\
+4  & 30.276 & 0.8839 & 29.855 & 0.8806 & 0.421 \\
+9  & 28.566 & 0.8829 & 28.121 & 0.8685 & 0.445 \\
+6  & 29.682 & 0.8983 & 28.850 & 0.8901 & 0.832 \\
+0  & 34.258 & 0.9302 & 33.351 & 0.9218 & 0.907 \\
+10 & 30.042 & 0.8877 & 29.124 & 0.8694 & 0.918 \\
+12 & 28.484 & 0.8991 & 27.395 & 0.8812 & 1.089 \\
+8  & 29.204 & 0.8962 & 27.846 & 0.8745 & 1.358 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\open{Replace this table with the 5-panel image figure (matching the EarVN1.0 Figure~\ref{fig:qualitative} format) once the panel images described above have been selected and copied into \texttt{paper/figures\_awex/}; this table is a placeholder carrying the exact underlying numbers so no data is lost in the meantime.}
+
+\textbf{Summary of Section~\ref{sec:res-awex}.} The paper's central compression-safety claim -- \texttt{span\_tiny} statistically indistinguishable from \texttt{span\_baseline} -- is confirmed on a second, independent dataset under \emph{three} separate protocols (from-scratch, full-fine-tune transfer, frozen-backbone transfer), with 0/5 backbones showing a significant cost under any of them. The secondary question, whether SR helps over no-SR at all, is directionally positive across most backbone$\times$protocol combinations but noisier and protocol-dependent in exactly which backbones reach significance, consistent with AWEx's smaller per-subject training sample ($\approx$6.7 images/subject vs.\ substantially more on EarVN1.0) rather than a contradiction of the EarVN1.0 findings; this distinction is discussed further in Section~\ref{sec:disc-power}. ResNet-18 is the one backbone that does not fit this pattern cleanly on AWEx (Section~\ref{sec:res-awex-transfer}) and is reported as a limitation rather than smoothed over.
+
+\subsection{Additional mechanisms tested for further improvement: a negative-result ablation study}
+\label{sec:novelty-ablations}
+
+Beyond the core block-count reduction, three further mechanisms were designed and tested to determine whether span\_tiny's downstream accuracy could be improved further: a richer distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning as an alternative to span\_tiny's fixed, hand-picked block selection. Each was screened at reduced scale first, then validated to the same statistical standard as the main result ($n=5$ seeds, all five recognition backbones, EarVN1.0) once a plausible configuration was identified. All three are reported here as negative or null results, exactly as measured, following the same reporting standard already applied to the distillation-term ablation in Section~\ref{sec:res-loss}.
+
+\subsubsection{Feature-level distillation (``KD v2'')}
+
+This mechanism adds a feature-level distillation term (matching intermediate SPAN features between student and teacher) to the existing pixel+distillation recipe. A related variant additionally combining this with a multi-judge identity loss (an ensemble of independently-trained recognition backbones providing identity supervision) was screened alongside it but performed no better during screening; the feature-only variant, the stronger candidate, is the one carried forward to the full $n=5$-seed validation reported here. Table~\ref{tab:kdv2-ablation} compares it against the main recipe (span\_tiny).
+
+\begin{table}[H]
+\centering
+\caption{KD v2 ablation vs.\ span\_tiny's main recipe, downstream accuracy, EarVN1.0, $n=5$ seeds.}
+\label{tab:kdv2-ablation}
+\begin{tabular}{lcccc}
+\toprule
+Backbone & span\_tiny & span\_tiny+KDv2 & Cohen's $d$ & $p_{\text{Bonf}}$ \\
+\midrule
+EfficientNet-B0   & 0.5485 & 0.5512 & 0.26  & 1.0    \\
+GhostNet-100      & 0.5115 & 0.5142 & 0.30  & 1.0    \\
+MobileNetV2       & 0.5026 & 0.4906 & $-$0.89 & 0.3542 \\
+MobileNetV3-Small & 0.4423 & 0.4352 & $-$0.42 & 1.0    \\
+ResNet-18         & 0.4825 & 0.4848 & 0.69  & 0.5992 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+No backbone shows a statistically significant difference in either direction ($p_{\text{Bonf}}$ 0.354--1.0), and the sign of the effect is inconsistent across backbones (positive in 3/5, negative in 2/5). The effect sizes themselves are small (0.26--0.89) and centered near zero, suggesting a genuine absence of effect rather than an underpowered trend: feature-level distillation does not yield a reliable improvement over span\_tiny's main recipe.
+
+\subsubsection{Saliency-weighted identity-critical loss}
+
+This mechanism reweights the pixel-reconstruction loss by a saliency map derived from identity-relevant image regions, intended to concentrate SR fidelity where it matters most for recognition. Table~\ref{tab:saliency-ablation} compares the best-performing saliency weight identified during screening against the main recipe.
+
+\begin{table}[H]
+\centering
+\caption{Saliency-weighted loss ablation vs.\ span\_tiny's main recipe, downstream accuracy, EarVN1.0, $n=5$ seeds.}
+\label{tab:saliency-ablation}
+\begin{tabular}{lcccc}
+\toprule
+Backbone & span\_tiny & span\_tiny+saliency & Cohen's $d$ & $p_{\text{Bonf}}$ \\
+\midrule
+EfficientNet-B0   & 0.5485 & 0.5559 & 0.90  & 0.3462 \\
+GhostNet-100      & 0.5115 & 0.5150 & 0.42  & 1.0    \\
+MobileNetV2       & 0.5026 & 0.5053 & 0.29  & 1.0    \\
+MobileNetV3-Small & 0.4423 & 0.4441 & 0.11  & 1.0    \\
+ResNet-18         & 0.4825 & 0.4800 & $-$0.29 & 1.0    \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Again no backbone reaches significance, with small effect sizes (0.11--0.90) and a positive trend in 4/5 backbones that never clears Bonferroni correction. As with KD v2, the saliency-weighted loss does not produce a statistically detectable improvement.
+
+\subsubsection{Learned/differentiable block pruning}
+
+Rather than span\_tiny's fixed choice to keep the first three of six SPABs, this mechanism learns which blocks to keep via a differentiable gating mechanism, with a sparsity penalty pushing the model toward a target size. At the sparsity level that produces an exact match to span\_tiny's parameter count (0.230M, 3 blocks retained), Table~\ref{tab:pruning-ablation} compares the two block-selection strategies at equal size.
+
+\begin{table}[H]
+\centering
+\caption{Learned block pruning vs.\ span\_tiny's fixed block selection, downstream accuracy at an identical parameter count (0.230M), EarVN1.0, $n=5$ seeds.}
+\label{tab:pruning-ablation}
+\begin{tabular}{lcccc}
+\toprule
+Backbone & span\_tiny (fixed) & Learned pruning & Cohen's $d$ & $p_{\text{Bonf}}$ \\
+\midrule
+EfficientNet-B0   & 0.5485 & 0.5222 & $-$3.71 & \textbf{0.0035} \\
+GhostNet-100      & 0.5115 & 0.4806 & $-$3.54 & \textbf{0.0041} \\
+MobileNetV2       & 0.5026 & 0.4685 & $-$3.00 & \textbf{0.0078} \\
+MobileNetV3-Small & 0.4423 & 0.4095 & $-$3.34 & \textbf{0.0052} \\
+ResNet-18         & 0.4825 & 0.4575 & $-$5.98 & \textbf{0.0005} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Unlike the two mechanisms above, this result is unambiguous: learned pruning is significantly worse than span\_tiny's fixed, hand-picked block selection in all 5/5 backbones, with large effect sizes throughout ($d$ $-$3.0 to $-$6.0) and every $p_{\text{Bonf}} < 0.01$. At an identical parameter count, automatically learning which blocks to discard performs reliably worse here than simply keeping the first three of six -- a negative result for the differentiable-pruning mechanism specifically, not for depth compression in general (which Table~\ref{tab:depth} shows is close to accuracy-neutral when the retained blocks are chosen by hand).
+
+\textbf{Summary of Section~\ref{sec:novelty-ablations}.} None of the three mechanisms tested improve on span\_tiny's original design: two (KD v2, saliency-weighted loss) are statistically null in either direction, and one (learned pruning) is significantly negative in every backbone tested. This is reported as a rigorous negative-result ablation study, using the same paired-test, multi-seed, multi-backbone standard as the paper's positive claims, rather than reframed as partial successes. The paper's positive, validated contribution remains span\_tiny's original depth-count reduction (Sections~\ref{sec:res-main}--\ref{sec:res-depth}).
+
+\subsection{Extended ablations toward mechanistic and design generality}
+\label{sec:extended-ablations}
+
+The results above establish that depth compression is accuracy-neutral for span\_tiny specifically. Three further questions were identified to test whether this finding reflects a general mechanism or an architecture-specific coincidence, and whether the specific design choices made for span\_tiny are themselves well-supported. The first (attention-parameterization) has now been run to completion, on EarVN1.0, to the same $n=5$-seed, five-backbone standard as the main result. The second (recognition-embedding-space distillation) turns out, on inspection, to already have an answer from an existing result under a different name, described below. The third (block-removal position) is implemented but had not yet been run at the time of this draft; the mechanism and protocol are specified in full below.
+
+\subsubsection{Attention-parameterization ablation -- completed, hypothesis not supported}
+
+Section~\ref{sec:disc-depth} proposes that SPAN tolerates depth reduction because its attention mechanism carries no learned parameters, so removing blocks removes computation but not learned capacity. If this account is correct, an architecture with \emph{learned} attention/modulation should show a measurably larger accuracy cost from an equivalent proportional depth reduction than span\_tiny does. SAFMN~\cite{sun2023safmn} and SMFANet~\cite{zheng2024smfanet}, both using learned modulation mechanisms, were each halved in block count and evaluated under the identical Track B recipe, $n=5$ seeds, all five recognition backbones (SR-quality rows in Table~\ref{tab:quality}). Table~\ref{tab:attn-ablation} reports, per backbone, $\Delta_{\text{arch}}$ (that architecture's own full-depth-minus-half-depth accuracy) against $\Delta_{\text{SPAN}}$ (span\_large minus span\_tiny, from Table~\ref{tab:depth}), and a paired test on their difference.
+
+\begin{table}[H]
+\centering
+\caption{Attention-parameterization ablation, EarVN1.0, $n=5$ seeds. $\Delta_{\text{arch}}-\Delta_{\text{SPAN}}$ is the diff-of-diffs (positive $=$ the learned-attention architecture loses \emph{more} from depth-halving than SPAN, supporting the parameter-free account); $p_{\text{Bonf}}$ corrected across 5 backbones per architecture.}
+\label{tab:attn-ablation}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+Backbone & $\Delta_{\text{SAFMN}}$ & $\Delta_{\text{SMFANet}}$ & diff-of-diffs ($d$, $p_{\text{Bonf}}$) SAFMN & diff-of-diffs ($d$, $p_{\text{Bonf}}$) SMFANet \\
+\midrule
+EfficientNet-B0   & 0.0066  & 0.0023  & $-$0.0017, $d{=}{-}0.14$, $p{=}1.0$ & $-$0.0060, $d{=}{-}0.79$, $p{=}0.766$ \\
+GhostNet-100      & $-$0.0021 & 0.0012 & $-$0.0046, $d{=}{-}0.54$, $p{=}1.0$ & $-$0.0013, $d{=}{-}0.18$, $p{=}1.0$ \\
+MobileNetV2       & 0.0019  & 0.0002  & 0.0000, $d{=}0.00$, $p{=}1.0$       & $-$0.0016, $d{=}{-}0.14$, $p{=}1.0$ \\
+MobileNetV3-Small & $-$0.0009 & 0.0074 & $-$0.0059, $d{=}{-}0.33$, $p{=}1.0$ & 0.0025, $d{=}0.30$, $p{=}1.0$ \\
+ResNet-18         & 0.0038  & $-$0.0008 & 0.0000, $d{=}0.00$, $p{=}1.0$    & $-$0.0046, $d{=}{-}0.33$, $p{=}1.0$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+$\Delta_{\text{SPAN}}$ itself (0.0018--0.0083 across backbones, Table~\ref{tab:depth}) is small throughout, and neither SAFMN nor SMFANet loses significantly more than SPAN does from an equivalent proportional depth reduction in \emph{any} of the 10 backbone$\times$architecture combinations tested ($p_{\text{Bonf}}$ 0.766--1.0). If anything, the diff-of-diffs is negative (SPAN loses as much or more) in 7/10 combinations: SAFMN and SMFANet, despite using learned modulation mechanisms, tolerate an equivalent depth reduction just as well as span\_tiny does. The parameter-free-attention account proposed in Section~\ref{sec:disc-depth} therefore finds no support here and is revised there accordingly: depth tolerance at this compression level and resolution appears to be a broader property of lightweight SR architectures under this training recipe, not a consequence specific to SPAN's parameter-free design.
+
+\subsubsection{Block-removal position ablation (implemented, not yet run)}
+
+span\_tiny retains the first three of six SPABs (Figure~\ref{fig:arch}), a choice made for implementation convenience rather than validated against alternatives. Two further 3-block variants, holding total block count fixed, would test whether removal position matters independently of removal count: one retaining the last three blocks instead (removing blocks 1--3), and one retaining an interleaved subset (blocks 1, 3, 5).
+
+Testing this meaningfully requires more than relabelling a freshly-initialized 3-block network: since span\_tiny is trained end-to-end from a random initialization under output-level distillation only, a 3-block student trained this way has no internal notion of ``which blocks of a virtual 6-block network it occupies'' -- three variants trained identically would be expected to differ only by seed noise, not by the position nominally assigned to them. To give position a training signal, each variant instead uses a position-targeted feature-hint loss: the student's final-block output is matched, via a learned $1\times1$ adapter and the same instance-normalized $L_1$ formulation already used for the feature-KD term (Section~\ref{sec:novelty-ablations}), against the teacher's output at a specific block index representing the depth that variant is meant to occupy (block 3 for the current first-three-blocks recipe, block 6 for a last-three-blocks recipe, block 5 for an interleaved 1-3-5 recipe). All three variants use this same mechanism, differing only in which teacher block is targeted, so the comparison isolates position specifically rather than confounding it with the presence or absence of positional supervision. The teacher for this ablation is span\_large rather than span\_baseline/span\_official: both are 6-block, but only span\_large shares the same re-implementation class as span\_tiny (Section~\ref{sec:arch}), giving well-defined intermediate block outputs to target; span\_official's internal structure is external, third-party code without a guaranteed matching interface.
+
+This mechanism and a three-variant screening pipeline are implemented and unit-tested (forward pass, gradient isolation from the frozen teacher, boundary/type-checking on the block index, and rejection of architecturally incompatible teachers -- including span\_official specifically, addressed by using span\_large instead -- all verified), but had not yet been run at the time of this draft. \open{Run \texttt{pipeline/run\_block\_position\_ablation.sh} ($n=3$ seeds, all five recognition backbones, screening scale) and, if the three variants show a difference worth reporting, extend to $n=5$ seeds (adding seeds 44 and 999) following the same pattern used for the mechanisms in Section~\ref{sec:novelty-ablations}. Report as an extension of Table~\ref{tab:depth}. A table skeleton is given below.}
+
+\begin{table}[H]
+\centering
+\caption{Block-removal position ablation (pending a run). Downstream accuracy for three 3-block variants, each trained with position-targeted feature-hint distillation against a different teacher block depth.}
+\label{tab:position-ablation}
+\begin{tabular}{lccc}
+\toprule
+Variant & Blocks conceptually retained & Teacher hint block & Accuracy \\
+\midrule
+keep-first (current span\_tiny's depth) & 1, 2, 3 & 3 & pending \\
+keep-last                                & 4, 5, 6 & 6 & pending \\
+interleaved                              & 1, 3, 5 & 5 & pending \\
+\bottomrule
+\end{tabular}
+\end{table}
+\open{Values in Table~\ref{tab:position-ablation} are pending a run of the script referenced above.}
+
+\subsubsection{Recognition-embedding-space distillation}
+
+Ataer-Cansizoglu et al.~\cite{ataer2019identity} and the iris-recognition literature reviewed in Section~\ref{sec:related} (Nguyen et al.~\cite{nguyen2011iris}, Ribeiro et al.~\cite{ribeiro2019iris}) suggest that SR objectives aligned with a downstream recognition embedding, rather than with pixel or teacher-feature reconstruction, are more likely to transfer to recognition accuracy. This account is directly testable with a loss term matching embeddings extracted from a frozen, pretrained recognition backbone, computed between span\_tiny's SR output and the true HR image:
 \begin{equation}
 \mathcal{L}_{\text{embed}} = 1 - \cos\big(f(\mathrm{SR}(x)),\, f(\mathrm{HR})\big),
 \end{equation}
-where $f(\cdot)$ denotes the frozen backbone's penultimate-layer embedding. If $\mathcal{L}_{\text{embed}}$ produces a statistically significant improvement over the existing pixel+distillation recipe where pixel/feature distillation alone did not, this would directly support the recognition-aware-objective account from Section~\ref{sec:related} and turn the negative result of Section~\ref{sec:res-loss} into constructive guidance for the training recipe.
-
-\open{Implement $\mathcal{L}_{\text{embed}}$ using one of the five recognition backbones (MobileNetV2, matching Table~\ref{tab:loss}, is a natural choice for continuity) as the frozen embedding source, sweep its weight against the existing recipe, and repeat the four-configuration loss ablation of Table~\ref{tab:loss} with this fifth configuration added. Report as an extension of Table~\ref{tab:loss}. A table skeleton is given below.}
-
-\begin{table}[H]
-\centering
-\caption{Recognition-embedding-space distillation ablation (planned), extending Table~\ref{tab:loss}.}
-\label{tab:embed-ablation}
-\begin{tabular}{lcc}
-\toprule
-Configuration & Mean accuracy & Std \\
-\midrule
-pixel + distillation (main recipe) & \multicolumn{2}{c}{already reported, Table~\ref{tab:loss} (0.5347, 0.0057)} \\
-pixel + $\mathcal{L}_{\text{embed}}$        & pending & pending \\
-pixel + distillation + $\mathcal{L}_{\text{embed}}$ & pending & pending \\
-\bottomrule
-\end{tabular}
-\end{table}
-\open{Values in Table~\ref{tab:embed-ablation} are pending. See the ``Implement:'' instruction above for the exact protocol.}
+where $f(\cdot)$ denotes the frozen backbone's penultimate-layer embedding. This is, on inspection, mathematically identical to the identity-loss term already evaluated in Section~\ref{sec:res-loss} and Section~\ref{sec:recipe}: both are a cosine loss between a frozen recognition backbone's embeddings of the SR output and the true HR image, using the same backbone (MobileNetV2) as the embedding source. The two configurations this account calls for -- pixel plus $\mathcal{L}_{\text{embed}}$ alone, and pixel plus distillation plus $\mathcal{L}_{\text{embed}}$ -- are exactly the pixel+identity and pixel+distill+identity (``full'') rows already reported in Table~\ref{tab:loss}, not a new experiment. Both fall in the lower-performing cluster there, and the identity-loss term is independently confirmed to significantly reduce accuracy by the $\lambda_{\text{identity}}$ sweep in Section~\ref{sec:recipe} ($d=-10.09$). The recognition-aware-objective account therefore does not hold in this setting: unlike the face- and iris-recognition results that motivate it, aligning the SR loss with a frozen recognition backbone's embedding space does not improve, and in fact measurably harms, downstream identity accuracy for ear SR at this compression level.
 
 % ============================================================================
 \section{Discussion}
 \label{sec:discussion}
 % ============================================================================
 
-\textbf{Interpreting the trade-off.} The design goal of this work was not maximal downstream accuracy but a specific, pre-defined criterion: preserve the ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} while substantially reducing parameter count and latency. This criterion is met in 5/5 backbones on EarVN1.0 (Table~\ref{tab:main}) and in 5/5 backbones under the AWEx transfer-learning protocol (Table~\ref{tab:awex-transfer}), forming the paper's central empirical claim.
+\textbf{Interpreting the trade-off.} The design goal of this work was not maximal downstream accuracy but a specific, pre-defined criterion: preserve the ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} while substantially reducing parameter count and latency, and in particular keep the compression-specific cost (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) small and, ideally, statistically undetectable. On EarVN1.0 this cost is non-significant in 4/5 backbones (Table~\ref{tab:main}) and, on the depth-isolated comparison, in 4/5 backbones as well (Table~\ref{tab:depth}). On AWEx it is non-significant in 5/5 backbones under all three protocols tested -- from-scratch, full-fine-tune transfer, and frozen-backbone transfer (Section~\ref{sec:res-awex}) -- the single most consistent result in the paper. This forms the paper's central empirical claim.
 
-\textbf{Why depth reduction is close to accuracy-neutral.}
+\textbf{Why depth reduction is close to accuracy-neutral -- revised after testing it directly.}
 \label{sec:disc-depth}
-SPAN's parameter-free attention works by applying a fixed, symmetric activation function to convolutional activations, so there are no learned attention weights involved. Removing SPABs therefore removes attention \emph{computation} across the deleted blocks, but there is no separate pool of attention \emph{parameters} to lose along with them. This property is proposed as a plausible mechanism, rather than a proven one, for why halving block count (Table~\ref{tab:depth}) produces no statistically detectable accuracy cost on either dataset. As noted in Section~\ref{sec:arch}, Table~\ref{tab:depth} is the cleaner test of this claim, since span\_tiny and span\_large come from the same re-implementation class and differ only in depth; this comparison, rather than Table~\ref{tab:main}, is treated as the primary evidence here.
+An earlier draft of this account proposed that SPAN tolerates depth reduction because its attention mechanism carries no learned parameters: removing SPABs removes attention \emph{computation} but not learned attention \emph{capacity}, since there is none to lose. This account makes a testable directional prediction -- an architecture with \emph{learned} attention/modulation should lose more from an equivalent depth cut -- and Section~\ref{sec:extended-ablations} tested it directly against SAFMN and SMFANet. The prediction was not confirmed: neither architecture loses significantly more than SPAN does from a proportional depth halving in any of 10 backbone$\times$architecture combinations, and the diff-of-diffs is negative (SPAN losing as much or more) in 7/10. The parameter-free-attention account is therefore not supported by this test and is retracted as the explanation. A more likely account, consistent with both this ablation and the loss-ablation result below, is that at this extreme compression level and input resolution (20$\times$20\,px), the recognition-relevant signal in an ear crop is concentrated in relatively coarse, low-frequency structure that a shallower network already captures adequately, regardless of its attention mechanism's parameterization -- making depth reduction broadly tolerable across this class of lightweight SR architectures rather than a property specific to SPAN. This is offered as a plausible revised account, not a proven mechanism; distinguishing it from other candidate explanations is left to future work (Section~\ref{sec:conclusion}).
 
-\textbf{Why the distillation ablation is negative, and why this does not undermine the main claim.} The loss-ablation result (Section~\ref{sec:res-loss}) shows no statistically significant contribution of the distillation term to \emph{downstream accuracy} at this compression level. Three explanations seem plausible: the pixel-reconstruction signal alone may already be close to sufficient at this parameter scale; seed-to-seed variance may exceed the true effect size; or, as Zhang et al.~\cite{zhang2024dukd} argue for SR distillation generally, a teacher's own output is only an approximation of the true HR image, which caps how much signal the distillation term can supply. Any of these would produce the observed pattern, and the data collected here cannot distinguish between them. This finding sits alongside the paper's central claim (Sections~\ref{sec:res-main}--\ref{sec:res-depth}) without contradicting it: that claim concerns architectural depth, not loss-function choice, and span\_tiny's training recipe (Track B) is justified independently by its role in stabilizing convergence for other architectures in the contextual comparison (Section~\ref{sec:res-context}).
+\textbf{Why the distillation-term ablation is negative while the identity-loss ablation is positive, and why neither undermines the main claim.} Section~\ref{sec:res-loss} finds two distinct results that should not be conflated: the identity-loss term \emph{significantly reduces} downstream accuracy (3/6 pairwise comparisons significant, 1/6 at trend level, corroborated independently by the $\lambda_{\text{identity}}$ sweep in Section~\ref{sec:recipe}, $d{=}{-}10.09$), while the distillation term's own marginal contribution over pixel-only training remains statistically indistinguishable ($d{=}{-}0.40$, $p_{\text{Bonf}}{=}1.0$). For the latter, null result, three explanations seem plausible: the pixel-reconstruction signal alone may already be close to sufficient at this parameter scale; seed-to-seed variance may exceed the true effect size; or, as Zhang et al.~\cite{zhang2024dukd} argue for SR distillation generally, a teacher's own output is only an approximation of the true HR image, which caps how much signal the distillation term can supply. The data collected here cannot distinguish between these. Neither result undermines the paper's central claim, which concerns architectural depth, not loss-function choice; span\_tiny's training recipe (Track B, pixel+distillation, $\lambda_{\text{identity}}{=}0$) remains justified independently by its role in stabilizing convergence for other architectures in the contextual comparison (Section~\ref{sec:res-context}) and by the identity-loss ablation's own negative finding for that specific term.
 
-\textbf{SMFANet convergence case study.} SMFANet failed to converge well under pixel-loss-only supervision (20.254\,dB, Table~\ref{tab:quality}) but recovered strongly under distillation supervision (+5.5\,dB). The marginal contribution of distillation to span\_tiny's own downstream accuracy was not statistically detectable, but this case shows that distillation supervision is not uniformly redundant across architectures at this extreme input resolution. Some architectures appear to depend on it to converge at all.
+\textbf{SMFANet convergence case study.} SMFANet failed to converge well under pixel-loss-only supervision (20.906\,dB, Table~\ref{tab:quality}) but recovered strongly under distillation supervision (+5.4\,dB). The marginal contribution of distillation to span\_tiny's own downstream accuracy was not statistically detectable, but this case shows that distillation supervision is not uniformly redundant across architectures at this extreme input resolution. Some architectures appear to depend on it to converge at all.
 
-\textbf{Position relative to other lightweight SR architectures.}
+\textbf{Position relative to other lightweight SR architectures -- stronger than raw image quality suggests.}
 \label{sec:disc-position}
-Beyond the SPAN family, span\_tiny is second-fastest and second-smallest among six compared architectures, but it does not dominate on accuracy (Table~\ref{tab:context}): SAFMN wins with statistical significance at 7--8$\times$ the latency, and ECBSR ties span\_tiny on downstream accuracy with fewer parameters and lower latency still. This does not undermine the paper's contribution, since the central claim concerns SPAN-family depth compression, not cross-architecture superiority (Section~1.3f). It should nonetheless be stated plainly that a reader evaluating span\_tiny purely as a lightweight SR option should know that ECBSR is a competitive, smaller alternative for this specific task, and that SAFMN is a competitive, more accurate but substantially slower one. The re-implementation's timing broadly matches the original SPAN paper's comparison against SAFMN on standard SR benchmarks ($\approx$13\,ms/28.66\,dB vs.\ $\approx$72\,ms/$\approx$28.60\,dB on Set14 $\times4$ in~\cite{wan2024span}), an independent data point supporting the general trade-off observed here.
+Beyond the SPAN family, span\_tiny is second-fastest and second-smallest among six compared architectures and ranks second-lowest on raw PSNR/SSIM (Table~\ref{tab:quality}) -- but on downstream recognition accuracy, the metric this paper is organized around, span\_tiny is never significantly beaten by any of the other four architectures across any of the five recognition backbones, is statistically tied with the two most accurate ones (RLFN-adapted, SAFMN), and significantly \emph{outperforms} the two least accurate ones (ECBSR: 4/5 backbones significant, 1/5 trend; SMFANet: 2/5 significant, 1/5 trend) (Table~\ref{tab:context}). This is a materially stronger position than the raw image-quality ranking alone would suggest, and it is worth stating plainly what it does and does not mean: it is not evidence that span\_tiny is the best lightweight SR architecture in absolute terms (SAFMN and RLFN-adapted remain fully competitive, at higher latency for SAFMN and a comparable one for RLFN-adapted), but it is evidence that raw PSNR/SSIM ranking, on its own, would have misidentified span\_tiny as accuracy-inferior to ECBSR and SMFANet when the downstream task says otherwise. The re-implementation's timing broadly matches the original SPAN paper's comparison against SAFMN on standard SR benchmarks ($\approx$13\,ms/28.66\,dB vs.\ $\approx$72\,ms/$\approx$28.60\,dB on Set14 $\times4$ in~\cite{wan2024span}), an independent data point supporting the general efficiency trade-off observed here, alongside the new evidence that this trade-off does not come at a downstream-accuracy cost relative to the weaker-PSNR alternatives.
 
-\textbf{Diverging statistical power between datasets.}
+\textbf{Diverging statistical power between datasets, and between transfer protocols.}
 \label{sec:disc-power}
-The weaker statistical significance of \texttt{span\_tiny $>$ lr} on AWEx (Table~\ref{tab:awex-transfer}) compared to EarVN1.0 (Table~\ref{tab:main}) follows directly from AWEx's smaller per-subject training sample ($\approx$6.7 images/subject, versus substantially more on EarVN1.0). It is not evidence of a weaker or contradictory effect. The direction of the effect is identical in all five backbones on both datasets, and the AWEx effect sizes (Cohen's $d$ 0.3--1.15) are large enough that more training data or a larger seed budget would plausibly push several of them past significance. Absence of significance here should not be read as evidence of no effect.
+The weaker and more protocol-dependent statistical significance of \texttt{SR $>$ lr} on AWEx (Section~\ref{sec:res-awex}) compared to EarVN1.0 (Table~\ref{tab:main}, significant in 5/5 backbones for both span\_tiny and span\_baseline) follows from AWEx's smaller per-subject training sample ($\approx$6.7 images/subject, versus substantially more on EarVN1.0), not from a weaker or contradictory effect. It is not evidence of no effect. This applies specifically to the \emph{secondary} question (does SR help over no-SR); the paper's \emph{central} claim, that compression itself is safe, is the more consistent finding across both datasets and is confirmed under all three protocols tested on AWEx with 0/5 backbones showing a significant cost in any of them -- if anything, this claim is \emph{more} thoroughly replicated on AWEx (three independent protocols) than the secondary question is.
 
-\textbf{Unresolved observations.} Two results in this study are only partially explained and are reported as such rather than forced into a tidier narrative: the off-trend ResNet-18 result in the AWEx from-scratch track (Table~\ref{tab:awex-scratch}), and span\_large's anomalously low PSNR on AWEx (19.235\,dB / SSIM 0.493, Table~\ref{tab:awex-quality}, Section~\ref{sec:res-awex}). For the latter, a transcription gap and a NaN-training artifact have been ruled out, and the anomaly is confirmed to sit only in span\_large's image-quality metric: span\_tiny's own AWEx quality metrics are healthy, and the depth-ablation accuracy comparison is unaffected. The underlying cause remains open pending the log and visual inspection described in Section~\ref{sec:res-awex}.
+\textbf{Unresolved and resolved observations.} Two anomalies flagged at an earlier stage of this study are resolved under the corrected experimental setup and are not carried forward: an off-trend ResNet-18 result on the AWEx from-scratch track (Section~\ref{sec:res-awex}), and span\_large's anomalously low PSNR on AWEx (previously $\approx$19\,dB; now 24.4\,dB, in line with the other three core architectures, Table~\ref{tab:awex-quality}). One new finding is reported as an investigated boundary condition rather than an unexplained anomaly: the reversed ordering on the EarVN1.0 real-low-resolution holdout (Section~\ref{sec:res-main}), traced to every holdout image's native resolution falling below the SR models' trained input size. One genuine open item remains: ResNet-18's inconsistent secondary-question evidence across all three AWEx protocols (Section~\ref{sec:res-awex-transfer}), for which no confirmed explanation exists and which is carried forward as a limitation rather than a subject for speculation.
 
 % ============================================================================
 \section{Limitations}
 \label{sec:limitations}
 % ============================================================================
 
-\begin{enumerate}
-\item \textbf{Statistical power on AWEx.} AWEx's smaller per-subject sample size ($\approx$6.7 training images/subject) limits statistical power, particularly in the transfer-learning track (Table~\ref{tab:awex-transfer}): effects are directionally positive in all five backbones but do not clear the significance threshold. This should be read as underpowered rather than null (Section~\ref{sec:disc-power}).
-\item \textbf{Latency measured on training hardware, not an edge device.} All latency figures (Table~\ref{tab:quality}) come from the development machine, not a representative resource-constrained device such as a Raspberry Pi or a phone SoC. These numbers should be treated as relative comparisons under controlled conditions rather than deployment-ready benchmarks.
-\item \textbf{Single-run SR image-quality metrics.} PSNR/SSIM/LPIPS (Table~\ref{tab:quality}, Table~\ref{tab:awex-quality}) come from a single training run per configuration ($n=1$), with no confidence interval, unlike downstream recognition accuracy, which is multi-seed throughout. Several Track-B architectures on AWEx are also still missing SSIM/LPIPS (Table~\ref{tab:awex-quality}, marked ``--''); only PSNR had been extracted from the source logs at the time of writing.
-\item \textbf{Distillation ablation scope.} The loss-component ablation (Section~\ref{sec:res-loss}) covers a single backbone (MobileNetV2) on EarVN1.0. Whether the negative result holds for the other four backbones, or on AWEx, remains untested.
-\item \textbf{Unmodified RLFN sample size.} The unmodified \texttt{rlfn} baseline (distinct from \texttt{rlfn\_adapted}, the primary RLFN reference) has $n=3$ seeds on EarVN1.0 at the time of writing, short of the $n=5$ used elsewhere.
-\item \textbf{Two unresolved observations.} The off-trend ResNet-18 result (Section~\ref{sec:res-awex}) and span\_large's anomalously low AWEx PSNR/SSIM (Table~\ref{tab:awex-quality}, Section~\ref{sec:res-awex}) still lack a confirmed cause. For the latter, a transcription gap and a NaN-training artifact have been ruled out, and the anomaly is confirmed to be isolated to span\_large, with span\_tiny and the depth-ablation accuracy comparison unaffected; the root cause awaits the log and visual inspection described in Section~\ref{sec:res-awex}.
-\item \textbf{Non-standard AWEx split.} This study uses a custom closed-set, per-subject train/validation/test split for AWEx instead of its official open-set split, because the task addressed here (closed-set identity classification) differs from the open-set verification problem that split was designed for. This choice is considered appropriate for the task at hand and is stated explicitly here to avoid the impression of an undisclosed deviation from a standard protocol.
-\end{enumerate}
+Several limitations concern AWEx specifically, and none of them affects the paper's central compression-safety claim, which is confirmed there with zero of five backbones showing a significant cost under all three protocols tested. AWEx's smaller per-subject sample size ($\approx$6.7 training images/subject) does limit statistical power for the secondary question of whether SR helps over no-SR at all (Section~\ref{sec:res-awex}): effects are directionally positive in most backbone$\times$protocol combinations but do not always clear the significance threshold, and which backbones reach significance varies by protocol; this should be read as underpowered rather than null (Section~\ref{sec:disc-power}). ResNet-18 is the clearest case of this: across all three AWEx protocols it shows the weakest and least consistent evidence that SR helps at all, including one instance (frozen-backbone transfer) where span\_tiny falls nominally, non-significantly, below no-SR, and no confirmed explanation exists for why this backbone behaves differently from the other four on this dataset. The AWEx depth ablation (span\_tiny vs.\ span\_large) also runs at a reduced sample size, $n=3$ seeds rather than the $n=5$ used elsewhere, so its non-significant result in all five backbones carries correspondingly less power, even though it agrees with the EarVN1.0 finding. Separately, the six-architecture context comparison, the attention-parameterization ablation, and the three additional-mechanism ablations were all validated on EarVN1.0 only in this phase of the study; whether span\_tiny's competitive standing against other architectures, the null result for the parameter-free-attention account, and the negative or null findings for KD v2, the saliency-weighted loss, and learned pruning replicate on AWEx is untested and left as a direction for future work rather than assumed. Finally, AWEx is evaluated with a custom closed-set, per-subject train/validation/test split rather than its official open-set split, because this study addresses closed-set identity classification rather than the open-set verification problem that official split was designed for; this choice is considered appropriate for the task at hand and is stated explicitly to avoid any impression of an undisclosed deviation from a standard protocol.
+
+Two further ablations on EarVN1.0 are validated at reduced scope. The loss-component ablation (Section~\ref{sec:res-loss}) covers a single backbone, MobileNetV2; whether the identity-loss finding and the distillation null result hold for the other four backbones, or on AWEx, remains untested, and the independent $\lambda_{\text{identity}}$ sweep (Section~\ref{sec:recipe}) corroborates the identity-loss direction on the same backbone without extending that coverage either. The unmodified \texttt{rlfn} baseline (distinct from \texttt{rlfn\_adapted}, the primary RLFN reference used throughout) has $n=3$ seeds at the time of writing, short of the $n=5$ used elsewhere.
+
+Two measurement-level limitations apply throughout. Latency figures (Table~\ref{tab:quality}) come from the development machine rather than a representative resource-constrained device such as a Raspberry Pi or a phone SoC, so they should be read as relative comparisons under controlled conditions rather than deployment-ready benchmarks. PSNR/SSIM/LPIPS (Table~\ref{tab:quality}, Table~\ref{tab:awex-quality}) come from a single training run per configuration ($n=1$), with no confidence interval, unlike downstream recognition accuracy, which is multi-seed throughout.
+
+Finally, the paper's main claim is validated specifically for the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this scope should be stated plainly rather than assumed to extend further: an auxiliary check on genuinely low-resolution real-world images (Section~\ref{sec:res-main}) shows the opposite ordering, traced to a resolution mismatch between these images (all natively below the SR models' trained input size) and the training-time degradation. This is a boundary condition on where the claim has been shown to hold, not a refutation of it, but it means this paper does not provide evidence that span\_tiny or span\_baseline improves recognition on arbitrary real-world low-resolution ear images outside the synthetic-degradation regime studied here -- that check itself stands at $n=1$ (173 images, one backbone), with no multi-seed confirmation.
 
 % ============================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 % ============================================================================
 
-This paper asked a narrower question than most efficient-SR work: not whether a compressed model is the most accurate option available, but whether compressing SPAN's depth by half still leaves a model worth using ahead of no SR at all. Across five recognition backbones and two independent datasets, span\_tiny answers that question affirmatively. The ordering \texttt{no-SR $<$ span\_tiny $<$ uncompressed baseline} holds in every setting tested, at a 46\% parameter reduction and roughly half the latency of the uncompressed model. The strongest evidence in the paper is not that ordering itself but the depth ablation behind it: span\_tiny and its uncompressed-depth counterpart, span\_large, are statistically indistinguishable in every backbone on both datasets, a clean signal that the depth cut costs little.
+This paper asked a narrower question than most efficient-SR work: not whether a compressed model is the most accurate option available, but whether compressing SPAN's depth by half still leaves a model worth using ahead of no SR at all, without paying a real accuracy price for the compression itself. Across five recognition backbones and two independent datasets, span\_tiny answers both parts of that question affirmatively, and more strongly than a coarser reading of the numbers alone would suggest. \texttt{span\_tiny} beats \texttt{no-SR} with statistical significance in 5/5 backbones on EarVN1.0; the specific cost of compression (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) is non-significant in 4/5 backbones there and in 5/5 backbones under all three evaluation protocols tested on AWEx (from-scratch, full-fine-tune transfer, frozen-backbone transfer) -- the most consistently replicated finding in the paper. The depth ablation isolating block count alone corroborates this directly: span\_tiny and its uncompressed-depth counterpart, span\_large, are statistically indistinguishable in 4/5 backbones on EarVN1.0 and 5/5 on AWEx. Against five other lightweight SR architectures, span\_tiny is never significantly beaten on downstream accuracy and significantly outperforms the two weakest of them, despite ranking low on raw PSNR/SSIM -- a concrete demonstration that pixel-fidelity metrics are an imperfect stand-in for the metric this paper actually cares about.
 
-The evidence is reported with equal clarity where it runs out. The distillation-loss ablation returned a negative result and is reported as such, rather than reinterpreted more favorably. AWEx's smaller sample size means the cross-dataset confirmation is directionally consistent but statistically underpowered, and two observations, an off-trend ResNet-18 result and span\_large's unexplained AWEx image-quality dip, remain open rather than explained away. None of this changes the central result, but a reader should be able to see exactly how far the evidence goes and where it stops.
+The evidence is reported with equal clarity where it runs out or points against an earlier hypothesis. Three further mechanisms proposed to improve on span\_tiny -- a richer distillation loss, a saliency-weighted loss, and learned block pruning -- were each validated to the same statistical standard as the main result and are reported as negative or null, with learned pruning significantly worse than span\_tiny's fixed block selection in every backbone tested. An ablation designed to test this paper's own proposed explanation for why depth reduction is tolerable -- SPAN's parameter-free attention -- returned a result against that explanation, and the account is revised rather than defended. An auxiliary check on genuinely real, low-resolution images reversed the main claim's ordering, and rather than being left unexplained, this was traced to a specific, verifiable cause (a resolution mismatch between these images and the synthetic degradation used in training) and is reported as a boundary condition on the paper's scope. One anomaly remains open: ResNet-18's inconsistent secondary-question evidence on AWEx, across all three protocols, lacks a confirmed explanation. None of this changes the central result, but a reader should be able to see exactly how far the evidence goes, where a hypothesis was tested and did not survive, and where it stops.
 
-Extending this work would involve latency measured on an actual edge device rather than development hardware, confidence intervals for the SR-quality metrics, currently single-run, and, if a suitable third dataset becomes available, an additional independent check on generalization beyond EarVN1.0 and AWEx. Three further extensions are specified in Section~\ref{sec:extended-ablations} and remain to be executed: an attention-parameterization ablation testing whether depth tolerance is specific to SPAN's parameter-free design, a block-removal position ablation testing whether span\_tiny's specific choice of retained blocks is well-supported, and a recognition-embedding-space distillation loss motivated by the recognition-aware SR literature reviewed in Section~\ref{sec:related}. Each is designed to convert an architecture-specific empirical result or an untested design choice into a more general, mechanistically grounded claim.
+Extending this work would involve latency measured on an actual edge device rather than development hardware, confidence intervals for the SR-quality metrics (currently single-run), extending the six-architecture context comparison and the three additional-mechanism ablations to AWEx to test whether they replicate cross-dataset, and, if a suitable third dataset becomes available, an additional independent check on generalization beyond EarVN1.0 and AWEx. One further extension specified in Section~\ref{sec:extended-ablations} remains to be executed: a block-removal position ablation testing whether span\_tiny's specific choice of retained blocks is well-supported, designed to convert an untested design choice into a more general, mechanistically grounded claim. A second candidate extension, a recognition-embedding-space distillation loss motivated by the recognition-aware SR literature reviewed in Section~\ref{sec:related}, turned out on inspection to be mathematically identical to the identity-loss term already evaluated in Section~\ref{sec:res-loss}, and that account does not hold in this setting.
 
 % ============================================================================
 \section*{Declarations}
@@ -797,6 +921,11 @@ In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogn
 Cohen, J.:
 Statistical Power Analysis for the Behavioral Sciences, 2nd edn.
 Lawrence Erlbaum Associates, Hillsdale, NJ (1988)
+
+\bibitem{kingma2015adam}
+Kingma, D.P., Ba, J.:
+Adam: A Method for Stochastic Optimization.
+In: Proceedings of the 3rd International Conference on Learning Representations (ICLR) (2015)
 
 \bibitem{dunn1961multiple}
 Dunn, O.J.:

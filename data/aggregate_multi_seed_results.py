@@ -238,9 +238,24 @@ def main():
     backbones = sorted({b for b, d in by_key.keys()})
     pairwise_rows = []
     for backbone in backbones:
+        # [SỬA — bug tái lập KHÔNG ổn định phát hiện qua review, xác nhận bằng
+        # test thực chạy PYTHONHASHSEED khác nhau] domain_order chỉ phân biệt
+        # được 4 domain cũ (hr/lr/sr_baseline/sr_improved) — mọi domain MỚI
+        # (ví dụ 3 domain sr_position_* của block-position ablation) đều rơi
+        # vào cùng giá trị mặc định 9, khiến sorted() chỉ còn dựa vào thứ tự
+        # duyệt của {set comprehension} phía trên — thứ tự đó phụ thuộc
+        # PYTHONHASHSEED (ngẫu nhiên mỗi lần khởi động python, trừ khi đặt cố
+        # định), nên chạy LẶP LẠI script này trên ĐÚNG cùng 1 bộ JSON có thể
+        # cho domain_a/domain_b hoán đổi giữa 2 lần chạy, kéo theo dấu của
+        # mean_diff_b_minus_a và cận CI95% đảo dấu (đã kiểm chứng: cùng dữ
+        # liệu, PYTHONHASHSEED=1..5 cho ra tối thiểu 2 hoán vị khác nhau).
+        # p-value/|Cohen's d| không đổi (chỉ dấu), nhưng vẫn gây khó đọc kết
+        # quả nếu re-run. Thêm khoá phụ `d` (thứ tự chữ cái) để tie-break xác
+        # định, không phụ thuộc hash seed — áp dụng chung cho MỌI script gọi
+        # aggregator này, không chỉ ablation vị trí khối.
         domains_this_backbone = sorted(
             {d for b, d in by_key.keys() if b == backbone},
-            key=lambda d: domain_order.get(d, 9))
+            key=lambda d: (domain_order.get(d, 9), d))
         pairs = list(combinations(domains_this_backbone, 2))
         n_comparisons = max(1, len(pairs))
         for d1, d2 in pairs:

@@ -115,7 +115,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets.hrlr_pair_dataset import HRLRPairDataset
-from models.sr_models import build_sr_model, SRFeatureHook
+from models.sr_models import build_sr_model, SRFeatureHook, SPANBlockHook
 from models.recognition_model import EarRecognitionNet
 from utils.device_manager import DeviceManager, move_optimizer_state
 from utils.early_stopping import (EarlyStopping, save_state_dict as _save_state_dict,
@@ -232,6 +232,62 @@ def _setup_feat_kd(student, teacher, lambda_feat, cfg, scale, device, logger, ta
                 f"trên (student_feat_ch/teacher_feat_ch) KHÔNG đủ để phát hiện lỗi này nếu "
                 f"trùng ngẫu nhiên với 3*scale² — xem models/sr_models.py::SRFeatureHook.")
     return student_hook, teacher_hook, feat_adapter, list(feat_adapter.parameters())
+
+
+def _setup_position_kd(student, teacher, teacher_block_idx, lambda_position, device, logger):
+    """[MỚI — Mục 5.7.2 bài báo, block-removal position ablation] Khởi tạo
+    hook + adapter cho feature-hint distillation NHẮM VÀO 1 khối SPAB cụ thể
+    của teacher (xem SPANBlockHook trong models/sr_models.py để hiểu ĐỘNG LỰC
+    đầy đủ — vì sao cần cơ chế này thay vì chỉ gắn nhãn "coi như giữ khối
+    4-6" lên 1 model 3-khối train từ đầu không có hint gì).
+
+    Luôn hook khối CUỐI CÙNG của student (bất kể student có bao nhiêu khối)
+    — đây là điểm "student vừa hoàn tất xử lý, chuẩn bị đi vào conv chiếu
+    cuối", điểm tự nhiên để so khớp với "trạng thái xử lý của teacher tại
+    độ sâu tương ứng với vai trò được gán". Trả về (None, None, None, [])
+    nếu lambda_position<=0 hoặc teacher_block_idx là None (tắt hẳn, không
+    tốn chi phí — giống hệt quy ước của _setup_feat_kd)."""
+    if lambda_position <= 0:
+        return None, None, None, []
+    # [SỬA — lỗi phát hiện qua code review, phòng vệ lớp 2] Nếu lambda_position>0
+    # NHƯNG teacher_block_idx=None, TRƯỚC ĐÂY hàm này coi như "tắt" và trả về
+    # no-op im lặng (cùng nhánh với lambda_position<=0) — nguy hiểm vì người
+    # gọi tưởng cơ chế đang bật (đã đặt lambda_position>0) nhưng thực ra
+    # không có gì được train. main() đã có 1 lớp chặn tương tự trước khi gọi
+    # tới đây, nhưng hàm này tự chặn thêm 1 lớp nữa (phòng trường hợp được
+    # gọi từ chỗ khác trong tương lai không đi qua đúng lớp chặn ở main()).
+    if teacher_block_idx is None:
+        raise ValueError(
+            "_setup_position_kd: lambda_position>0 nhưng teacher_block_idx=None — cơ chế sẽ "
+            "KHÔNG được train (không phải tắt hẳn như lambda_position<=0). Cần chỉ định rõ "
+            "teacher_block_idx thay vì để mặc định.")
+    # [SỬA — lỗi phát hiện qua code review, xem chú thích tương ứng trong
+    # SPANBlockHook.__init__] Chỉ cần kiểm tra tối thiểu `.body` tồn tại và
+    # không rỗng ở ĐÂY (đủ để tính student_block_idx an toàn) — việc kiểm
+    # tra ĐẦY ĐỦ (đúng kiểu SPAB, không chỉ ModuleList bất kỳ như RLFN cũng
+    # có) đã nằm trong SPANBlockHook.__init__ ngay dưới đây, KHÔNG lặp lại
+    # logic kiểm tra ở 2 nơi (tránh 2 chỗ kiểm tra lệch nhau theo thời gian).
+    if not hasattr(student, "body") or not isinstance(student.body, nn.ModuleList) \
+            or len(student.body) == 0:
+        raise RuntimeError(
+            f"_setup_position_kd: student kiến trúc {type(student).__name__} không có "
+            f"`.body` dạng ModuleList không rỗng — ablation vị trí khối chỉ áp dụng cho "
+            f"SPAN/span_tiny/span_large.")
+    student_block_idx = len(student.body) - 1
+    student_hook = SPANBlockHook(student, student_block_idx)
+    teacher_hook = SPANBlockHook(teacher, teacher_block_idx)
+    # feat chưa có giá trị cho tới lần forward đầu tiên (khác SRFeatureHook,
+    # class này dùng register_forward_hook thường, không cần dummy forward
+    # tường minh ở đây vì train loop sẽ forward ngay sau) — suy kênh trực
+    # tiếp từ chính module SPAB được hook thay vì cần forward giả.
+    student_ch = student.body[student_block_idx].conv3.out_channels
+    teacher_ch = teacher.body[teacher_block_idx].conv3.out_channels
+    position_adapter = nn.Conv2d(student_ch, teacher_ch, kernel_size=1).to(device)
+    if logger:
+        logger.info(f"[Position KD] student block {student_block_idx} (cuối) -> teacher "
+                    f"block {teacher_block_idx} | student_ch={student_ch} teacher_ch={teacher_ch} "
+                    f"-> adapter Conv1x1({student_ch}->{teacher_ch}) (chỉ tồn tại lúc train)")
+    return student_hook, teacher_hook, position_adapter, list(position_adapter.parameters())
 
 
 def compute_multi_judge_saliency(judges, hr_img, identity_label, bbox=None,
@@ -414,7 +470,9 @@ def compute_multi_judge_saliency(judges, hr_img, identity_label, bbox=None,
 
 def compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
                         student_feat=None, teacher_feat=None, feat_adapter=None,
-                        saliency_map=None):
+                        saliency_map=None,
+                        student_position_feat=None, teacher_position_feat=None,
+                        position_adapter=None):
     l1 = nn.L1Loss()
 
     loss_pixel = l1(student_out, hr_img)
@@ -473,6 +531,28 @@ def compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
     else:
         loss_feat = torch.zeros((), device=student_out.device)
 
+    # [MỚI — Mục 5.7.2 bài báo, block-removal position ablation] Feature-hint
+    # NHẮM VÀO 1 khối cụ thể của teacher (khác loss_feat ở trên, luôn nhắm
+    # feature TRƯỚC conv chiếu cuối) — xem SPANBlockHook/_setup_position_kd
+    # để hiểu động lực đầy đủ. Dùng LẠI đúng công thức chuẩn hoá zero-mean/
+    # unit-std trước L1 như loss_feat, vì lý do lệch thang giá trị nội bộ
+    # giữa các kiến trúc/checkpoint là như nhau ở cả 2 cơ chế.
+    if position_adapter is not None and student_position_feat is not None \
+            and teacher_position_feat is not None:
+        def _instance_normalize_pos(f):
+            f = f.float()
+            b = f.shape[0]
+            flat = f.reshape(b, -1)
+            mean = flat.mean(dim=1).view(b, 1, 1, 1)
+            std = flat.std(dim=1).view(b, 1, 1, 1) + 1e-6
+            return (f - mean) / std
+
+        student_pos_n = _instance_normalize_pos(position_adapter(student_position_feat))
+        teacher_pos_n = _instance_normalize_pos(teacher_position_feat.detach())
+        loss_position = l1(student_pos_n, teacher_pos_n)
+    else:
+        loss_position = torch.zeros((), device=student_out.device)
+
     # [SỬA — lỗi phát hiện qua code review] Trước đây LUÔN forward+backward
     # QUA TẤT CẢ judge để tính identity loss dù lambda_identity=0 — vừa tốn
     # chi phí vô ích, vừa rủi ro `0 * NaN = NaN`: nếu 1 judge cho NaN/Inf ở
@@ -512,7 +592,8 @@ def compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
              ci["lambda_distill"] * loss_distill +
              ci.get("lambda_feat", 0.0) * loss_feat +
              ci.get("lambda_saliency", 0.0) * loss_saliency +
-             ci["lambda_identity"] * loss_identity)
+             ci["lambda_identity"] * loss_identity +
+             ci.get("lambda_position", 0.0) * loss_position)
 
     return total, {
         "pixel": loss_pixel.item(),
@@ -520,22 +601,26 @@ def compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
         "feat": loss_feat.item() if torch.is_tensor(loss_feat) else float(loss_feat),
         "saliency": loss_saliency.item() if torch.is_tensor(loss_saliency) else float(loss_saliency),
         "identity": loss_identity.item(),
+        "position": loss_position.item() if torch.is_tensor(loss_position) else float(loss_position),
     }
 
 
-def _move_all_to(device, student, teacher, judges, feat_adapter, optimizer):
+def _move_all_to(device, student, teacher, judges, feat_adapter, optimizer, position_adapter=None):
     student.to(device)
     teacher.to(device)
     for judge in judges:
         judge.to(device)
     if feat_adapter is not None:
         feat_adapter.to(device)
+    if position_adapter is not None:
+        position_adapter.to(device)
     move_optimizer_state(optimizer, device)
 
 
 def _forward_step(student, teacher, judges, lr_img, hr_img, identity_label, bbox, device,
                    cfg, optimizer, scaler, is_train,
-                   student_hook=None, teacher_hook=None, feat_adapter=None):
+                   student_hook=None, teacher_hook=None, feat_adapter=None,
+                   position_student_hook=None, position_teacher_hook=None, position_adapter=None):
     lr_img = lr_img.to(device, non_blocking=True)
     hr_img = hr_img.to(device, non_blocking=True)
     identity_label = identity_label.to(device, non_blocking=True)
@@ -561,6 +646,10 @@ def _forward_step(student, teacher, judges, lr_img, hr_img, identity_label, bbox
     # gọi lại forward.
     student_feat = student_hook.feat if student_hook is not None else None
     teacher_feat = teacher_hook.feat if teacher_hook is not None else None
+    # [MỚI — Mục 5.7.2] Cùng cơ chế "tự động cập nhật .feat lúc forward" như
+    # feature-KD ở trên, áp dụng cho hook theo-khối (SPANBlockHook).
+    position_student_feat = position_student_hook.feat if position_student_hook is not None else None
+    position_teacher_feat = position_teacher_hook.feat if position_teacher_hook is not None else None
 
     # [MỚI] Chỉ tính saliency map (tốn 1 lần forward+backward/judge) khi thực
     # sự cần dùng — giữ chi phí = 0 khi lambda_saliency=0 (mặc định cũ không đổi).
@@ -576,7 +665,10 @@ def _forward_step(student, teacher, judges, lr_img, hr_img, identity_label, bbox
 
     loss, parts = compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
                                       student_feat=student_feat, teacher_feat=teacher_feat,
-                                      feat_adapter=feat_adapter, saliency_map=saliency_map)
+                                      feat_adapter=feat_adapter, saliency_map=saliency_map,
+                                      student_position_feat=position_student_feat,
+                                      teacher_position_feat=position_teacher_feat,
+                                      position_adapter=position_adapter)
 
     loss_val = loss.item()
     # [SỬA — bug NGHIÊM TRỌNG phát hiện qua review Q1] TRƯỚC ĐÂY backward()+
@@ -598,6 +690,8 @@ def _forward_step(student, teacher, judges, lr_img, hr_img, identity_label, bbox
         params_to_clip = list(student.parameters())
         if feat_adapter is not None:
             params_to_clip += list(feat_adapter.parameters())
+        if position_adapter is not None:
+            params_to_clip += list(position_adapter.parameters())
         torch.nn.utils.clip_grad_norm_(params_to_clip, max_norm=1.0)
         optimizer.step()
 
@@ -606,11 +700,13 @@ def _forward_step(student, teacher, judges, lr_img, hr_img, identity_label, bbox
 
 def run_epoch(student, teacher, judges, loader, device_mgr, cfg,
               optimizer=None, scaler=None, logger=None,
-              student_hook=None, teacher_hook=None, feat_adapter=None):
+              student_hook=None, teacher_hook=None, feat_adapter=None,
+              position_student_hook=None, position_teacher_hook=None, position_adapter=None):
     is_train = optimizer is not None
     student.train() if is_train else student.eval()
 
-    totals = {"pixel": 0.0, "distill": 0.0, "feat": 0.0, "saliency": 0.0, "identity": 0.0, "total": 0.0}
+    totals = {"pixel": 0.0, "distill": 0.0, "feat": 0.0, "saliency": 0.0, "identity": 0.0,
+              "position": 0.0, "total": 0.0}
     n, nan_batches = 0, 0
     model_device = next(student.parameters()).device.type
 
@@ -620,25 +716,31 @@ def run_epoch(student, teacher, judges, loader, device_mgr, cfg,
             device = device_mgr.current_device()
 
             if device != model_device:
-                _move_all_to(device, student, teacher, judges, feat_adapter, optimizer)
+                _move_all_to(device, student, teacher, judges, feat_adapter, optimizer,
+                             position_adapter=position_adapter)
                 model_device = device
 
             try:
                 loss_val, parts = _forward_step(
                     student, teacher, judges, lr_img, hr_img, identity_label, bbox, device,
                     cfg, optimizer, scaler if device == "cuda" else None, is_train,
-                    student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter)
+                    student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter,
+                    position_student_hook=position_student_hook, position_teacher_hook=position_teacher_hook,
+                    position_adapter=position_adapter)
             except RuntimeError as e:
                 if device != "cuda" or "out of memory" not in str(e).lower():
                     raise
                 device_mgr.report_oom()
                 device = "cpu"
-                _move_all_to(device, student, teacher, judges, feat_adapter, optimizer)
+                _move_all_to(device, student, teacher, judges, feat_adapter, optimizer,
+                             position_adapter=position_adapter)
                 model_device = device
                 loss_val, parts = _forward_step(
                     student, teacher, judges, lr_img, hr_img, identity_label, bbox, device,
                     cfg, optimizer, None, is_train,
-                    student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter)
+                    student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter,
+                    position_student_hook=position_student_hook, position_teacher_hook=position_teacher_hook,
+                    position_adapter=position_adapter)
 
             if loss_val != loss_val or loss_val in (float("inf"), float("-inf")):
                 nan_batches += 1
@@ -719,6 +821,32 @@ def main():
                           "(dùng cho ablation)")
     ap.add_argument("--lambda_identity", type=float, default=None,
                      help="ghi đè sr_improve.lambda_identity trong config (dùng cho ablation)")
+    ap.add_argument("--teacher_arch", default=None,
+                     help="[MỚI — Mục 5.7.2] ghi đè sr_improve.teacher_arch trong config. "
+                          "BẮT BUỘC dùng 'span_large' (KHÔNG phải 'span_official' mặc định) khi "
+                          "--lambda_position > 0: teacher mặc định span_official được bọc qua "
+                          "SPANWithRescale (models/span_official_wrapper.py, import kiến trúc "
+                          "NGOÀI dự án) — object đó KHÔNG có thuộc tính `.body` mà SPANBlockHook "
+                          "cần, sẽ raise RuntimeError ngay lập tức. span_large dùng chung class "
+                          "SPAN tự viết với span_tiny (có `.body`), tương thích và cũng là phép so "
+                          "sánh 'sạch' hơn theo đúng lý do đã nêu ở Section~arch của bài báo.")
+    ap.add_argument("--teacher_ckpt", default=None,
+                     help="[MỚI — Mục 5.7.2] ghi đè sr_improve.teacher_ckpt trong config — dùng "
+                          "kèm --teacher_arch (ví dụ --teacher_arch span_large --teacher_ckpt "
+                          "runs/sr_improved_span_large/best.pt).")
+    ap.add_argument("--lambda_position", type=float, default=None,
+                     help="[MỚI — Mục 5.7.2, block-removal position ablation] ghi đè "
+                          "sr_improve.lambda_position (feature-hint distillation nhắm vào 1 khối "
+                          "SPAB cụ thể của teacher, xem models/sr_models.py::SPANBlockHook và "
+                          "_setup_position_kd để hiểu động lực). Yêu cầu truyền kèm "
+                          "--teacher_block_idx. Chỉ dùng được với student_arch thuộc họ SPAN tự "
+                          "viết (span/span_tiny/span_large).")
+    ap.add_argument("--teacher_block_idx", type=int, default=None,
+                     help="[MỚI — Mục 5.7.2] index (0-based) của khối SPAB teacher dùng làm hint "
+                          "target cho feature-hint theo-vị-trí — span_tiny hiện tại (giữ khối "
+                          "1-3) tương ứng idx=2; biến thể 'giữ khối 4-6' dùng idx=5 (khối cuối, "
+                          "teacher có 6 khối); biến thể 'giữ khối 1,3,5' dùng idx=4. Bắt buộc nếu "
+                          "--lambda_position > 0, bỏ qua (không dùng) nếu không.")
     ap.add_argument("--min_delta", type=float, default=0.0,
                      help="[MỚI — 2026-08-25, sự cố thật] ngưỡng cải thiện tối thiểu trên "
                           "val_total để tính là 'tốt hơn' cho early-stopping (xem "
@@ -770,6 +898,45 @@ def main():
         ci["lambda_saliency"] = args.lambda_saliency
     if args.lambda_identity is not None:
         ci["lambda_identity"] = args.lambda_identity
+    if args.teacher_arch is not None:
+        ci["teacher_arch"] = args.teacher_arch
+    if args.teacher_ckpt is not None:
+        ci["teacher_ckpt"] = args.teacher_ckpt
+    if args.lambda_position is not None:
+        ci["lambda_position"] = args.lambda_position
+    # [SỬA — lỗi THIẾT KẾ phát hiện qua code review] teacher mặc định
+    # (span_official) được bọc qua SPANWithRescale (models/
+    # span_official_wrapper.py) — object đó KHÔNG có `.body`, nên
+    # SPANBlockHook sẽ raise ngay ở lần forward đầu tiên nếu ai đó chạy
+    # ablation vị trí khối mà QUÊN đổi teacher_arch sang 'span_large'. Lỗi đó
+    # tự nó không SAI (raise rõ ràng, không âm thầm), nhưng xảy ra SAU KHI
+    # đã load xong toàn bộ dataset + build model — chặn NGAY TẠI ĐÂY, trước
+    # khi tốn bất kỳ chi phí nào, với thông báo chỉ thẳng cách khắc phục.
+    if ci.get("lambda_position", 0.0) > 0 and ci.get("teacher_arch") == "span_official":
+        raise ValueError(
+            "lambda_position > 0 nhưng teacher_arch='span_official' — teacher này được bọc qua "
+            "SPANWithRescale (kiến trúc NGOÀI dự án), KHÔNG có thuộc tính `.body` mà "
+            "SPANBlockHook cần, sẽ crash ngay khi bắt đầu train. Dùng --teacher_arch span_large "
+            "--teacher_ckpt runs/sr_improved_span_large/best.pt (cùng class SPAN tự viết với span_tiny, "
+            "có `.body` tương thích — xem pipeline/run_block_position_ablation.sh).")
+    # [SỬA — lỗi phát hiện qua code review] Trước đây kiểm tra `args.lambda_position`
+    # (giá trị CLI thô, có thể là None nếu không truyền qua CLI) thay vì giá
+    # trị ĐÃ RESOLVE `ci["lambda_position"]` — nếu ai đó sửa thẳng
+    # lambda_position>0 trong configs/config.yaml (không qua CLI) mà QUÊN
+    # truyền --teacher_block_idx, check này bị BỎ QUA HOÀN TOÀN (args.lambda_position
+    # vẫn là None), rồi _setup_position_kd() ÂM THẦM tắt hẳn cơ chế (coi
+    # teacher_block_idx=None là "tắt", xem guard trong hàm đó) — training vẫn
+    # chạy êm re, tưởng lambda_position=0.5 đang có tác dụng nhưng thực ra
+    # đang chạy pixel+distill thuần. ĐÚNG LOẠI LỖI "silent confound" đã từng
+    # xảy ra thật với lambda_feat/lambda_saliency (xem đầu file) — sửa bằng
+    # cách kiểm tra giá trị ĐÃ RESOLVE, bắt được ở CẢ 2 đường (CLI hoặc sửa
+    # thẳng config.yaml).
+    if ci.get("lambda_position", 0.0) > 0 and args.teacher_block_idx is None:
+        raise ValueError(
+            "sr_improve.lambda_position > 0 (dù truyền qua --lambda_position hay đặt thẳng "
+            "trong config.yaml) yêu cầu truyền kèm --teacher_block_idx (index khối SPAB của "
+            "teacher dùng làm hint target) — xem help của --teacher_block_idx. Không có nó, "
+            "cơ chế sẽ ÂM THẦM bị tắt (không train position-KD nào cả) thay vì báo lỗi.")
     if args.student_arch is not None:
         ci["student_arch"] = args.student_arch
 
@@ -817,7 +984,8 @@ def main():
     lambda_saliency = ci.get("lambda_saliency", 0.0)
     logger.info(f"Student architecture: {student_arch} | Lambda: pixel={ci['lambda_pixel']} "
                 f"distill={ci['lambda_distill']} feat={lambda_feat} saliency={lambda_saliency} "
-                f"identity={ci['lambda_identity']} | early_stop_min_delta={args.min_delta}")
+                f"identity={ci['lambda_identity']} position={ci.get('lambda_position', 0.0)} "
+                f"(teacher_block_idx={args.teacher_block_idx}) | early_stop_min_delta={args.min_delta}")
     device_mgr = DeviceManager(logger=logger)
     device = device_mgr.preferred
     logger.info(f"=== Bắt đầu cải tiến SPAN (distillation + feature-KD + saliency-weighted loss "
@@ -825,7 +993,8 @@ def main():
     logger.info(f"Device ưu tiên: {device}")
     logger.info(f"Teacher: {ci['teacher_arch']} (output-level distill"
                 f"{' + feature-level KD' if lambda_feat > 0 else ''}"
-                f"{' + saliency-weighted identity-critical loss' if lambda_saliency > 0 else ''})")
+                f"{' + saliency-weighted identity-critical loss' if lambda_saliency > 0 else ''}"
+                f"{f' + position-targeted feature-hint (teacher block {args.teacher_block_idx})' if ci.get('lambda_position', 0.0) > 0 else ''})")
 
     # --- Student: kiến trúc NÉN (student_arch, ví dụ span_tiny) — model sẽ được deploy ---
     # [MỚI — Mục 5.7(i)] truyền student_n_blocks xuống build_sr_model(); hàm
@@ -874,7 +1043,13 @@ def main():
     student_hook, teacher_hook, feat_adapter, extra_params = _setup_feat_kd(
         student, teacher, lambda_feat, cfg, scale, device, logger)
 
-    optimizer = torch.optim.Adam(list(student.parameters()) + extra_params, lr=ci["lr"])
+    # --- [MỚI — Mục 5.7.2] Feature-hint theo-vị-trí (chỉ bật nếu lambda_position > 0) ---
+    lambda_position = ci.get("lambda_position", 0.0)
+    position_student_hook, position_teacher_hook, position_adapter, position_extra_params = \
+        _setup_position_kd(student, teacher, args.teacher_block_idx, lambda_position, device, logger)
+
+    optimizer = torch.optim.Adam(
+        list(student.parameters()) + extra_params + position_extra_params, lr=ci["lr"])
     # KHÔNG dùng GradScaler/AMP cho script này (xem ghi chú trong _forward_step
     # về lý do img_range=255 của SPAN dễ tràn số dưới fp16 khi chuỗi nhiều model).
 
@@ -885,10 +1060,14 @@ def main():
     for epoch in range(max_epochs):
         train_stats = run_epoch(student, teacher, judges, train_loader,
                                  device_mgr, cfg, optimizer=optimizer, scaler=None, logger=logger,
-                                 student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter)
+                                 student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter,
+                                 position_student_hook=position_student_hook,
+                                 position_teacher_hook=position_teacher_hook, position_adapter=position_adapter)
         val_stats = run_epoch(student, teacher, judges, val_loader,
                                device_mgr, cfg, optimizer=None, scaler=None, logger=logger,
-                               student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter)
+                               student_hook=student_hook, teacher_hook=teacher_hook, feat_adapter=feat_adapter,
+                               position_student_hook=position_student_hook,
+                               position_teacher_hook=position_teacher_hook, position_adapter=position_adapter)
 
         oom_note = f" | OOM fallback: {device_mgr.total_oom_events} lần" \
             if device_mgr.total_oom_events > 0 else ""
@@ -897,7 +1076,8 @@ def main():
             f"(early-stop counter: {stopper.counter}/{patience}){oom_note} | "
             f"train_total={train_stats['total']:.4f} pixel={train_stats['pixel']:.4f} "
             f"distill={train_stats['distill']:.4f} feat={train_stats['feat']:.4f} "
-            f"saliency={train_stats['saliency']:.4f} identity={train_stats['identity']:.4f} | "
+            f"saliency={train_stats['saliency']:.4f} identity={train_stats['identity']:.4f} "
+            f"position={train_stats['position']:.4f} | "
             f"VAL_TOTAL={val_stats['total']:.4f}"
         )
 
@@ -917,6 +1097,10 @@ def main():
         student_hook.remove()
     if teacher_hook is not None:
         teacher_hook.remove()
+    if position_student_hook is not None:
+        position_student_hook.remove()
+    if position_teacher_hook is not None:
+        position_teacher_hook.remove()
 
     _save_last_if_missing(run_dir / "best.pt", student, logger, "best.pt")
 
