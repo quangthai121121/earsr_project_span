@@ -219,6 +219,12 @@ def main():
                      help="ghi đè seed trong config — dùng để chạy multi-seed, đo độ ổn định")
     ap.add_argument("--run_suffix", default="",
                      help="hậu tố thêm vào tên thư mục runs/, tránh ghi đè khi chạy nhiều seed")
+    ap.add_argument("--num_workers", type=int, default=4,
+                     help="[MỚI — 2026-08-30, sự cố thật] số DataLoader worker — mặc định 4 "
+                          "(giữ NGUYÊN hành vi cũ). Đặt 0 khi server dùng chung bị job khác chiếm "
+                          "gần hết /dev/shm (num_workers=0 chạy DataLoader trong process chính, "
+                          "không cần shared memory liên-process, xem chú thích tương tự trong "
+                          "train_sr_distill.py::_make_hrlr_loaders).")
     ap.add_argument("--freeze_backbone", action="store_true",
                      help="[MỚI] Đóng băng TOÀN BỘ model.features (backbone trích đặc trưng) — "
                           "chỉ train embedding + identity_head + gender_head ('linear probe'). "
@@ -254,18 +260,22 @@ def main():
     val_set = EarDataset(domain_root, "val", splits_json, label_map, image_size, train=False)
 
     # pin_memory + persistent_workers: tối ưu tốc độ nạp dữ liệu lên GPU
-    loader_kwargs = dict(num_workers=4, pin_memory=torch.cuda.is_available(),
-                          persistent_workers=True)
+    # [SỬA — 2026-08-30] persistent_workers PHẢI theo (num_workers>0) — PyTorch
+    # raise ValueError nếu persistent_workers=True mà num_workers=0 (trường hợp
+    # dùng --num_workers 0 để né /dev/shm hết chỗ trên server dùng chung).
+    nw = args.num_workers
+    loader_kwargs = dict(num_workers=nw, pin_memory=torch.cuda.is_available(),
+                          persistent_workers=(nw > 0))
     # [MỚI — phát hiện qua review Q1] worker_init_fn + generator cố định:
     # cudnn.deterministic (set_seed()) không đủ để tái lập tuyệt đối khi
     # num_workers>0 — thứ tự shuffle giờ tường minh qua generator seed riêng
     # thay vì dựa ngầm vào RNG toàn cục, và mỗi worker subprocess được seed
     # lại rõ ràng (xem utils/seed.py::seed_worker/seeded_generator).
     train_loader = DataLoader(train_set, batch_size=cfg["recognition"]["batch_size"],
-                               shuffle=True, worker_init_fn=seed_worker,
+                               shuffle=True, worker_init_fn=seed_worker if nw > 0 else None,
                                generator=seeded_generator(cfg["split"]["seed"]), **loader_kwargs)
     val_loader = DataLoader(val_set, batch_size=cfg["recognition"]["batch_size"],
-                             shuffle=False, worker_init_fn=seed_worker, **loader_kwargs)
+                             shuffle=False, worker_init_fn=seed_worker if nw > 0 else None, **loader_kwargs)
 
     run_name = f"recognition_{args.domain}_{args.backbone}{args.run_suffix}"
     run_dir = Path(cfg["paths"]["runs_root"]) / run_name

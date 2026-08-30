@@ -877,6 +877,15 @@ def main():
                           "khi chạy nhiều cấu hình ablation/fine-tune khác nhau")
     ap.add_argument("--seed", type=int, default=None,
                      help="ghi đè seed trong config — dùng để chạy multi-seed, đo độ ổn định")
+    ap.add_argument("--num_workers", type=int, default=4,
+                     help="[MỚI — 2026-08-30, sự cố thật] số DataLoader worker — mặc định 4 "
+                          "(giữ NGUYÊN hành vi cũ). Đặt 0 khi server dùng chung bị job khác chiếm "
+                          "gần hết /dev/shm (quan sát thực tế: tmpfs 32G bị 1 job federated-learning "
+                          "khác chiếm tới 90% trong vài phút) — num_workers=0 chạy DataLoader NGAY "
+                          "trong process chính, không sinh worker con, nên KHÔNG cần /dev/shm để "
+                          "truyền tensor liên-process, loại bỏ hẳn rủi ro 'unable to allocate shared "
+                          "memory' bất kể job khác chiếm bao nhiêu. Đổi lại nạp ảnh chậm hơn (không "
+                          "còn prefetch song song), không ảnh hưởng logic/độ chính xác training.")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -969,6 +978,7 @@ def main():
     _validate_identity_labels(train_set, cfg["num_identities"])
     _validate_identity_labels(val_set, cfg["num_identities"])
     train_loader, val_loader = _make_hrlr_loaders(train_set, val_set, ci["batch_size"],
+                                                   num_workers=args.num_workers,
                                                    seed=cfg["split"]["seed"])
 
     student_arch = ci.get("student_arch", cfg["sr"]["arch"])

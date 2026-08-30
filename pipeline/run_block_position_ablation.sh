@@ -75,6 +75,14 @@ SR_SEED=42
 LAMBDA_POSITION=0.5
 TEACHER_ARCH="span_large"
 TEACHER_CKPT="runs/sr_improved_span_large/best.pt"
+# [MỚI — 2026-08-30, sự cố thật] số DataLoader worker, đọc từ biến môi trường
+# nếu có, mặc định 4 (giữ NGUYÊN hành vi cũ). Đặt 0 bằng cách chạy
+# "NUM_WORKERS=0 bash pipeline/run_block_position_ablation.sh" khi server dùng
+# chung bị job khác chiếm gần hết /dev/shm (đã quan sát thực tế: tmpfs 32G bị
+# 1 job khác chiếm tới 90% trong vài phút, gây crash "unable to allocate
+# shared memory" giữa lúc train — xem --num_workers trong train_sr_distill.py
+# và train_recognition.py để hiểu cơ chế đầy đủ).
+NUM_WORKERS="${NUM_WORKERS:-4}"
 
 declare -A VARIANT_TEACHER_IDX=(
     [keepfirst]=2
@@ -137,7 +145,8 @@ for VARIANT in "${!VARIANT_TEACHER_IDX[@]}"; do
             --lambda_pixel 1.0 --lambda_distill 1.0 \
             --lambda_feat 0.0 --lambda_saliency 0.0 --lambda_identity 0.0 \
             --lambda_position "$LAMBDA_POSITION" --teacher_block_idx "$TEACHER_IDX" \
-            --min_delta 0.001 --seed "$SR_SEED" --run_suffix "_${SR_TAG}"
+            --min_delta 0.001 --seed "$SR_SEED" --run_suffix "_${SR_TAG}" \
+            --num_workers "$NUM_WORKERS"
     fi
 
     echo ""
@@ -178,7 +187,8 @@ for VARIANT in "${!VARIANT_TEACHER_IDX[@]}"; do
             # mọi seed.
             LR_CKPT="runs/recognition_lr_${BACKBONE}_seed${SEED}/best.pt"
             python train_recognition.py --config "$CONFIG" --domain "$DOMAIN" --backbone "$BACKBONE" \
-                --init_ckpt "$LR_CKPT" --seed "$SEED" --run_suffix "_seed${SEED}"
+                --init_ckpt "$LR_CKPT" --seed "$SEED" --run_suffix "_seed${SEED}" \
+                --num_workers "$NUM_WORKERS"
 
             python eval_recognition.py --config "$CONFIG" \
                 --ckpt "runs/recognition_${DOMAIN}_${BACKBONE}_seed${SEED}/best.pt" \
