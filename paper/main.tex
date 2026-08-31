@@ -461,7 +461,95 @@ Across all five backbones, span\_tiny is never significantly beaten by any of th
 
 \subsection{Auxiliary validation: real low-resolution holdout}
 
-On a held-out set of 173 genuinely low-resolution ear images (rather than synthetically downsampled ones), downstream identity accuracy \emph{reverses} the main result's ordering: no-SR = 0.1965, span\_tiny = 0.1561, span\_baseline = 0.1214 (single run, $n=1$, mobilenet\_v2 only, not multi-seed); gender accuracy shows the same reversed ordering (no-SR = 0.8555, span\_tiny = 0.8324, span\_baseline = 0.8382), which argues against this being sampling noise specific to one task. The likely cause is a resolution mismatch: every one of the 173 holdout images has a native short side strictly below 20\,px (range 13--19\,px, mean 17.8\,px) -- below the resolution the SR models were trained to receive as input. The SR models were trained exclusively to invert one specific, clean synthetic degradation (bicubic downsampling from an 80\,px HR crop); genuinely-captured images this small do not share that degradation's statistics, and many additionally have non-square aspect ratios (mean long side 25.7\,px against a 17.8\,px short side) that cause the shared letterbox-resize routine (Section~\ref{sec:arch}) to shrink the short side further still and introduce a larger padded region before the SR model sees the image. Under this distribution mismatch, a model trained to confidently reconstruct fine detail from a specific degradation can readily hallucinate plausible-looking but incorrect high-frequency structure, actively harming downstream recognition, while plain bicubic upsampling (the no-SR path) never attempts this reconstruction and therefore cannot introduce it. This is a known failure mode in the SR literature -- models trained on synthetic degradation transferring poorly to real-world degradation -- and is discussed further as a boundary condition on the paper's central claim in Section~\ref{sec:limitations}, rather than treated as evidence against it: the main claim is specifically about the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this auxiliary check probes a related but distinct question that the main experiments were never designed to answer.
+On a held-out set of 173 genuinely low-resolution ear images (rather than synthetically downsampled ones), downstream accuracy \emph{reverses} the main result's ordering. Table~\ref{tab:lr-holdout} reports this at $n=5$ seeds (mobilenet\_v2), extending an earlier single-seed screening of the same holdout set.
+
+\begin{table}[H]
+\centering
+\caption{Real low-resolution holdout, EarVN1.0 (173 images, mobilenet\_v2), $n=5$ seeds.}
+\label{tab:lr-holdout}
+\begin{tabular}{lcc}
+\toprule
+Condition & Identity accuracy & Gender accuracy \\
+\midrule
+no-SR            & 0.1757 $\pm$ 0.0194 & 0.8451 $\pm$ 0.0103 \\
+span\_baseline   & 0.1480 $\pm$ 0.0194 & 0.8301 $\pm$ 0.0113 \\
+span\_tiny       & 0.1538 $\pm$ 0.0264 & 0.8312 $\pm$ 0.0155 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Real low-resolution holdout, pairwise comparisons ($d$, $p_{\text{Bonf}}$; family of 3 comparisons per metric), $n=5$ seeds.}
+\label{tab:lr-holdout-pairwise}
+\begin{tabular}{lcc}
+\toprule
+Comparison & Identity accuracy & Gender accuracy \\
+\midrule
+span\_baseline $-$ no-SR & $d{=}{-}0.79$, $p{=}0.453$ (n.s.) & $d{=}{-}1.43$, $p{=}0.099$ (sig.) \\
+span\_tiny $-$ no-SR     & $d{=}{-}0.96$, $p{=}0.296$ (n.s.) & $d{=}{-}0.68$, $p{=}0.603$ (n.s.) \\
+span\_tiny $-$ span\_baseline & $d{=}0.14$, $p{=}1.0$ (n.s.) & $d{=}0.04$, $p{=}1.0$ (n.s.) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The reversal replicates consistently in direction across all 5 seeds for both metrics: no-SR scores highest and span\_baseline lowest in every one of the 5 seeds on both identity and gender accuracy, with span\_tiny in between. On gender accuracy, span\_baseline's cost relative to no-SR reaches significance after Bonferroni correction ($d{=}{-}1.43$, $p_{\text{Bonf}}{=}0.099$); the corresponding identity-accuracy comparison does not ($d{=}{-}0.79$, $p_{\text{Bonf}}{=}0.453$), though it points the same direction with a comparable effect size. Two independent tasks (identity and gender classification) reversing in the same direction across 5 independent seeds argues against this being sampling noise specific to one task or one seed, even though $n{=}5$ is underpowered to establish significance on every individual comparison (MDES at $\alpha{=}.10$ requires $d{\geq}1.36$; the largest observed magnitude, $|d|{=}0.96$ for identity accuracy, falls short of it). span\_tiny vs.\ span\_baseline itself remains non-significant on both metrics ($d{=}0.14$ and $d{=}0.04$, respectively) -- consistent with the paper's central claim that the specific cost of compression is near zero, rather than a separate anomaly requiring its own explanation.
+
+The likely cause of the no-SR/SR reversal itself is a resolution mismatch: every one of the 173 holdout images has a native short side strictly below 20\,px (range 13--19\,px, mean 17.8\,px) -- below the resolution the SR models were trained to receive as input. The SR models were trained exclusively to invert one specific, clean synthetic degradation (bicubic downsampling from an 80\,px HR crop); genuinely-captured images this small do not share that degradation's statistics, and many additionally have non-square aspect ratios (mean long side 25.7\,px against a 17.8\,px short side) that cause the shared letterbox-resize routine (Section~\ref{sec:arch}) to shrink the short side further still and introduce a larger padded region before the SR model sees the image. Under this distribution mismatch, a model trained to confidently reconstruct fine detail from a specific degradation can readily hallucinate plausible-looking but incorrect high-frequency structure, actively harming downstream recognition, while plain bicubic upsampling (the no-SR path) never attempts this reconstruction and therefore cannot introduce it. This is a known failure mode in the SR literature -- models trained on synthetic degradation transferring poorly to real-world degradation -- and is discussed further as a boundary condition on the paper's central claim in Section~\ref{sec:limitations}, rather than treated as evidence against it: the main claim is specifically about the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this auxiliary check probes a related but distinct question that the main experiments were never designed to answer.
+
+\subsubsection{Mitigation for the boundary condition: degradation-augmented training}
+\label{sec:degradation-mitigation}
+
+Rather than leaving the resolution-mismatch boundary condition as an unaddressed limitation, a direct mitigation was implemented and tested: both span\_tiny and span\_baseline were retrained with the LR input generated by a randomized real-world-style degradation pipeline (Gaussian blur, additive noise, and JPEG compression, each resampled independently per training sample per epoch) rather than clean bicubic downsampling alone, following the classical degradation-modeling approach used in BSRGAN~\cite{zhang2021designing} rather than the more elaborate two-stage pipeline of Real-ESRGAN~\cite{wang2021realesrgan}, to keep the change tractable as a single-variable ablation. Only the training-time LR generation changes; the validation split, the distillation recipe, and the frozen teacher are all unchanged from the main recipe, isolating the effect of degradation diversity specifically. Table~\ref{tab:degradation-sanity} first confirms this retraining does not disturb the paper's central claim: span\_tiny remains statistically indistinguishable from span\_baseline under the new recipe ($d{=}{-}0.09$, $p_{\text{Bonf}}{=}0.848$), at a modest cost in absolute accuracy on the clean synthetic benchmark relative to the original bicubic-only recipe (mobilenet\_v2: 49.92\% and 49.80\% here vs.\ 51.25\% and 50.26\% in Table~\ref{tab:main}) -- an expected accuracy/robustness trade-off from training on a harder, more varied degradation distribution.
+
+\begin{table}[H]
+\centering
+\caption{Compression-safety sanity check under degradation-augmented training, EarVN1.0 (mobilenet\_v2), $n{=}5$ seeds.}
+\label{tab:degradation-sanity}
+\begin{tabular}{lcc}
+\toprule
+span\_baseline (degradation-aug.\ training) & span\_tiny (degradation-aug.\ training) & $d$, $p_{\text{Bonf}}$ \\
+\midrule
+0.4992 $\pm$ 0.0114 & 0.4980 $\pm$ 0.0016 & $d{=}{-}0.09$, $p{=}0.848$ (n.s.) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:degradation-holdout} re-evaluates both retrained models on the same 173-image real-low-resolution holdout, at $n{=}5$ seeds.
+
+\begin{table}[H]
+\centering
+\caption{Real low-resolution holdout under degradation-augmented training vs.\ the original bicubic-only recipe (Table~\ref{tab:lr-holdout}), EarVN1.0 (mobilenet\_v2), $n{=}5$ seeds.}
+\label{tab:degradation-holdout}
+\begin{tabular}{lcccc}
+\toprule
+Condition & Identity (bicubic-only) & Identity (degrad.-aug.) & Gender (bicubic-only) & Gender (degrad.-aug.) \\
+\midrule
+no-SR          & 0.1757 $\pm$ 0.0194 & --                   & 0.8451 $\pm$ 0.0103 & --                   \\
+span\_baseline & 0.1480 $\pm$ 0.0194 & 0.1318 $\pm$ 0.0193  & 0.8301 $\pm$ 0.0113 & 0.8127 $\pm$ 0.0145  \\
+span\_tiny     & 0.1538 $\pm$ 0.0264 & 0.1572 $\pm$ 0.0384  & 0.8312 $\pm$ 0.0155 & 0.8509 $\pm$ 0.0229  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Real low-resolution holdout under degradation-augmented training, pairwise comparisons ($d$, $p_{\text{Bonf}}$; family of 3 per metric), $n{=}5$ seeds.}
+\label{tab:degradation-holdout-pairwise}
+\begin{tabular}{lcc}
+\toprule
+Comparison & Identity accuracy & Gender accuracy \\
+\midrule
+span\_baseline $-$ no-SR & $d{=}{-}1.41$, $p{=}0.104$ (n.s.) & $d{=}{-}3.08$, $p{=}0.007$ (sig.) \\
+span\_tiny $-$ no-SR     & $d{=}{-}0.35$, $p{=}1.0$ (n.s., gap narrowed from $d{=}{-}0.96$) & $d{=}0.23$, $p{=}1.0$ (n.s., span\_tiny nominally ahead) \\
+span\_tiny $-$ span\_baseline & $d{=}0.82$, $p{=}0.421$ (n.s.) & $d{=}1.45$, $p{=}0.095$ (sig., span\_tiny ahead) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The effect of degradation-augmented training is asymmetric between the two architectures, and the result is reported as such rather than smoothed into a single verdict. For span\_baseline, the mitigation does not help and, on gender accuracy, makes the gap to no-SR significantly worse than under the original recipe ($d{=}{-}3.08$, $p_{\text{Bonf}}{=}0.007$, compared to $d{=}{-}1.43$ in Table~\ref{tab:lr-holdout-pairwise}). For span\_tiny, the mitigation shows a consistent, if not fully significant, improvement on both metrics: on identity accuracy, the gap to no-SR narrows from $d{=}{-}0.96$ to $d{=}{-}0.35$; on gender accuracy, span\_tiny under degradation-augmented training is nominally \emph{ahead} of no-SR (0.8509 vs.\ 0.8451, $d{=}0.23$), a reversal of the original direction, and now significantly ahead of span\_baseline under the same recipe ($d{=}1.45$, $p_{\text{Bonf}}{=}0.095$) -- a comparison that was flat ($d{=}0.04$) before this mitigation. None of the individual comparisons reaches significance against no-SR after Bonferroni correction at $n{=}5$, so this is reported as a partial, directionally consistent mitigation specific to the compressed model, not a resolved boundary condition: degradation-augmented training measurably helps span\_tiny's robustness to genuinely low-resolution real images without disturbing the compression-safety claim, but does not by itself close the gap to no-SR with statistical certainty, and does not transfer the same benefit to span\_baseline under the specific degradation recipe tested here.
+
+A candidate mechanism for the asymmetry itself -- that span\_baseline's larger capacity permits more confident, and potentially more incorrect, high-frequency reconstruction under distribution shift than span\_tiny's -- was tested directly with a paired Laplacian-variance analysis across all 173 holdout images, using the gain in sharpness relative to no-SR as a proxy for the amount of high-frequency content each model adds; this proxy quantifies added detail but, absent a clean HR reference for these genuinely low-resolution images, cannot on its own distinguish correct detail recovery from hallucination. The paired effect size between span\_baseline and span\_tiny is negligible under both the original recipe ($d{=}0.06$) and degradation-augmented training ($d{=}{-}0.07$), and across the four conditions, mean sharpness gain correlates positively rather than negatively with mean identity accuracy (Spearman $\rho{=}0.20$, $n{=}4$) -- the opposite of what the capacity/hallucination account predicts. This candidate mechanism therefore finds no support, and the cause of the span\_tiny/span\_baseline asymmetry under degradation-augmented training is left open rather than assigned an unverified explanation.
 
 \subsection{Cross-dataset generalization (AWEx)}
 \label{sec:res-awex}
@@ -756,7 +844,7 @@ Two further ablations on EarVN1.0 are validated at reduced scope. The loss-compo
 
 Two measurement-level limitations apply throughout. Latency figures (Table~\ref{tab:quality}) come from the development machine rather than a representative resource-constrained device such as a Raspberry Pi or a phone SoC, so they should be read as relative comparisons under controlled conditions rather than deployment-ready benchmarks. PSNR/SSIM/LPIPS (Table~\ref{tab:quality}, Table~\ref{tab:awex-quality}) come from a single training run per configuration ($n=1$), with no confidence interval, unlike downstream recognition accuracy, which is multi-seed throughout.
 
-Finally, the paper's main claim is validated specifically for the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this scope should be stated plainly rather than assumed to extend further: an auxiliary check on genuinely low-resolution real-world images (Section~\ref{sec:res-main}) shows the opposite ordering, traced to a resolution mismatch between these images (all natively below the SR models' trained input size) and the training-time degradation. This is a boundary condition on where the claim has been shown to hold, not a refutation of it, but it means this paper does not provide evidence that span\_tiny or span\_baseline improves recognition on arbitrary real-world low-resolution ear images outside the synthetic-degradation regime studied here -- that check itself stands at $n=1$ (173 images, one backbone), with no multi-seed confirmation.
+Finally, the paper's main claim is validated specifically for the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this scope should be stated plainly rather than assumed to extend further: an auxiliary check on genuinely low-resolution real-world images (Section~\ref{sec:res-main}) shows the opposite ordering, traced to a resolution mismatch between these images (all natively below the SR models' trained input size) and the training-time degradation. This is a boundary condition on where the claim has been shown to hold, not a refutation of it, but it means this paper does not provide evidence that span\_tiny or span\_baseline improves recognition on arbitrary real-world low-resolution ear images outside the synthetic-degradation regime studied here -- the reversal itself is now confirmed at $n=5$ seeds and replicates in direction on two independent tasks (identity and gender accuracy), so it is not attributable to one seed or one task, but the check remains limited to a single backbone (mobilenet\_v2) and a single holdout set (173 images). A direct mitigation, retraining with degradation-augmented data (Section~\ref{sec:degradation-mitigation}), was tested rather than left for future work, and helps span\_tiny specifically (narrowing or reversing its gap to no-SR on both metrics) without disturbing the compression-safety claim, but does not reach significance against no-SR at $n{=}5$ and does not help span\_baseline under the same recipe -- a partial mitigation, reported as such rather than as a closed problem.
 
 % ============================================================================
 \section{Conclusion}
@@ -765,7 +853,7 @@ Finally, the paper's main claim is validated specifically for the synthetic bicu
 
 This paper asked a narrower question than most efficient-SR work: not whether a compressed model is the most accurate option available, but whether compressing SPAN's depth by half still leaves a model worth using ahead of no SR at all, without paying a real accuracy price for the compression itself. Across five recognition backbones and two independent datasets, span\_tiny answers both parts of that question affirmatively, and more strongly than a coarser reading of the numbers alone would suggest. \texttt{span\_tiny} beats \texttt{no-SR} with statistical significance in 5/5 backbones on EarVN1.0; the specific cost of compression (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) is non-significant in 4/5 backbones there and in 5/5 backbones under all three evaluation protocols tested on AWEx (from-scratch, full-fine-tune transfer, frozen-backbone transfer) -- the most consistently replicated finding in the paper. The depth ablation isolating block count alone corroborates this directly: span\_tiny and its uncompressed-depth counterpart, span\_large, are statistically indistinguishable in 4/5 backbones on EarVN1.0 and 5/5 on AWEx. Against five other lightweight SR architectures, span\_tiny is never significantly beaten on downstream accuracy and significantly outperforms the two weakest of them, despite ranking low on raw PSNR/SSIM -- a concrete demonstration that pixel-fidelity metrics are an imperfect stand-in for the metric this paper actually cares about.
 
-The evidence is reported with equal clarity where it runs out or points against an earlier hypothesis. Three further mechanisms proposed to improve on span\_tiny -- a richer distillation loss, a saliency-weighted loss, and learned block pruning -- were each validated to the same statistical standard as the main result and are reported as negative or null, with learned pruning significantly worse than span\_tiny's fixed block selection in every backbone tested. An ablation designed to test this paper's own proposed explanation for why depth reduction is tolerable -- SPAN's parameter-free attention -- returned a result against that explanation, and the account is revised rather than defended. An auxiliary check on genuinely real, low-resolution images reversed the main claim's ordering, and rather than being left unexplained, this was traced to a specific, verifiable cause (a resolution mismatch between these images and the synthetic degradation used in training) and is reported as a boundary condition on the paper's scope. One anomaly remains open: ResNet-18's inconsistent secondary-question evidence on AWEx, across all three protocols, lacks a confirmed explanation. None of this changes the central result, but a reader should be able to see exactly how far the evidence goes, where a hypothesis was tested and did not survive, and where it stops.
+The evidence is reported with equal clarity where it runs out or points against an earlier hypothesis. Three further mechanisms proposed to improve on span\_tiny -- a richer distillation loss, a saliency-weighted loss, and learned block pruning -- were each validated to the same statistical standard as the main result and are reported as negative or null, with learned pruning significantly worse than span\_tiny's fixed block selection in every backbone tested. An ablation designed to test this paper's own proposed explanation for why depth reduction is tolerable -- SPAN's parameter-free attention -- returned a result against that explanation, and the account is revised rather than defended. An auxiliary check on genuinely real, low-resolution images reversed the main claim's ordering, and rather than being left unexplained, this was traced to a specific, verifiable cause (a resolution mismatch between these images and the synthetic degradation used in training) and is reported as a boundary condition on the paper's scope; a direct mitigation for this boundary condition, degradation-augmented retraining, was also tested and found to partially and asymmetrically help -- narrowing or reversing span\_tiny's gap to no-SR without disturbing the compression-safety claim, though not to the point of statistical significance and without the same benefit for span\_baseline -- and is reported as a partial result rather than a solved problem. One anomaly remains open: ResNet-18's inconsistent secondary-question evidence on AWEx, across all three protocols, lacks a confirmed explanation. None of this changes the central result, but a reader should be able to see exactly how far the evidence goes, where a hypothesis was tested and did not survive, and where it stops.
 
 Extending this work would involve latency measured on an actual edge device rather than development hardware, confidence intervals for the SR-quality metrics (currently single-run), extending the six-architecture context comparison and the three additional-mechanism ablations to AWEx to test whether they replicate cross-dataset, and, if a suitable third dataset becomes available, an additional independent check on generalization beyond EarVN1.0 and AWEx. Two further questions raised in Section~\ref{sec:extended-ablations} about span\_tiny's specific design choices have since been resolved rather than left open: a block-removal position ablation, testing whether the specific choice of retained blocks was well-supported, found no significant effect of removal position at $n=5$ seeds across all five backbones; and a candidate recognition-embedding-space distillation loss, motivated by the recognition-aware SR literature reviewed in Section~\ref{sec:related}, turned out on inspection to be mathematically identical to the identity-loss term already evaluated in Section~\ref{sec:res-loss}, an account that does not hold in this setting.
 
@@ -924,6 +1012,16 @@ In: Proceedings of the 3rd International Conference on Learning Representations 
 Dunn, O.J.:
 Multiple Comparisons Among Means.
 Journal of the American Statistical Association \textbf{56}(293), 52--64 (1961)
+
+\bibitem{zhang2021designing}
+Zhang, K., Liang, J., Van Gool, L., Timofte, R.:
+Designing a Practical Degradation Model for Deep Blind Image Super-Resolution.
+In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp. 4791--4800 (2021)
+
+\bibitem{wang2021realesrgan}
+Wang, X., Xie, L., Dong, C., Shan, Y.:
+Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data.
+In: Proceedings of the IEEE/CVF International Conference on Computer Vision Workshops (ICCVW), pp. 1905--1914 (2021)
 
 \end{thebibliography}
 

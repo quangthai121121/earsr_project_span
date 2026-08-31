@@ -67,25 +67,49 @@ def aggregate_sr_quality(csv_path):
     """Đọc sr_quality_srseed.csv (do eval_sr_quality.py append 1 dòng/seed),
     tách seed từ cột 'label' (dạng '<arch>_srseed<N>'), trả về list dict
     (1 dict/metric: psnr_db, ssim) với mean/std/CI95%/values — hoặc None nếu
-    file không tồn tại/rỗng."""
+    file không tồn tại/rỗng.
+
+    [SỬA — phát hiện qua review] eval_sr_quality.py LUÔN append (không dedup) —
+    nếu 1 bước bị lỗi giữa chừng rồi chạy lại (dễ xảy ra trên server dùng
+    chung), dòng của seed đó bị nhân đôi trong CSV, và code CŨ ở đây cộng dồn
+    TẤT CẢ dòng khớp pattern vào 1 list phẳng không phân biệt theo seed —
+    silently đếm sai n (ví dụ n=4 dù chỉ có 3 seed thật) và lệch mean/std mà
+    KHÔNG có cảnh báo nào. Giờ key theo SEED (dict), dòng SAU đè dòng TRƯỚC
+    (khớp "chạy lại ghi đè kết quả cũ" là ý định hợp lý nhất khi rerun), và
+    IN CẢNH BÁO rõ ràng nếu phát hiện trùng — để người dùng biết mà kiểm tra
+    lại file thay vì tin nhầm số liệu.
+    """
     if not csv_path or not Path(csv_path).exists():
         return None
-    rows_by_metric = {"psnr_db": [], "ssim": []}
-    seeds_seen = []
+    per_seed = {}  # seed:int -> {"psnr_db": float, "ssim": float}
+    n_duplicate_rows = 0
     with open(csv_path, "r", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             m = LABEL_SEED_RE.search(row.get("label", ""))
             if not m:
                 continue
-            seeds_seen.append(int(m.group(1)))
-            for metric in rows_by_metric:
+            seed = int(m.group(1))
+            if seed in per_seed:
+                n_duplicate_rows += 1
+            entry = per_seed.setdefault(seed, {})
+            for metric in ("psnr_db", "ssim"):
                 try:
-                    rows_by_metric[metric].append(float(row[metric]))
+                    entry[metric] = float(row[metric])
                 except (KeyError, ValueError):
                     pass
 
-    if not seeds_seen:
+    if not per_seed:
         return None
+    if n_duplicate_rows:
+        print(f"CẢNH BÁO: {csv_path} có {n_duplicate_rows} dòng label trùng seed (có thể do "
+              f"chạy lại 1 bước sau lỗi) — chỉ dùng dòng CUỐI CÙNG cho mỗi seed, dòng cũ bị bỏ. "
+              f"Kiểm tra lại file gốc nếu nghi ngờ số liệu.")
+
+    rows_by_metric = {"psnr_db": [], "ssim": []}
+    for entry in per_seed.values():
+        for metric in rows_by_metric:
+            if metric in entry:
+                rows_by_metric[metric].append(entry[metric])
 
     out = []
     for metric, values in rows_by_metric.items():
@@ -218,9 +242,19 @@ def main():
             print(f"  (chưa có số liệu downstream-seed để so sánh — "
                   f"{r['std_identity_accuracy_due_to_downstream_seed']})")
 
-    print("\nLƯU Ý: n=3 SR-seed là bước sàng lọc, không phải bằng chứng cuối cùng — nếu muốn "
-          "kiểm định thống kê chính thức (t-test/CI) cho riêng trục SR-seed, cần thêm seed "
-          "(khuyến nghị n=5, khớp quy ước n=5 seed downstream của project).")
+    # [SỬA — trước đây hardcode "n=3 ... cần thêm seed" bất kể n thực tế, gây
+    # hiểu lầm khi đã chạy pipeline/run_sr_seed_variance_extra_seeds.sh lên
+    # n=5 (log vẫn nói "cần thêm" dù đã đủ) -- giờ đọc n nhỏ nhất thực tế
+    # trong rows để quyết định thông điệp đúng.
+    min_n = min(r["n_sr_seeds"] for r in rows)
+    if min_n < 5:
+        print(f"\nLƯU Ý: n={min_n} SR-seed là bước sàng lọc, không phải bằng chứng cuối cùng — "
+              "nếu muốn kiểm định thống kê chính thức (t-test/CI) cho riêng trục SR-seed, cần "
+              "thêm seed (khuyến nghị n=5, khớp quy ước n=5 seed downstream của project — xem "
+              "pipeline/run_sr_seed_variance_extra_seeds.sh).")
+    else:
+        print(f"\nĐã đạt n={min_n} SR-seed, khớp quy ước n=5 seed downstream của project — đủ để "
+              "dùng làm bằng chứng chính thức, không chỉ sàng lọc.")
 
     sr_quality_rows = aggregate_sr_quality(args.sr_quality_csv)
     if sr_quality_rows:
