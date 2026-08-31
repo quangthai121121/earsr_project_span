@@ -181,6 +181,12 @@ def main():
                           "span_tiny_robust (train_sr_distill.py), xem cờ tương ứng ở đó. CHỈ áp "
                           "dụng cho train_set; val_set giữ NGUYÊN LR tĩnh. Mặc định False (giữ "
                           "NGUYÊN hành vi cũ).")
+    ap.add_argument("--num_workers", type=int, default=4,
+                     help="[MỚI — cùng lý do đã thêm ở train_sr_distill.py] số worker DataLoader — "
+                          "trên server dùng chung, job của user khác có thể chiếm hết /dev/shm trong "
+                          "vài phút, làm crash mọi worker>0 (RuntimeError: unable to write to file "
+                          "</torch_...>). num_workers=0 chạy DataLoader NGAY trong process chính, "
+                          "né hoàn toàn /dev/shm nhưng chậm hơn. Mặc định 4 (giữ NGUYÊN hành vi cũ).")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -202,8 +208,9 @@ def main():
     # thích đầy đủ (cùng nguyên tắc áp dụng ở đây).
     val_set = HRLRPairDataset(f"{splits_root}/hr", f"{splits_root}/lr", "val")
 
-    loader_kwargs = dict(num_workers=4, pin_memory=torch.cuda.is_available(),
-                          persistent_workers=True)
+    nw = args.num_workers
+    loader_kwargs = dict(num_workers=nw, pin_memory=torch.cuda.is_available(),
+                          persistent_workers=(nw > 0))
     # [MỚI — phát hiện qua review Q1] worker_init_fn + generator cố định, xem
     # giải thích đầy đủ trong train_recognition.py / utils/seed.py.
     train_loader = DataLoader(train_set, batch_size=cfg["sr"]["batch_size"],

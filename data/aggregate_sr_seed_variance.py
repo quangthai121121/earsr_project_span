@@ -23,11 +23,13 @@ mean/std/CI95% của PSNR/SSIM theo seed-SR — bằng chứng TRỰC TIẾP NH�
 lượng ảnh SR tự nó biến động ra sao theo seed, TRƯỚC CẢ khi tính đến nhiễu từ
 recognition downstream) — ghi ra file riêng <out_csv stem>_sr_quality.csv.
 
-Chạy:
-    python data/aggregate_sr_seed_variance.py --results_dir results/sr_seed_variance \
-        --out_csv results/sr_seed_variance/sr_seed_variance_summary.csv \
+Chạy (ví dụ span_tiny -- --downstream_domain mặc định "sr_improved" nên có thể
+bỏ qua; span_baseline/span_large BẮT BUỘC truyền đúng domain tương ứng, xem
+--help, nếu không sẽ so sánh nhầm với phương sai downstream của span_tiny):
+    python data/aggregate_sr_seed_variance.py --results_dir results/sr_seed_variance_span_tiny \
+        --out_csv results/sr_seed_variance_span_tiny/sr_seed_variance_summary.csv \
         --downstream_multiseed_csv results/multi_seed/multi_seed_summary.csv \
-        --sr_quality_csv results/sr_seed_variance/sr_quality_srseed.csv
+        --sr_quality_csv results/sr_seed_variance_span_tiny/sr_quality_srseed.csv
 """
 import argparse
 import csv
@@ -127,6 +129,14 @@ def main():
                      help="[tuỳ chọn] results/sr_seed_variance/sr_quality_srseed.csv — tính thêm "
                           "phương sai PSNR/SSIM của CHÍNH checkpoint SR theo seed (bằng chứng trực "
                           "tiếp nhất, trước cả khi tính đến nhiễu downstream)")
+    ap.add_argument("--downstream_domain", default="sr_improved",
+                     help="[MỚI — mở rộng đa kiến trúc] domain cần đọc std downstream-seed từ "
+                          "--downstream_multiseed_csv để so sánh — PHẢI khớp đúng kiến trúc đang đo "
+                          "SR-seed ở đây (span_tiny -> 'sr_improved' [mặc định, giữ hành vi cũ], "
+                          "span_baseline -> 'sr_baseline', span_large -> 'sr_span_large'). Trước đây "
+                          "hardcode 'sr_improved' -- đúng khi script chỉ dùng cho span_tiny, nhưng SAI "
+                          "cho span_baseline/span_large nếu không đổi cờ này (sẽ so sánh nhầm với "
+                          "phương sai downstream của span_tiny thay vì của chính kiến trúc đang đo).")
     args = ap.parse_args()
 
     by_backbone = defaultdict(dict)  # backbone -> {sr_seed:int -> data_dict}
@@ -155,7 +165,8 @@ def main():
         mean = statistics.mean(id_accs)
         std = statistics.stdev(id_accs) if n > 1 else 0.0
         ci_lo, ci_hi = ci95_from_values(id_accs)
-        downstream_std = read_downstream_std(args.downstream_multiseed_csv, backbone)
+        downstream_std = read_downstream_std(args.downstream_multiseed_csv, backbone,
+                                              domain=args.downstream_domain)
 
         row = {
             "backbone": backbone,
