@@ -29,7 +29,7 @@ import yaml
 from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from aggregate_multi_seed_results import cohens_d_paired, paired_ci95, wilcoxon_paired_p  # noqa: E402
+from aggregate_multi_seed_results import cohens_d_paired, paired_ci95, wilcoxon_paired_p, tost_paired  # noqa: E402
 
 BACKBONE = "mobilenet_v2"
 SEEDS = [42, 123, 2024, 44, 999]
@@ -57,6 +57,11 @@ def main():
     ap.add_argument("--depth_sweep_dir", default=None,
                      help="mặc định: <results_root>/depth_sweep")
     ap.add_argument("--out_csv", default=None)
+    ap.add_argument("--equivalence_margin", type=float, default=0.01,
+                     help="[MỚI — trả lời phản biện] biên tương đương cho TOST (accuracy, mặc định "
+                          "0.01 = 1 điểm %%) -- 'n.s.' trong bảng pairwise KHÔNG chứng minh được "
+                          "'tương đương', chỉ có nghĩa 'chưa đủ bằng chứng khác biệt' -- xem "
+                          "aggregate_multi_seed_results.py::tost_paired().")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -133,10 +138,14 @@ def main():
         w_p = wilcoxon_paired_p(values_a, values_b)
         t_stat, p_raw = stats.ttest_rel(values_a, values_b)
         mean_diff = statistics.mean([a - b for a, b in zip(values_a, values_b)])
+        # [MỚI — trả lời phản biện] "n.s." (p_bonf>=0.05) KHÔNG chứng minh
+        # được "tương đương" -- xem giải thích đầy đủ trong
+        # aggregate_multi_seed_results.py::tost_paired().
+        tost_result = tost_paired(values_a, values_b, margin=args.equivalence_margin)
         raw_results.append({
             "n_blocks": depth, "n_blocks_ref": 6, "n_common_seeds": len(common_seeds),
             "mean_diff": mean_diff, "cohens_d": d, "p_raw": p_raw, "wilcoxon_p": w_p,
-            "ci95_lower": ci_lo, "ci95_upper": ci_hi,
+            "ci95_lower": ci_lo, "ci95_upper": ci_hi, "tost_result": tost_result,
         })
 
     if not raw_results:
@@ -158,6 +167,8 @@ def main():
             "wilcoxon_p": round(r["wilcoxon_p"], 4) if r["wilcoxon_p"] is not None else "NA",
             "ci95_lower": round(r["ci95_lower"], 4) if r["ci95_lower"] is not None else "NA",
             "ci95_upper": round(r["ci95_upper"], 4) if r["ci95_upper"] is not None else "NA",
+            "tost_p": round(r["tost_result"]["p_tost"], 4) if r["tost_result"] is not None else "NA",
+            "equivalent_within_margin": r["tost_result"]["equivalent"] if r["tost_result"] is not None else "NA",
         })
 
     pairwise_path = out_path.with_name(out_path.stem + "_pairwise.csv")
@@ -169,8 +180,26 @@ def main():
     print(f"\n== So sánh mỗi điểm nén với 6 khối (uncompressed), Bonferroni qua family "
           f"{n_comparisons} so sánh ==")
     for r in pairwise_rows:
+        # [SỬA — phát hiện qua review, không phải qua chạy thử] dòng in console
+        # trước đây KHÔNG hiển thị kết quả TOST (chỉ có trong CSV) -- nếu chỉ
+        # đọc console log (thói quen gửi kết quả trong suốt session này) sẽ bỏ
+        # lỡ hoàn toàn phân biệt NHST/TOST, đúng lỗi phương pháp reviewer chỉ
+        # ra. Nhúng thẳng vào dòng in, khớp cách aggregate_multi_seed_results.py
+        # đã làm.
+        # [SỬA — bug phát hiện qua chạy thử ngay sau khi viết] "equivalent" từ
+        # tost_paired() là kết quả so sánh scipy (p_tost < alpha) -> kiểu
+        # numpy.bool_, KHÔNG phải bool gốc Python. "numpy.bool_(True) is True"
+        # cho ra False (so sánh định danh, không phải giá trị) -- dùng "is"
+        # khiến MỌI dòng rơi vào nhánh "TOST: NA" dù CSV có giá trị thật (đã
+        # tái lập: chạy thử ngay sau khi thêm dòng in này, toàn bộ 5 dòng đều
+        # in "TOST: NA"). Dùng truthy-check thường (bool(...)), an toàn với
+        # cả bool gốc lẫn numpy.bool_.
+        eq = r["equivalent_within_margin"]
+        tost_str = ("TOST: NA" if eq == "NA"
+                    else f"tương đương ±{args.equivalence_margin} (TOST p={r['tost_p']})" if eq
+                    else f"KHÔNG chứng minh được tương đương (TOST p={r['tost_p']})")
         print(f"  {r['n_blocks']} khối vs 6 khối: diff={r['mean_diff']}, d={r['cohens_d']}, "
-              f"p_bonf={r['p_bonferroni']}")
+              f"p_bonf={r['p_bonferroni']} | {tost_str}")
 
 
 if __name__ == "__main__":

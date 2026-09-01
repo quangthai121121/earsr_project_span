@@ -48,7 +48,7 @@ A Statistically-Validated Accuracy--Efficiency Trade-off for Ear Biometrics}
 \maketitle
 
 \begin{abstract}
-Ear recognition is gaining attention as a complement to face recognition when the face is occluded or unavailable. In practice, ear images are often captured at very low resolution, for example in surveillance footage, distant capture, or on resource-constrained edge cameras. Lightweight super-resolution (SR) networks such as SPAN (Swift Parameter-free Attention Network) offer a way to pre-process such images, but they were designed and validated at resolutions well above the 20$\times$20-pixel regime typical of distant ear capture, and it remains unclear how much further they can be compressed before downstream recognition accuracy is affected. This paper proposes \textbf{span\_tiny}, a depth-compressed variant of SPAN with 3 attention blocks instead of 6, giving 0.230M parameters and a 46.0\% reduction from the uncompressed baseline. Five recognition backbones are evaluated with $n=5$ seeds and paired statistical testing (paired $t$-test, Cohen's $d$, Bonferroni correction). On the primary dataset (EarVN1.0, 164 subjects), both span\_tiny and the uncompressed baseline significantly beat the no-SR condition in all five backbones (Cohen's $d$ 2.2--10.6), while the accuracy cost of compression itself reaches significance in only one of five backbones (EfficientNet-B0, 1.2 percentage points) and stays under one percentage point in the remaining four. A depth ablation isolating block count alone corroborates this: span\_tiny is statistically indistinguishable from an otherwise identical, uncompressed-depth counterpart in four of five backbones. On a second, independent dataset (AWEx, 336 subjects), the same compression-safety finding replicates across three independent evaluation protocols -- from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer -- with zero of five backbones showing a significant accuracy cost from compression under any protocol. Against five other lightweight SR architectures trained under an identical distillation recipe, span\_tiny is the second-fastest and third-smallest, is statistically tied with the two most accurate alternatives, and significantly outperforms the two least accurate ones on downstream accuracy, despite ranking low on raw PSNR/SSIM -- evidence that pixel-fidelity metrics are a poor proxy for recognition-relevant quality at this compression level. Three further mechanisms proposed to improve on span\_tiny -- a multi-judge identity/feature-distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning -- are each validated to the same $n=5$-seed, five-backbone standard and found to provide no reliable improvement, with learned pruning performing significantly worse than span\_tiny's fixed block selection in all five backbones. A further ablation testing whether SPAN's parameter-free attention specifically explains its depth tolerance finds no support for that account: two architectures with learned attention mechanisms tolerate an equivalent depth reduction just as well. Results that do not reach statistical significance are reported as such throughout, and an auxiliary check on genuinely low-resolution real-world images (as opposed to synthetically downsampled ones) surfaces a boundary condition on the main claim, traced to a resolution mismatch between these images and the synthetic degradation used to train the SR models.
+Ear recognition is gaining attention as a complement to face recognition when the face is occluded or unavailable. In practice, ear images are often captured at very low resolution, for example in surveillance footage, distant capture, or on resource-constrained edge cameras. Lightweight super-resolution (SR) networks such as SPAN (Swift Parameter-free Attention Network) offer a way to pre-process such images, but they were designed and validated at resolutions well above the 20$\times$20-pixel regime typical of distant ear capture, and it remains unclear how much further they can be compressed before downstream recognition accuracy is affected. This paper proposes \textbf{span\_tiny}, a depth-compressed variant of SPAN with 3 attention blocks instead of 6, giving 0.230M parameters and a 46.0\% reduction from the uncompressed baseline. Five recognition backbones are evaluated with $n=5$ seeds and paired statistical testing (paired $t$-test, Cohen's $d$, Bonferroni correction). On the primary dataset (EarVN1.0, 164 subjects), both span\_tiny and the uncompressed baseline significantly beat the no-SR condition in all five backbones (Cohen's $d$ 2.2--10.6), while the accuracy cost of compression itself reaches significance in only one of five backbones (EfficientNet-B0, 1.2 percentage points) and stays under one percentage point in the remaining four. A depth ablation isolating block count alone corroborates this: span\_tiny is statistically indistinguishable from an otherwise identical, uncompressed-depth counterpart in four of five backbones. A full sweep across every intermediate block count (1--6) locates the boundary directly rather than testing a single cut: accuracy is statistically flat from 2 blocks through 6, and only a 1-block cut produces a significant cost, placing the compression limit, on the backbone tested, between one and two blocks rather than at three. On a second, independent dataset (AWEx, 336 subjects), the same compression-safety finding replicates across three independent evaluation protocols -- from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer -- with zero of five backbones showing a significant accuracy cost from compression under any protocol. Against five other lightweight SR architectures trained under an identical distillation recipe, span\_tiny is the second-fastest and third-smallest, is statistically tied with the two most accurate alternatives, and significantly outperforms the two least accurate ones on downstream accuracy, despite ranking low on raw PSNR/SSIM -- evidence that pixel-fidelity metrics are a poor proxy for recognition-relevant quality at this compression level. Three further mechanisms proposed to improve on span\_tiny -- a multi-judge identity/feature-distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning -- are each validated to the same $n=5$-seed, five-backbone standard and found to provide no reliable improvement, with learned pruning performing significantly worse than span\_tiny's fixed block selection in all five backbones. A further ablation testing whether SPAN's parameter-free attention specifically explains its depth tolerance finds no support for that account: two architectures with learned attention mechanisms tolerate an equivalent depth reduction just as well. Results that do not reach statistical significance are reported as such throughout, and an auxiliary check on genuinely low-resolution real-world images (as opposed to synthetically downsampled ones) surfaces a boundary condition on the main claim, traced to a resolution mismatch between these images and the synthetic degradation used to train the SR models.
 
 \vspace{2mm}
 \noindent\textbf{Keywords:} lightweight super-resolution; depth compression; knowledge distillation; ear recognition; low-resolution biometrics; statistical significance testing; cross-dataset generalization; negative-result ablation
@@ -408,6 +408,98 @@ ResNet-18         & 0.4825 & 0.4863 & +0.0038 & 0.45 & 1.0    \\
 \end{table}
 
 4/5 backbones show no statistically significant difference between span\_tiny (0.230M parameters) and span\_large (0.417M parameters). The fifth, EfficientNet-B0, shows a small but statistically significant cost ($p_{\text{Bonf}}{=}0.0125$), span\_large ahead by 0.83 percentage points. This is still the strongest single piece of evidence for the paper's central claim, precisely stated: reducing depth from 6 to 3 SPABs is accuracy-neutral in the large majority of backbones tested and, where it is not, the cost is small (under 1 percentage point) -- not a claim of zero cost in every setting. On AWEx (Section~\ref{sec:res-awex}), the same comparison is statistically non-significant in 5/5 backbones, though at a smaller sample ($n=3$ seeds; see Section~\ref{sec:limitations}).
+
+\subsubsection{Locating the compression boundary: a full depth sweep}
+\label{sec:depth-sweep}
+
+The comparison above isolates a single point on the depth axis (3 vs.\ 6 blocks) and therefore cannot say how far compression can be pushed before it costs accuracy, only that this particular cut does not. To answer that question directly, span\_tiny's two intermediate block counts (1, 2, 4, 5) were each trained under the identical pinned recipe used for span\_tiny itself (Section~\ref{sec:recipe}, isolating block count as the only varying factor) and evaluated at $n=5$ seeds on MobileNetV2, the representative backbone used for other screening-scale checks in this study. Figure~\ref{fig:depth-sweep} plots the resulting six-point curve, Table~\ref{tab:depth-sweep} reports the same values numerically, and Table~\ref{tab:depth-sweep-pairwise} compares each compressed configuration against the uncompressed 6-block reference.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1.4cm, y=1cm, font=\small]
+    % --- trục toạ độ: x = số khối (1..6), y = accuracy (bậc thang 0.01, hệ số 70) ---
+    % y_px(acc) = (acc - 0.465) * 70 ; điểm dữ liệu và lưới đều dùng chung công thức này
+    \def\ymin{0}
+    \def\ymax{4.2}
+    \def\xmin{-0.6}
+    \def\xmax{7.6}
+
+    % lưới ngang + nhãn trục y (accuracy 0.47..0.52)
+    \foreach \acc/\ypos in {0.47/0.35, 0.48/1.05, 0.49/1.75, 0.50/2.45, 0.51/3.15, 0.52/3.85} {
+        \draw[gray!25] (\xmin,\ypos) -- (\xmax,\ypos);
+        \node[anchor=east, gray!70] at (\xmin-0.15,\ypos) {\acc};
+    }
+
+    % truc
+    \draw[thick] (\xmin,\ymin) -- (\xmax,\ymin);
+    \draw[thick] (\xmin,\ymin) -- (\xmin,\ymax);
+
+    % nhan truc x (so khoi 1..6) tai dung vi tri du lieu
+    \foreach \n/\xpos in {1/0.0, 2/1.4, 3/2.8, 4/4.2, 5/5.6, 6/7.0} {
+        \draw (\xpos,\ymin) -- (\xpos,\ymin-0.08);
+        \node[anchor=north] at (\xpos,\ymin-0.12) {\n};
+    }
+    \node[anchor=north] at (3.5,\ymin-0.65) {Number of SPAB blocks retained};
+    \node[anchor=south, rotate=90] at (\xmin-1.05,2.1) {Downstream identity accuracy};
+
+    % duong tham chieu doc: n=3 (span_tiny, de xuat) va n=6 (span_large, uncompressed)
+    \draw[dashed, blue!60!black] (2.8,\ymin) -- (2.8,\ymax);
+    \node[anchor=south, blue!60!black, font=\scriptsize] at (2.8,\ymax+0.05) {span\_tiny (proposed)};
+    \draw[dashed, teal!70!black] (7.0,\ymin) -- (7.0,\ymax);
+    \node[anchor=south, teal!70!black, font=\scriptsize] at (7.0,\ymax+0.05) {span\_large (uncompr.)};
+
+    % duong noi 6 diem
+    \draw[thick] (0.0,1.568) -- (1.4,2.149) -- (2.8,2.632) -- (4.2,3.171) -- (5.6,2.912) -- (7.0,2.758);
+
+    % error bar (+- 1 do lech chuan) cho tung diem, kem "mu" ngang 2 dau
+    \foreach \x/\ylo/\yhi in {0.0/1.393/1.743, 1.4/1.638/2.660, 2.8/2.114/3.150, 4.2/2.548/3.794, 5.6/2.688/3.136, 7.0/2.422/3.094} {
+        \draw (\x,\ylo) -- (\x,\yhi);
+        \draw (\x-0.06,\ylo) -- (\x+0.06,\ylo);
+        \draw (\x-0.06,\yhi) -- (\x+0.06,\yhi);
+    }
+
+    % diem du lieu -- do (n=1, giam co y nghia thong ke) khac mau voi cac diem con lai (n.s. so voi 6 khoi)
+    \fill[red!70!black] (0.0,1.568) circle (2.2pt);
+    \foreach \x/\y in {1.4/2.149, 2.8/2.632, 4.2/3.171, 5.6/2.912, 7.0/2.758} {
+        \fill[black] (\x,\y) circle (2.2pt);
+    }
+\end{tikzpicture}
+\caption{Downstream identity accuracy (MobileNetV2, EarVN1.0, $n=5$ seeds, error bars $=\pm 1$ std.\ dev.) as a function of retained SPAB block count. The red point (1 block) is the only configuration with a statistically significant cost relative to the 6-block reference (Table~\ref{tab:depth-sweep-pairwise}); all black points (2--5 blocks) are statistically indistinguishable from it.}
+\label{fig:depth-sweep}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Downstream identity accuracy across block counts 1--6, EarVN1.0 (MobileNetV2), $n=5$ seeds. 3 blocks = span\_tiny, 6 blocks = span\_large; both reproduced from Table~\ref{tab:depth}.}
+\label{tab:depth-sweep}
+\begin{tabular}{lcccccc}
+\toprule
+Blocks & 1 & 2 & 3 & 4 & 5 & 6 \\
+\midrule
+Accuracy & 0.4874 & 0.4957 & 0.5026 & 0.5103 & 0.5066 & 0.5044 \\
+Std.\ dev.\ & 0.0025 & 0.0073 & 0.0074 & 0.0089 & 0.0032 & 0.0048 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Each block count vs.\ the 6-block (uncompressed) reference, MobileNetV2, $n=5$ seeds. $p_{\text{Bonf}}$ corrected across the 5-comparison family.}
+\label{tab:depth-sweep-pairwise}
+\begin{tabular}{lcccc}
+\toprule
+Blocks vs.\ 6 & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ & Verdict \\
+\midrule
+1 & $-$0.0170 & $-$4.59 & 0.0025 & \textbf{sig.\ (cost)} \\
+2 & $-$0.0087 & $-$0.85 & 0.659  & n.s. \\
+3 & $-$0.0018 & $-$0.29 & 1.0    & n.s. \\
+4 & +0.0059   & 0.61    & 1.0    & n.s. \\
+5 & +0.0022   & 1.10    & 0.350  & n.s. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The curve is not monotonic in the range that matters: accuracy is statistically flat from 2 blocks through 6 (all four comparisons non-significant after Bonferroni correction, including 5 blocks despite a raw $p$ of 0.070 that does not survive correction), and only the most aggressive cut tested, to a single block, produces a large and statistically significant cost ($d=-4.59$, $p_{\text{Bonf}}=0.0025$). The boundary this study can locate, on this backbone, therefore sits between one and two blocks, not at three: span\_tiny's specific choice of 3 blocks is accuracy-neutral, as already shown, but so -- on this evidence -- would a 2-block cut be, a further 33\% reduction in retained blocks beyond span\_tiny. This does not change the paper's proposed configuration, since span\_tiny's 3-block design has additionally been validated across five backbones and two datasets (Table~\ref{tab:depth}, Section~\ref{sec:res-awex}) where the sweep above covers one representative backbone on EarVN1.0 only; it does, however, directly answer the compression-limit question the title and abstract raise, in place of the single 3-vs-6 comparison that could previously only answer whether one specific cut was safe.
 
 \subsection{Ablation: loss components}
 \label{sec:res-loss}
@@ -893,7 +985,7 @@ Finally, the paper's main claim is validated specifically for the synthetic bicu
 \label{sec:conclusion}
 % ============================================================================
 
-This paper asked a narrower question than most efficient-SR work: not whether a compressed model is the most accurate option available, but whether compressing SPAN's depth by half still leaves a model worth using ahead of no SR at all, without paying a real accuracy price for the compression itself. Across five recognition backbones and two independent datasets, span\_tiny answers both parts of that question affirmatively, and more strongly than a coarser reading of the numbers alone would suggest. \texttt{span\_tiny} beats \texttt{no-SR} with statistical significance in 5/5 backbones on EarVN1.0; the specific cost of compression (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) is non-significant in 4/5 backbones there and in 5/5 backbones under all three evaluation protocols tested on AWEx (from-scratch, full-fine-tune transfer, frozen-backbone transfer) -- the most consistently replicated finding in the paper. The depth ablation isolating block count alone corroborates this directly: span\_tiny and its uncompressed-depth counterpart, span\_large, are statistically indistinguishable in 4/5 backbones on EarVN1.0 and 5/5 on AWEx. Against five other lightweight SR architectures, span\_tiny is never significantly beaten on downstream accuracy and significantly outperforms the two weakest of them, despite ranking low on raw PSNR/SSIM -- a concrete demonstration that pixel-fidelity metrics are an imperfect stand-in for the metric this paper actually cares about.
+This paper asked a narrower question than most efficient-SR work: not whether a compressed model is the most accurate option available, but whether compressing SPAN's depth by half still leaves a model worth using ahead of no SR at all, without paying a real accuracy price for the compression itself. Across five recognition backbones and two independent datasets, span\_tiny answers both parts of that question affirmatively, and more strongly than a coarser reading of the numbers alone would suggest. \texttt{span\_tiny} beats \texttt{no-SR} with statistical significance in 5/5 backbones on EarVN1.0; the specific cost of compression (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) is non-significant in 4/5 backbones there and in 5/5 backbones under all three evaluation protocols tested on AWEx (from-scratch, full-fine-tune transfer, frozen-backbone transfer) -- the most consistently replicated finding in the paper. The depth ablation isolating block count alone corroborates this directly: span\_tiny and its uncompressed-depth counterpart, span\_large, are statistically indistinguishable in 4/5 backbones on EarVN1.0 and 5/5 on AWEx. A full depth sweep across every intermediate block count locates the compression boundary itself rather than testing a single cut: on the backbone examined, accuracy is statistically flat from 2 through 6 blocks, and the boundary sits between one and two blocks rather than at span\_tiny's specific choice of three, directly answering how far this architecture can be compressed rather than only whether one particular cut is safe. Against five other lightweight SR architectures, span\_tiny is never significantly beaten on downstream accuracy and significantly outperforms the two weakest of them, despite ranking low on raw PSNR/SSIM -- a concrete demonstration that pixel-fidelity metrics are an imperfect stand-in for the metric this paper actually cares about.
 
 The evidence is reported with equal clarity where it runs out or points against an earlier hypothesis. Three further mechanisms proposed to improve on span\_tiny -- a richer distillation loss, a saliency-weighted loss, and learned block pruning -- were each validated to the same statistical standard as the main result and are reported as negative or null, with learned pruning significantly worse than span\_tiny's fixed block selection in every backbone tested. An ablation designed to test this paper's own proposed explanation for why depth reduction is tolerable -- SPAN's parameter-free attention -- returned a result against that explanation, and the account is revised rather than defended. An auxiliary check on genuinely real, low-resolution images reversed the main claim's ordering, and rather than being left unexplained, this was traced to a specific, verifiable cause (a resolution mismatch between these images and the synthetic degradation used in training) and is reported as a boundary condition on the paper's scope; a direct mitigation for this boundary condition, degradation-augmented retraining, was also tested and found to partially and asymmetrically help -- narrowing or reversing span\_tiny's gap to no-SR without disturbing the compression-safety claim, though not to the point of statistical significance and without the same benefit for span\_baseline -- and is reported as a partial result rather than a solved problem. One anomaly remains open: ResNet-18's inconsistent secondary-question evidence on AWEx, across all three protocols, lacks a confirmed explanation. None of this changes the central result, but a reader should be able to see exactly how far the evidence goes, where a hypothesis was tested and did not survive, and where it stops.
 

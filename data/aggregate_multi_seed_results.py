@@ -169,10 +169,54 @@ def mdes_paired(values_a, values_b, alpha=0.05, power=0.80):
     return mdes_d, mdes_d * std_diff
 
 
+def tost_paired(values_a, values_b, margin, alpha=0.05):
+    """[MỚI — trả lời phản biện] Two One-Sided Tests (TOST) cho equivalence
+    ghép cặp -- KHÔNG bác bỏ H0 (p>0.05 sau Bonferroni) chỉ có nghĩa "chưa đủ
+    bằng chứng khác biệt", KHÔNG có nghĩa "tương đương" (absence of evidence
+    != evidence of absence) -- đặc biệt với n=5 seed + Bonferroni bảo thủ,
+    power rất thấp (xem mdes_paired() ở trên, đã định lượng điều này từ
+    trước). TOST là cách ĐÚNG để khẳng định "tương đương trong biên độ
+    margin": test 2 phía một chiều, mỗi bên kiểm định "hiệu số KHÔNG vượt quá
+    margin theo hướng đó" — declare tương đương CHỈ KHI CẢ HAI bị bác bỏ.
+
+    margin: biên tương đương ĐỊNH TRƯỚC (pre-specified), đơn vị GIỐNG values
+    (accuracy, ví dụ 0.01 = 1 điểm %). KHÔNG được chọn SAU KHI thấy số liệu
+    (data dredging) — dùng CHUNG 1 giá trị cho mọi lời gọi trong 1 bài báo,
+    truyền qua CLI --equivalence_margin để tường minh, không hardcode.
+
+    Trả về dict {"p_tost", "mean_diff", "equivalent"} hoặc None nếu n<2.
+    Trường hợp suy biến (std hiệu số ~0, mọi seed cho CÙNG 1 hiệu số tuyệt
+    đối) không thể tính t-test chuẩn -- quyết định trực tiếp bằng so sánh
+    |mean_diff| với margin (an toàn, không suy đoán p-value vô nghĩa)."""
+    diffs = [a - b for a, b in zip(values_a, values_b)]
+    n = len(diffs)
+    if n < 2:
+        return None
+    mean_diff = statistics.mean(diffs)
+    std_diff = statistics.stdev(diffs)
+    if std_diff < 1e-9:
+        equivalent = abs(mean_diff) < margin
+        return {"p_tost": 0.0 if equivalent else 1.0, "mean_diff": mean_diff, "equivalent": equivalent}
+    se = std_diff / (n ** 0.5)
+    df = n - 1
+    t_lower = (mean_diff + margin) / se   # H0: true_diff <= -margin
+    t_upper = (mean_diff - margin) / se   # H0: true_diff >= +margin
+    p_lower = 1 - stats.t.cdf(t_lower, df)
+    p_upper = stats.t.cdf(t_upper, df)
+    p_tost = max(p_lower, p_upper)
+    return {"p_tost": p_tost, "mean_diff": mean_diff, "equivalent": p_tost < alpha}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results_dir", required=True)
     ap.add_argument("--out_csv", required=True)
+    ap.add_argument("--equivalence_margin", type=float, default=0.01,
+                     help="[MỚI — trả lời phản biện] biên tương đương cho TOST (đơn vị accuracy, "
+                          "mặc định 0.01 = 1 điểm %% -- khớp đúng ngưỡng 'accuracy-neutral' bài báo "
+                          "đã dùng không chính thức trong văn bản từ trước, giờ định trước tường minh "
+                          "làm equivalence margin thay vì chỉ dựa vào p>0.05 của NHST, vốn KHÔNG chứng "
+                          "minh được tương đương -- xem tost_paired()).")
     args = ap.parse_args()
 
     # key = (backbone, domain) -> {seed:int -> {"identity_accuracy":.., "identity_accuracy_rank5":.., "gender_accuracy":..}}
@@ -270,6 +314,7 @@ def main():
                     "p_raw": "", "p_bonferroni": "", "wilcoxon_p": "",
                     "mdes_d_alpha10": "", "mdes_accuracy_alpha10": "",
                     "mdes_d_bonferroni": "", "mdes_accuracy_bonferroni": "",
+                    "tost_p": "", "equivalent_within_margin": "",
                     "n_comparisons_this_backbone": n_comparisons,
                     "note": "< 2 seed chung -> không đủ để kiểm định",
                 })
@@ -289,6 +334,13 @@ def main():
             # 2 con số không cùng ý nghĩa, dễ đọc nhầm.
             mdes_d_a10, mdes_acc_a10 = mdes_paired(vals_b, vals_a, alpha=0.10)
             mdes_d_bonf, mdes_acc_bonf = mdes_paired(vals_b, vals_a, alpha=0.10 / n_comparisons)
+            # [MỚI — trả lời phản biện] TOST equivalence test, TÁCH BIỆT với
+            # NHST ở trên -- "p_bonferroni >= 0.10" (không bác bỏ H0) KHÔNG có
+            # nghĩa "tương đương", chỉ có nghĩa "chưa đủ bằng chứng khác biệt"
+            # (absence of evidence != evidence of absence). tost_p<0.05 mới là
+            # bằng chứng THẬT cho "tương đương trong khoảng margin đã định
+            # trước" -- xem tost_paired() và --equivalence_margin.
+            tost_result = tost_paired(vals_b, vals_a, margin=args.equivalence_margin)
             pairwise_rows.append({
                 "backbone": backbone, "domain_a": d1, "domain_b": d2,
                 "n_common_seeds": len(common_seeds),
@@ -302,9 +354,16 @@ def main():
                 "mdes_accuracy_alpha10": round(mdes_acc_a10, 4) if mdes_acc_a10 is not None else "NA",
                 "mdes_d_bonferroni": round(mdes_d_bonf, 3) if mdes_d_bonf is not None else "NA",
                 "mdes_accuracy_bonferroni": round(mdes_acc_bonf, 4) if mdes_acc_bonf is not None else "NA",
+                "tost_p": round(tost_result["p_tost"], 4) if tost_result is not None else "NA",
+                "equivalent_within_margin": tost_result["equivalent"] if tost_result is not None else "NA",
                 "n_comparisons_this_backbone": n_comparisons,
-                "note": "có ý nghĩa sau Bonferroni (p<0.10)" if p_bonferroni < 0.10
-                        else "chưa đủ ý nghĩa sau Bonferroni (p>=0.10)",
+                "note": ("có ý nghĩa sau Bonferroni (p<0.10)" if p_bonferroni < 0.10
+                         else "chưa đủ ý nghĩa sau Bonferroni (p>=0.10)")
+                        + " | "
+                        + (f"tương đương trong ±{args.equivalence_margin} (TOST, p={tost_result['p_tost']:.4f})"
+                           if tost_result is not None and tost_result["equivalent"]
+                           else f"KHÔNG chứng minh được tương đương trong ±{args.equivalence_margin} (TOST)"
+                           if tost_result is not None else "TOST: NA"),
             })
 
     pairwise_path = out_path.with_name(out_path.stem + "_pairwise.csv")
