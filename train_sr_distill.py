@@ -861,11 +861,17 @@ def main():
     ap.add_argument("--student_n_blocks", type=int, default=None,
                      help="[MỚI — Mục 5.7(i), ablation attention-parameterization] ghi đè số "
                           "khối (n_blocks) của student — CHỈ có tác dụng khi student_arch là "
-                          "'safmn'/'smfanet' (build_sr_model() bỏ qua tham số này với các kiến "
-                          "trúc khác). Dùng để train biến thể half-depth, ví dụ "
-                          "--student_arch safmn --student_n_blocks 4 (mặc định SAFMN/SMFANet là "
-                          "n_blocks=8, xem RUN_ALL_attention_param_ablation.sh). Không truyền "
-                          "-> giữ nguyên hành vi cũ (n_blocks mặc định của kiến trúc).")
+                          "'safmn'/'smfanet'/'span_pruned' (build_sr_model() bỏ qua tham số này "
+                          "với các kiến trúc khác, ví dụ span_tiny/span_large có n_blocks cố định "
+                          "riêng). [SỬA — comment cũ ghi thiếu 'span_pruned', đã lỗi thời từ khi "
+                          "nhánh đó được thêm vào build_sr_model(); xác nhận lại bằng thực nghiệm: "
+                          "build_sr_model('span_pruned', n_blocks=N) cho đúng N khối với mọi N.] "
+                          "Dùng để train biến thể half-depth, ví dụ --student_arch safmn "
+                          "--student_n_blocks 4 (mặc định SAFMN/SMFANet là n_blocks=8, xem "
+                          "RUN_ALL_attention_param_ablation.sh), hoặc --student_arch span_pruned "
+                          "--student_n_blocks 1 (dùng cho depth sweep, xem "
+                          "pipeline/run_depth_sweep.sh). Không truyền -> giữ nguyên hành vi cũ "
+                          "(n_blocks mặc định của kiến trúc).")
     ap.add_argument("--init_ckpt", default=None,
                      help="checkpoint SPAN student có sẵn để khởi tạo trọng số trước khi "
                           "train — dùng cho FINE-TUNE/TRANSFER LEARNING xuyên dataset (ví dụ "
@@ -1023,9 +1029,12 @@ def main():
                 f"{'THẬT ngẫu nhiên (blur+noise+JPEG, xem utils/degradation.py)' if args.degradation_augment else 'bicubic sạch (LR tĩnh, mặc định cũ)'}")
 
     # --- Student: kiến trúc NÉN (student_arch, ví dụ span_tiny) — model sẽ được deploy ---
-    # [MỚI — Mục 5.7(i)] truyền student_n_blocks xuống build_sr_model(); hàm
-    # đó tự bỏ qua tham số này với mọi arch khác "safmn"/"smfanet" (an toàn
-    # ngược, không đổi hành vi bất kỳ lời gọi cũ nào không dùng cờ mới).
+    # [MỚI — Mục 5.7(i), mở rộng cho depth sweep] truyền student_n_blocks
+    # xuống build_sr_model(); hàm đó tự bỏ qua tham số này với mọi arch khác
+    # "safmn"/"smfanet"/"span_pruned" (an toàn ngược, không đổi hành vi bất kỳ
+    # lời gọi cũ nào không dùng cờ mới) — đã xác nhận lại bằng thực nghiệm
+    # rằng "span_pruned" NHẬN đúng n_blocks truyền vào (kiểm tra
+    # len(model.body) khớp chính xác với mọi giá trị n_blocks).
     student = build_sr_model(student_arch, scale, pretrained_path=student_pretrained,
                               n_blocks=args.student_n_blocks).to(device)
 
