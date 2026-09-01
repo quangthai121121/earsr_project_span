@@ -235,6 +235,15 @@ def main():
             "identity_accuracy": data["identity_accuracy"],
             "identity_accuracy_rank5": data.get("identity_accuracy_rank5"),
             "gender_accuracy": data.get("gender_accuracy"),
+            # [MỚI — trả lời phản biện] identity_auc/identity_eer đã được
+            # eval_recognition.py tính và ghi vào MỌI file JSON per-seed từ
+            # trước (xem eval_recognition.py:150-152), nhưng chưa từng được
+            # đưa vào bảng tổng hợp multi-seed này -- EER là metric chuẩn hơn
+            # cho biometric verification so với rank-1 accuracy thuần, và
+            # reviewer chỉ ra bảng kết quả chính gần như không báo cáo. Không
+            # cần chạy lại thí nghiệm nào -- dữ liệu đã có sẵn trong JSON.
+            "identity_auc": data.get("identity_auc"),
+            "identity_eer": data.get("identity_eer"),
         }
 
     if not by_key:
@@ -250,6 +259,8 @@ def main():
         id_accs = [v["identity_accuracy"] for v in by_seed.values()]
         rank5s = [v["identity_accuracy_rank5"] for v in by_seed.values() if v["identity_accuracy_rank5"] is not None]
         genders = [v["gender_accuracy"] for v in by_seed.values() if v["gender_accuracy"] is not None]
+        aucs = [v["identity_auc"] for v in by_seed.values() if v["identity_auc"] is not None]
+        eers = [v["identity_eer"] for v in by_seed.values() if v["identity_eer"] is not None]
         mean = statistics.mean(id_accs)
         std = statistics.stdev(id_accs) if len(id_accs) > 1 else 0.0
         rows.append({
@@ -261,6 +272,13 @@ def main():
             # nhưng KHÔNG được đưa vào bảng tổng hợp multi-seed này.
             "mean_identity_accuracy_rank5": round(statistics.mean(rank5s), 4) if rank5s else "NA",
             "mean_gender_accuracy": round(statistics.mean(genders), 4) if genders else "NA",
+            # [MỚI — trả lời phản biện] AUC/EER trung bình + độ lệch chuẩn qua
+            # n seed -- EER là metric chuẩn cho verification, chưa từng được
+            # báo cáo ở mức tổng hợp trước đây dù đã tính sẵn mỗi seed.
+            "mean_identity_auc": round(statistics.mean(aucs), 4) if aucs else "NA",
+            "std_identity_auc": round(statistics.stdev(aucs), 4) if len(aucs) > 1 else ("0.0" if aucs else "NA"),
+            "mean_identity_eer": round(statistics.mean(eers), 4) if eers else "NA",
+            "std_identity_eer": round(statistics.stdev(eers), 4) if len(eers) > 1 else ("0.0" if eers else "NA"),
             "all_values": ";".join(f"{v:.4f}" for v in id_accs),
             "seeds": ";".join(str(s) for s in sorted(by_seed.keys())),
         })
@@ -386,7 +404,9 @@ def main():
             if r["backbone"] == backbone:
                 print(f"  {r['domain']:<15} {r['mean_identity_accuracy']:.4f} +- "
                       f"{r['std_identity_accuracy']:.4f}  (n={r['n_seeds']} seed, "
-                      f"rank5={r['mean_identity_accuracy_rank5']}, gender={r['mean_gender_accuracy']})")
+                      f"rank5={r['mean_identity_accuracy_rank5']}, gender={r['mean_gender_accuracy']}, "
+                      f"AUC={r['mean_identity_auc']}+-{r['std_identity_auc']}, "
+                      f"EER={r['mean_identity_eer']}+-{r['std_identity_eer']})")
 
         print("-- Kiểm định từng cặp domain (paired t-test + Wilcoxon + Cohen's d + CI95%) --")
         for pr in pairwise_rows:

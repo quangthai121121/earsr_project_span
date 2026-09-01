@@ -48,7 +48,7 @@ A Statistically-Validated Accuracy--Efficiency Trade-off for Ear Biometrics}
 \maketitle
 
 \begin{abstract}
-Ear recognition is gaining attention as a complement to face recognition when the face is occluded or unavailable. In practice, ear images are often captured at very low resolution, for example in surveillance footage, distant capture, or on resource-constrained edge cameras. Lightweight super-resolution (SR) networks such as SPAN (Swift Parameter-free Attention Network) offer a way to pre-process such images, but they were designed and validated at resolutions well above the 20$\times$20-pixel regime typical of distant ear capture, and it remains unclear how much further they can be compressed before downstream recognition accuracy is affected. This paper proposes \textbf{span\_tiny}, a depth-compressed variant of SPAN with 3 attention blocks instead of 6, giving 0.230M parameters and a 46.0\% reduction from the uncompressed baseline. Five recognition backbones are evaluated with $n=5$ seeds and paired statistical testing (paired $t$-test, Cohen's $d$, Bonferroni correction). On the primary dataset (EarVN1.0, 164 subjects), both span\_tiny and the uncompressed baseline significantly beat the no-SR condition in all five backbones (Cohen's $d$ 2.2--10.6), while the accuracy cost of compression itself reaches significance in only one of five backbones (EfficientNet-B0, 1.2 percentage points) and stays under one percentage point in the remaining four. A depth ablation isolating block count alone corroborates this: span\_tiny is statistically indistinguishable from an otherwise identical, uncompressed-depth counterpart in four of five backbones. A full sweep across every intermediate block count (1--6) locates the boundary directly rather than testing a single cut: accuracy is statistically flat from 2 blocks through 6, and only a 1-block cut produces a significant cost, placing the compression limit, on the backbone tested, between one and two blocks rather than at three. On a second, independent dataset (AWEx, 336 subjects), the same compression-safety finding replicates across three independent evaluation protocols -- from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer -- with zero of five backbones showing a significant accuracy cost from compression under any protocol. Against five other lightweight SR architectures trained under an identical distillation recipe, span\_tiny is the second-fastest and third-smallest, is statistically tied with the two most accurate alternatives, and significantly outperforms the two least accurate ones on downstream accuracy, despite ranking low on raw PSNR/SSIM -- evidence that pixel-fidelity metrics are a poor proxy for recognition-relevant quality at this compression level. Three further mechanisms proposed to improve on span\_tiny -- a multi-judge identity/feature-distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning -- are each validated to the same $n=5$-seed, five-backbone standard and found to provide no reliable improvement, with learned pruning performing significantly worse than span\_tiny's fixed block selection in all five backbones. A further ablation testing whether SPAN's parameter-free attention specifically explains its depth tolerance finds no support for that account: two architectures with learned attention mechanisms tolerate an equivalent depth reduction just as well. Results that do not reach statistical significance are reported as such throughout, and an auxiliary check on genuinely low-resolution real-world images (as opposed to synthetically downsampled ones) surfaces a boundary condition on the main claim, traced to a resolution mismatch between these images and the synthetic degradation used to train the SR models.
+Ear recognition is gaining attention as a complement to face recognition when the face is occluded or unavailable. In practice, ear images are often captured at very low resolution, for example in surveillance footage, distant capture, or on resource-constrained edge cameras. Lightweight super-resolution (SR) networks such as SPAN (Swift Parameter-free Attention Network) offer a way to pre-process such images, but they were designed and validated at resolutions well above the 20$\times$20-pixel regime typical of distant ear capture, and it remains unclear how much further they can be compressed before downstream recognition accuracy is affected. This paper proposes \textbf{span\_tiny}, a depth-compressed variant of SPAN with 3 attention blocks instead of 6, giving 0.230M parameters and a 46.0\% reduction from the uncompressed baseline. Five recognition backbones are evaluated with $n=5$ seeds and paired statistical testing (paired $t$-test, Cohen's $d$, Bonferroni correction). On the primary dataset (EarVN1.0, 164 subjects), both span\_tiny and the uncompressed baseline significantly beat the no-SR condition in all five backbones (Cohen's $d$ 2.2--10.6), while the accuracy cost of compression itself reaches significance in only one of five backbones (EfficientNet-B0, 1.2 percentage points) and stays under one percentage point in the remaining four; equivalence testing (TOST, $\pm 1$ percentage point margin) does not confirm this cost as negligible in any of those four at $n=5$ seeds, and this is reported as an open, underpowered question rather than folded into the safety claim. A depth ablation isolating block count alone gives a more direct answer to the same question: span\_tiny is statistically indistinguishable from an otherwise identical, uncompressed-depth counterpart in four of five backbones, and TOST confirms genuine equivalence in two of those four, leaving the remaining two inconclusive rather than settled. A full sweep across every intermediate block count (1--6) locates the boundary further: only a 1-block cut produces both a significant and a TOST-confirmed non-equivalent cost, while 3 and 5 blocks are TOST-confirmed equivalent to the 6-block reference and 2 and 4 blocks remain statistically non-significant but inconclusive under TOST -- placing the confirmed floor of safe compression, on the backbone tested, at no fewer than three blocks, with cuts below that neither confirmed safe nor confirmed unsafe rather than assumed safe by default. On a second, independent dataset (AWEx, 336 subjects), the same compression-safety finding replicates across three independent evaluation protocols -- from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer -- with zero of five backbones showing a significant accuracy cost from compression under any protocol. Against five other lightweight SR architectures trained under an identical distillation recipe, span\_tiny is the second-fastest and third-smallest, is statistically tied with the two most accurate alternatives, and significantly outperforms the two least accurate ones on downstream accuracy, despite ranking low on raw PSNR/SSIM -- evidence that pixel-fidelity metrics are a poor proxy for recognition-relevant quality at this compression level. Three further mechanisms proposed to improve on span\_tiny -- a multi-judge identity/feature-distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning -- are each validated to the same $n=5$-seed, five-backbone standard and found to provide no reliable improvement, with learned pruning performing significantly worse than span\_tiny's fixed block selection in all five backbones. A further ablation testing whether SPAN's parameter-free attention specifically explains its depth tolerance finds no support for that account: two architectures with learned attention mechanisms tolerate an equivalent depth reduction just as well. Results that do not reach statistical significance are reported as such throughout, and an auxiliary check on genuinely low-resolution real-world images (as opposed to synthetically downsampled ones) surfaces a boundary condition on the main claim, traced to a resolution mismatch between these images and the synthetic degradation used to train the SR models.
 
 \vspace{2mm}
 \noindent\textbf{Keywords:} lightweight super-resolution; depth compression; knowledge distillation; ear recognition; low-resolution biometrics; statistical significance testing; cross-dataset generalization; negative-result ablation
@@ -120,6 +120,24 @@ To our knowledge, no prior work combines further depth compression of a state-of
 \subsection{Problem formulation}
 
 Given a high-resolution ear crop, a low-resolution counterpart is generated via bicubic downsampling at a fixed scale factor $\times4$ (HR 80$\times$80 $\to$ LR 20$\times$20 on EarVN1.0; HR 76$\times$76 $\to$ LR 19$\times$19 on AWEx, since \texttt{hr\_size} is auto-selected per dataset, Section~\ref{sec:datasets}). An SR model upsamples the LR image back to the dataset's HR size, and the resulting image is passed to a recognition backbone trained to predict subject identity and, secondarily, gender. Three domains are compared throughout: \texttt{lr} (no SR, the LR image bicubically upsampled and fed directly to the recognition backbone, establishing the no-SR baseline), \texttt{span\_baseline} (the uncompressed SPAN architecture, referred to as \texttt{sr\_baseline} in project logs), and \texttt{span\_tiny} (the depth-compressed variant proposed here, referred to as \texttt{sr\_improved}).
+
+The SPAN-family names used throughout this paper are collected in Table~\ref{tab:terminology} for reference, since the same underlying architecture is instantiated in several configurations that differ only in block count or in which of the two implementations (custom re-implementation vs.\ original authors' code) is used, and these are each introduced separately across this and later sections.
+
+\begin{table}[H]
+\centering
+\caption{SPAN-family terminology used throughout this paper. All configurations share the same overall architecture (Figure~\ref{fig:arch}); they differ only in block count (\texttt{n\_blocks}) and in which of two implementations is used (Section~\ref{sec:arch}).}
+\label{tab:terminology}
+\begin{tabular}{lll}
+\toprule
+Paper name & Blocks / implementation & Role \\
+\midrule
+\texttt{span\_tiny} & 3 blocks, custom re-implementation & This paper's proposed, depth-compressed model \\
+\texttt{span\_baseline} & 6 blocks, original authors' code & Uncompressed reference in the main comparison (Table~\ref{tab:main}) \\
+\texttt{span\_large} & 6 blocks, custom re-implementation & Uncompressed counterpart isolating depth alone (Table~\ref{tab:depth}) \\
+\texttt{lr} & -- (no SR) & Bicubic-upsampled input, no-SR baseline \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{span\_tiny architecture}
 \label{sec:arch}
@@ -246,6 +264,8 @@ Downstream identity recognition is evaluated on five backbone architectures chos
 
 For every comparison between two SR domains (e.g., span\_tiny vs.\ lr), downstream recognition accuracy is measured across $n=5$ random seeds (42, 123, 2024, 44, 999), holding the SR model itself fixed. SR models are trained once per configuration, at a fixed seed of 42, and only the downstream recognition training is repeated across seeds for the main result tables; training a full SR model at every recognition seed was judged computationally infeasible at the scale of this study. This leaves open whether the specific SR checkpoint used could itself be an unmeasured source of variance -- Section~\ref{sec:sr-seed-variance} measures this directly for the three core architectures rather than leaving it as an untested assumption. The paired difference in mean accuracy is reported alongside a paired-sample $t$-test (\texttt{scipy.stats.ttest\_rel}) and a paired effect size (Cohen's $d_z = \text{mean(difference)}/\text{std(difference)}$)~\cite{cohen1988statistical}. Because multiple backbones and multiple pairwise comparisons are tested within each result table, a Bonferroni correction~\cite{dunn1961multiple} is applied across the comparisons within each family. $p_{\text{Bonf}} < 0.05$ is adopted as the threshold for a ``statistically significant'' claim, with $0.05 \leq p_{\text{Bonf}} < 0.10$ distinguished as ``suggestive of a trend'' and never described as significant in this paper.
 
+A non-significant paired $t$-test is not, by itself, evidence that two configurations are equivalent: at $n=5$ seeds with Bonferroni correction, statistical power is low, and failing to reject the null hypothesis of no difference is equally consistent with a true absence of effect and with an underpowered test that simply could not detect a real one. Wherever this paper describes a comparison as safe or accuracy-neutral rather than merely non-significant, that claim is backed by an equivalence test rather than the absence of a significant difference alone: a paired two one-sided tests (TOST) procedure~\cite{schuirmann1987tost}, using a pre-specified equivalence margin of $\pm 1$ percentage point of accuracy -- chosen to match the informal threshold (``under one percentage point'') this paper already uses elsewhere to describe a cost as small. TOST tests, in each one-sided direction, whether the true paired difference exceeds the margin; declaring equivalence requires rejecting both one-sided nulls simultaneously ($p_{\text{TOST}} = \max(p_{\text{lower}}, p_{\text{upper}}) < 0.05$), so a comparison can simultaneously fail to reach significance under the $t$-test above and fail to be confirmed equivalent under TOST -- this combination is reported explicitly as inconclusive rather than folded into either a ``significant'' or a ``safe'' verdict.
+
 \subsection{SR-training-seed variance validation}
 \label{sec:sr-seed-variance}
 
@@ -346,26 +366,26 @@ Table~\ref{tab:main} reports downstream rank-1 identity accuracy for the \texttt
 
 \begin{table}[H]
 \centering
-\caption{Downstream identity accuracy (rank-1) on EarVN1.0, $n=5$ seeds. ``tiny$>$lr'' and ``tiny vs.\ baseline'' report paired Cohen's $d$ and Bonferroni-corrected $p$-values (family of 3 comparisons per backbone: lr--baseline, lr--tiny, baseline--tiny).}
+\caption{Downstream identity accuracy (rank-1) on EarVN1.0, $n=5$ seeds. ``tiny$>$lr'' and ``tiny vs.\ baseline'' report paired Cohen's $d$ and Bonferroni-corrected $p$-values (family of 3 comparisons per backbone: lr--baseline, lr--tiny, baseline--tiny). ``TOST'' is the equivalence test for tiny vs.\ baseline (Section~\ref{sec:stats}, $\pm 1$ percentage point margin); ``not equiv.'' means equivalence is not confirmed at $n=5$, which is a distinct claim from ``significant'' -- see accompanying text.}
 \label{tab:main}
 \begin{threeparttable}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lcccll}
+\begin{tabular}{lcccllc}
 \toprule
-Backbone & lr & span\_tiny & span\_baseline & tiny $>$ lr ($d$, $p_{\text{Bonf}}$) & tiny vs.\ baseline ($d$, $p_{\text{Bonf}}$) \\
+Backbone & lr & span\_tiny & span\_baseline & tiny $>$ lr ($d$, $p_{\text{Bonf}}$) & tiny vs.\ baseline ($d$, $p_{\text{Bonf}}$) & TOST ($p_{\text{TOST}}$) \\
 \midrule
-EfficientNet-B0     & 0.5125 & 0.5485 & 0.5604 & $d{=}8.38$, $p{=}0.0001$ (sig.) & $d{=}{-}2.45$, $p{=}0.0163$ (sig., tiny lower) \\
-GhostNet-100        & 0.4675 & 0.5115 & 0.5205 & $d{=}9.10$, $p{=}0.0001$ (sig.) & $d{=}{-}1.36$, $p{=}0.1163$ (n.s.) \\
-MobileNetV2         & 0.4444 & 0.5026 & 0.5125 & $d{=}7.75$, $p{=}0.0002$ (sig.) & $d{=}{-}0.74$, $p{=}0.5135$ (n.s.) \\
-MobileNetV3-Small   & 0.4002 & 0.4423 & 0.4398 & $d{=}4.41$, $p{=}0.0018$ (sig.) & $d{=}0.27$, $p{=}1.0$ (n.s., tiny higher) \\
-ResNet-18           & 0.4575 & 0.4825 & 0.4882 & $d{=}2.20$, $p{=}0.0239$ (sig.) & $d{=}{-}0.66$, $p{=}0.6379$ (n.s.) \\
+EfficientNet-B0     & 0.5125 & 0.5485 & 0.5604 & $d{=}8.38$, $p{=}0.0001$ (sig.) & $d{=}{-}2.45$, $p{=}0.0163$ (sig., tiny lower) & 0.79 (not equiv.) \\
+GhostNet-100        & 0.4675 & 0.5115 & 0.5205 & $d{=}9.10$, $p{=}0.0001$ (sig.) & $d{=}{-}1.36$, $p{=}0.1163$ (n.s.) & 0.38 (not equiv.) \\
+MobileNetV2         & 0.4444 & 0.5026 & 0.5125 & $d{=}7.75$, $p{=}0.0002$ (sig.) & $d{=}{-}0.74$, $p{=}0.5135$ (n.s.) & 0.50 (not equiv.) \\
+MobileNetV3-Small   & 0.4002 & 0.4423 & 0.4398 & $d{=}4.41$, $p{=}0.0018$ (sig.) & $d{=}0.27$, $p{=}1.0$ (n.s., tiny higher) & 0.07 (not equiv.) \\
+ResNet-18           & 0.4575 & 0.4825 & 0.4882 & $d{=}2.20$, $p{=}0.0239$ (sig.) & $d{=}{-}0.66$, $p{=}0.6379$ (n.s.) & 0.16 (not equiv.) \\
 \bottomrule
 \end{tabular}%
 }
 \end{threeparttable}
 \end{table}
 
-\texttt{span\_tiny $>$ lr} reaches statistical significance ($p_{\text{Bonf}} < 0.05$) in 5/5 backbones, with large effect sizes throughout (Cohen's $d$ 2.2--9.1). \texttt{span\_baseline $>$ lr} is equally strong and significant in 5/5 backbones ($d$ 3.8--10.6, not tabulated separately). The accuracy cost of compression itself, \texttt{span\_tiny} vs.\ \texttt{span\_baseline}, reaches significance in only 1/5 backbones (EfficientNet-B0, a 1.2-percentage-point cost); the other four are statistically indistinguishable, and MobileNetV3-Small shows span\_tiny fractionally \emph{higher} than the baseline (not significant). This is a stronger and cleaner result than a coarser reading of the data might suggest: the benefit of using SR at all is large and universal, while the specific cost of halving SPAN's depth is small and, in 4/5 backbones, not statistically detectable.
+\texttt{span\_tiny $>$ lr} reaches statistical significance ($p_{\text{Bonf}} < 0.05$) in 5/5 backbones, with large effect sizes throughout (Cohen's $d$ 2.2--9.1). \texttt{span\_baseline $>$ lr} is equally strong and significant in 5/5 backbones ($d$ 3.8--10.6, not tabulated separately). The accuracy cost of compression itself, \texttt{span\_tiny} vs.\ \texttt{span\_baseline}, reaches significance in only 1/5 backbones (EfficientNet-B0, a 1.2-percentage-point cost); the other four are statistically indistinguishable, and MobileNetV3-Small shows span\_tiny fractionally \emph{higher} than the baseline (not significant). A non-significant paired $t$-test is not, on its own, proof that the cost is negligible, so each of these four was additionally tested for equivalence (TOST, $\pm 1$ percentage point margin, Section~\ref{sec:stats}): none reaches the threshold for confirmed equivalence at $n=5$ seeds ($p_{\text{TOST}}$ 0.07--0.50), MobileNetV3-Small coming closest. This paper therefore reports the compression cost honestly as \emph{not detected as significant} in four of five backbones -- a real and useful finding, since it means no measured evidence points to a cost there -- rather than as \emph{confirmed accuracy-neutral}, which the present sample size cannot establish; the depth ablation below (Table~\ref{tab:depth}), which isolates the same question with a cleaner single-variable comparison, does confirm genuine equivalence in two backbones.
 
 Figure~\ref{fig:qualitative} shows qualitative examples on real EarVN1.0 test images. Across the full 20-sample export, the per-image PSNR gap (span\_baseline $-$ span\_tiny) ranges from $-0.062$\,dB, with span\_tiny marginally ahead (Figure~\ref{fig:qualitative}a), to $+2.645$\,dB, the largest gap observed (Figure~\ref{fig:qualitative}e). Samples (a)--(e) are selected to span this full range rather than to favor either model. Two patterns are visible. First, the visual gap between span\_baseline and span\_tiny tracks the PSNR gap: it is imperceptible when the two are close (Figure~\ref{fig:qualitative}a--b) and visible mainly as reduced fine-structure sharpness in the antihelix/concha region when the gap is largest (Figure~\ref{fig:qualitative}e), consistent with a small, non-catastrophic accuracy cost rather than a qualitatively different failure mode. Second, Figure~\ref{fig:qualitative}b illustrates a limitation of pixel-fidelity metrics noted in Section~\ref{sec:related}: the ear itself is largely occluded by hair in this sample, so the near-tied, relatively high PSNR (30.92 vs.\ 30.89\,dB) is driven substantially by accurate reconstruction of the large, low-detail hair and background regions rather than by ear-specific structure. PSNR and downstream identity accuracy are related but not interchangeable signals.
 
@@ -392,22 +412,24 @@ These per-image values are computed over the full image frame, including any let
 
 \begin{table}[H]
 \centering
-\caption{span\_tiny vs.\ span\_large, downstream identity accuracy, EarVN1.0, $n=5$ seeds. Difference and $d$ are span\_large $-$ span\_tiny; $p_{\text{Bonf}}$ corrected across the 6-comparison family reported by this ablation's own aggregation (Section~\ref{sec:stats}).}
+\caption{span\_tiny vs.\ span\_large, downstream identity accuracy, EarVN1.0, $n=5$ seeds. Difference and $d$ are span\_large $-$ span\_tiny; $p_{\text{Bonf}}$ corrected across the 6-comparison family reported by this ablation's own aggregation (Section~\ref{sec:stats}). $p_{\text{TOST}}$ is the equivalence test ($\pm 1$ percentage point margin); ``equiv.'' requires $p_{\text{TOST}}<0.05$, a stricter and distinct claim from ``n.s.''}
 \label{tab:depth}
-\begin{tabular}{lccccc}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
 \toprule
-Backbone & span\_tiny & span\_large & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ \\
+Backbone & span\_tiny & span\_large & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ & $p_{\text{TOST}}$ \\
 \midrule
-EfficientNet-B0   & 0.5485 & 0.5568 & +0.0083 & 3.17 & 0.0125 (sig.) \\
-GhostNet-100      & 0.5115 & 0.5140 & +0.0025 & 1.33 & 0.244  \\
-MobileNetV2       & 0.5026 & 0.5044 & +0.0018 & 0.29 & 1.0    \\
-MobileNetV3-Small & 0.4423 & 0.4473 & +0.0050 & 0.37 & 1.0    \\
-ResNet-18         & 0.4825 & 0.4863 & +0.0038 & 0.45 & 1.0    \\
+EfficientNet-B0   & 0.5485 & 0.5568 & +0.0083 & 3.17 & 0.0125 (sig.) & 0.11 (not equiv.) \\
+GhostNet-100      & 0.5115 & 0.5140 & +0.0025 & 1.33 & 0.244  & \textbf{0.0004 (equiv.)} \\
+MobileNetV2       & 0.5026 & 0.5044 & +0.0018 & 0.29 & 1.0    & \textbf{0.0235 (equiv.)} \\
+MobileNetV3-Small & 0.4423 & 0.4473 & +0.0050 & 0.37 & 1.0    & 0.226 (not equiv.) \\
+ResNet-18         & 0.4825 & 0.4863 & +0.0038 & 0.45 & 1.0    & 0.371 (not equiv.) \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
-4/5 backbones show no statistically significant difference between span\_tiny (0.230M parameters) and span\_large (0.417M parameters). The fifth, EfficientNet-B0, shows a small but statistically significant cost ($p_{\text{Bonf}}{=}0.0125$), span\_large ahead by 0.83 percentage points. This is still the strongest single piece of evidence for the paper's central claim, precisely stated: reducing depth from 6 to 3 SPABs is accuracy-neutral in the large majority of backbones tested and, where it is not, the cost is small (under 1 percentage point) -- not a claim of zero cost in every setting. On AWEx (Section~\ref{sec:res-awex}), the same comparison is statistically non-significant in 5/5 backbones, though at a smaller sample ($n=3$ seeds; see Section~\ref{sec:limitations}).
+4/5 backbones show no statistically significant difference between span\_tiny (0.230M parameters) and span\_large (0.417M parameters). The fifth, EfficientNet-B0, shows a small but statistically significant cost ($p_{\text{Bonf}}{=}0.0125$), span\_large ahead by 0.83 percentage points, and this cost is also not confirmed within the equivalence margin by TOST ($p_{\text{TOST}}{=}0.11$) -- a consistent, real (if small) cost on this backbone by both tests. Of the remaining four, TOST confirms genuine equivalence within $\pm 1$ percentage point for two (GhostNet-100, $p_{\text{TOST}}{=}0.0004$; MobileNetV2, $p_{\text{TOST}}{=}0.0235$); the other two (MobileNetV3-Small, ResNet-18) are non-significant under the paired $t$-test but do not reach the TOST threshold either, and are reported as inconclusive rather than assumed safe. The paper's central claim is therefore precisely this: reducing depth from 6 to 3 SPABs is confirmed accuracy-neutral in 2/5 backbones, shows a small but real cost in 1/5, and remains an open question at this sample size in the remaining 2/5 -- not a blanket claim of zero cost everywhere, and stronger where it is made than a non-significance argument alone would support. On AWEx (Section~\ref{sec:res-awex}), the same comparison is statistically non-significant in 5/5 backbones, though at a smaller sample ($n=3$ seeds; see Section~\ref{sec:limitations}).
 
 \subsubsection{Locating the compression boundary: a full depth sweep}
 \label{sec:depth-sweep}
@@ -458,13 +480,17 @@ The comparison above isolates a single point on the depth axis (3 vs.\ 6 blocks)
         \draw (\x-0.06,\yhi) -- (\x+0.06,\yhi);
     }
 
-    % diem du lieu -- do (n=1, giam co y nghia thong ke) khac mau voi cac diem con lai (n.s. so voi 6 khoi)
+    % diem du lieu -- mau theo VERDICT TOST (Table~depth-sweep-pairwise), khong chi theo NHST:
+    % do = 1 khoi (sig. cost, KHONG tuong duong); xanh la = 3,5 khoi (equiv. da xac nhan qua TOST);
+    % cam = 2,4 khoi (n.s. nhung KHONG xac nhan duoc tuong duong -- inconclusive, khac han "an toan")
     \fill[red!70!black] (0.0,1.568) circle (2.2pt);
-    \foreach \x/\y in {1.4/2.149, 2.8/2.632, 4.2/3.171, 5.6/2.912, 7.0/2.758} {
-        \fill[black] (\x,\y) circle (2.2pt);
-    }
+    \fill[orange!85!black] (1.4,2.149) circle (2.2pt);
+    \fill[green!45!black] (2.8,2.632) circle (2.2pt);
+    \fill[orange!85!black] (4.2,3.171) circle (2.2pt);
+    \fill[green!45!black] (5.6,2.912) circle (2.2pt);
+    \fill[black] (7.0,2.758) circle (2.2pt);
 \end{tikzpicture}
-\caption{Downstream identity accuracy (MobileNetV2, EarVN1.0, $n=5$ seeds, error bars $=\pm 1$ std.\ dev.) as a function of retained SPAB block count. The red point (1 block) is the only configuration with a statistically significant cost relative to the 6-block reference (Table~\ref{tab:depth-sweep-pairwise}); all black points (2--5 blocks) are statistically indistinguishable from it.}
+\caption{Downstream identity accuracy (MobileNetV2, EarVN1.0, $n=5$ seeds, error bars $=\pm 1$ std.\ dev.) as a function of retained SPAB block count, colored by verdict against the 6-block reference (Table~\ref{tab:depth-sweep-pairwise}): red (1 block) is a statistically significant, TOST-confirmed non-equivalent cost; green (3, 5 blocks) is TOST-confirmed equivalent within $\pm 1$ percentage point; orange (2, 4 blocks) is non-significant under the paired $t$-test but \emph{not} TOST-confirmed equivalent either, and is reported as inconclusive rather than safe (Section~\ref{sec:stats}).}
 \label{fig:depth-sweep}
 \end{figure}
 
@@ -484,22 +510,22 @@ Std.\ dev.\ & 0.0025 & 0.0073 & 0.0074 & 0.0089 & 0.0032 & 0.0048 \\
 
 \begin{table}[H]
 \centering
-\caption{Each block count vs.\ the 6-block (uncompressed) reference, MobileNetV2, $n=5$ seeds. $p_{\text{Bonf}}$ corrected across the 5-comparison family.}
+\caption{Each block count vs.\ the 6-block (uncompressed) reference, MobileNetV2, $n=5$ seeds. $p_{\text{Bonf}}$ corrected across the 5-comparison family. $p_{\text{TOST}}$ is the equivalence test ($\pm 1$ percentage point margin, Section~\ref{sec:stats}); ``n.s.'' and ``equiv.'' are distinct claims -- non-significance alone does not establish equivalence.}
 \label{tab:depth-sweep-pairwise}
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
-Blocks vs.\ 6 & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ & Verdict \\
+Blocks vs.\ 6 & Difference & Cohen's $d$ & $p_{\text{Bonf}}$ & $p_{\text{TOST}}$ & Verdict \\
 \midrule
-1 & $-$0.0170 & $-$4.59 & 0.0025 & \textbf{sig.\ (cost)} \\
-2 & $-$0.0087 & $-$0.85 & 0.659  & n.s. \\
-3 & $-$0.0018 & $-$0.29 & 1.0    & n.s. \\
-4 & +0.0059   & 0.61    & 1.0    & n.s. \\
-5 & +0.0022   & 1.10    & 0.350  & n.s. \\
+1 & $-$0.0170 & $-$4.59 & 0.0025 & 0.993 & \textbf{sig.\ cost, not equiv.} \\
+2 & $-$0.0087 & $-$0.85 & 0.659  & 0.396 & n.s., not equiv.\ (inconclusive) \\
+3 & $-$0.0018 & $-$0.29 & 1.0    & \textbf{0.024} & n.s., \textbf{equiv.} \\
+4 & +0.0059   & 0.61    & 1.0    & 0.199 & n.s., not equiv.\ (inconclusive) \\
+5 & +0.0022   & 1.10    & 0.350  & \textbf{0.0005} & n.s., \textbf{equiv.} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The curve is not monotonic in the range that matters: accuracy is statistically flat from 2 blocks through 6 (all four comparisons non-significant after Bonferroni correction, including 5 blocks despite a raw $p$ of 0.070 that does not survive correction), and only the most aggressive cut tested, to a single block, produces a large and statistically significant cost ($d=-4.59$, $p_{\text{Bonf}}=0.0025$). The boundary this study can locate, on this backbone, therefore sits between one and two blocks, not at three: span\_tiny's specific choice of 3 blocks is accuracy-neutral, as already shown, but so -- on this evidence -- would a 2-block cut be, a further 33\% reduction in retained blocks beyond span\_tiny. This does not change the paper's proposed configuration, since span\_tiny's 3-block design has additionally been validated across five backbones and two datasets (Table~\ref{tab:depth}, Section~\ref{sec:res-awex}) where the sweep above covers one representative backbone on EarVN1.0 only; it does, however, directly answer the compression-limit question the title and abstract raise, in place of the single 3-vs-6 comparison that could previously only answer whether one specific cut was safe.
+The curve is not monotonic in the range that matters: none of 2, 3, 4, or 5 blocks reaches statistical significance against the 6-block reference after Bonferroni correction, and only the most aggressive cut tested, to a single block, produces a large and statistically significant cost ($d=-4.59$, $p_{\text{Bonf}}=0.0025$) that TOST also confirms is not equivalent ($p_{\text{TOST}}=0.993$). Non-significance alone, however, does not establish that a cut is safe (Section~\ref{sec:stats}), and TOST distinguishes two different situations among the four non-significant points: 3 and 5 blocks are confirmed equivalent to the 6-block reference within $\pm 1$ percentage point ($p_{\text{TOST}}=0.024$ and $0.0005$), while 2 and 4 blocks are neither significantly different nor confirmed equivalent ($p_{\text{TOST}}=0.396$ and $0.199$) and are reported as inconclusive at this sample size rather than assumed safe. The confirmed floor of safe compression this study can establish, on this backbone, is therefore 3 blocks -- span\_tiny's own choice -- not a lower one: the evidence that a 2-block cut is also safe is currently absent rather than negative, and would require more seeds to resolve rather than being assumed from the non-significant $p$-value alone. This does not change the paper's proposed configuration, since span\_tiny's 3-block design has additionally been validated across five backbones and two datasets (Table~\ref{tab:depth}, Section~\ref{sec:res-awex}) where the sweep above covers one representative backbone on EarVN1.0 only; it does, however, directly answer the compression-limit question the title and abstract raise, with an equivalence-tested floor rather than a single untested 3-vs-6 comparison.
 
 \subsection{Ablation: loss components}
 \label{sec:res-loss}
@@ -589,7 +615,7 @@ On a held-out set of 173 genuinely low-resolution ear images (rather than synthe
 
 \begin{table}[H]
 \centering
-\caption{Real low-resolution holdout, EarVN1.0 (173 images, mobilenet\_v2), $n=5$ seeds.}
+\caption{Real low-resolution holdout, EarVN1.0 (173 images, mobilenet\_v2), $n=5$ seeds. Gender accuracy uses EarVN1.0's folder-range gender convention (Section~\ref{sec:datasets}), not an independently verified attribute.}
 \label{tab:lr-holdout}
 \begin{tabular}{lcc}
 \toprule
@@ -604,7 +630,7 @@ span\_tiny       & 0.1538 $\pm$ 0.0264 & 0.8312 $\pm$ 0.0155 \\
 
 \begin{table}[H]
 \centering
-\caption{Real low-resolution holdout, pairwise comparisons ($d$, $p_{\text{Bonf}}$; family of 3 comparisons per metric), $n=5$ seeds.}
+\caption{Real low-resolution holdout, pairwise comparisons ($d$, $p_{\text{Bonf}}$; family of 3 comparisons per metric), $n=5$ seeds. Gender accuracy uses EarVN1.0's folder-range gender convention (Section~\ref{sec:datasets}), not an independently verified attribute.}
 \label{tab:lr-holdout-pairwise}
 \begin{tabular}{lcc}
 \toprule
@@ -624,18 +650,18 @@ The likely cause of the no-SR/SR reversal itself is a resolution mismatch: every
 \subsubsection{Mitigation for the boundary condition: degradation-augmented training}
 \label{sec:degradation-mitigation}
 
-Rather than leaving the resolution-mismatch boundary condition as an unaddressed limitation, a direct mitigation was implemented and tested: both span\_tiny and span\_baseline were retrained with the LR input generated by a randomized real-world-style degradation pipeline (Gaussian blur, additive noise, and JPEG compression, each resampled independently per training sample per epoch) rather than clean bicubic downsampling alone, following the classical degradation-modeling approach used in BSRGAN~\cite{zhang2021designing} rather than the more elaborate two-stage pipeline of Real-ESRGAN~\cite{wang2021realesrgan}, to keep the change tractable as a single-variable ablation. Only the training-time LR generation changes; the validation split, the distillation recipe, and the frozen teacher are all unchanged from the main recipe, isolating the effect of degradation diversity specifically. Table~\ref{tab:degradation-sanity} first confirms this retraining does not disturb the paper's central claim: span\_tiny remains statistically indistinguishable from span\_baseline under the new recipe ($d{=}{-}0.09$, $p_{\text{Bonf}}{=}0.848$), at a modest cost in absolute accuracy on the clean synthetic benchmark relative to the original bicubic-only recipe (mobilenet\_v2: 49.92\% and 49.80\% here vs.\ 51.25\% and 50.26\% in Table~\ref{tab:main}) -- an expected accuracy/robustness trade-off from training on a harder, more varied degradation distribution.
+Rather than leaving the resolution-mismatch boundary condition as an unaddressed limitation, a direct mitigation was implemented and tested: both span\_tiny and span\_baseline were retrained with the LR input generated by a randomized real-world-style degradation pipeline (Gaussian blur, additive noise, and JPEG compression, each resampled independently per training sample per epoch) rather than clean bicubic downsampling alone, following the classical degradation-modeling approach used in BSRGAN~\cite{zhang2021designing} rather than the more elaborate two-stage pipeline of Real-ESRGAN~\cite{wang2021realesrgan}, to keep the change tractable as a single-variable ablation. Only the training-time LR generation changes; the validation split, the distillation recipe, and the frozen teacher are all unchanged from the main recipe, isolating the effect of degradation diversity specifically. Table~\ref{tab:degradation-sanity} first checks that this retraining does not disturb the paper's central claim: the paired $t$-test finds no significant difference between span\_tiny and span\_baseline under the new recipe ($d{=}{-}0.09$, $p_{\text{Bonf}}{=}0.848$), though TOST does not confirm this as equivalent within $\pm 1$ percentage point either ($p_{\text{TOST}}{=}0.097$, just short of the 0.05 threshold) -- consistent with the same four EarVN1.0 backbones in Table~\ref{tab:main} under the original recipe, where equivalence is likewise not confirmed at $n=5$. This sanity check is read the same way as that main comparison: no evidence of a cost under the new recipe, short of a fully confirmed equivalence claim, at a modest cost in absolute accuracy on the clean synthetic benchmark relative to the original bicubic-only recipe (mobilenet\_v2: 49.92\% and 49.80\% here vs.\ 51.25\% and 50.26\% in Table~\ref{tab:main}) -- an expected accuracy/robustness trade-off from training on a harder, more varied degradation distribution.
 
 \begin{table}[H]
 \centering
-\caption{Compression-safety sanity check under degradation-augmented training, EarVN1.0 (mobilenet\_v2), $n{=}5$ seeds.}
+\caption{Compression-safety sanity check under degradation-augmented training, EarVN1.0 (mobilenet\_v2), $n{=}5$ seeds. $p_{\text{TOST}}$ is the equivalence test ($\pm 1$ percentage point margin, Section~\ref{sec:stats}).}
 \label{tab:degradation-sanity}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-span\_baseline (degradation-aug.\ training) & span\_tiny (degradation-aug.\ training) & $d$, $p_{\text{Bonf}}$ \\
+span\_baseline (degradation-aug.\ training) & span\_tiny (degradation-aug.\ training) & $d$, $p_{\text{Bonf}}$ & $p_{\text{TOST}}$ \\
 \midrule
-0.4992 $\pm$ 0.0114 & 0.4980 $\pm$ 0.0016 & $d{=}{-}0.09$, $p{=}0.848$ (n.s.) \\
+0.4992 $\pm$ 0.0114 & 0.4980 $\pm$ 0.0016 & $d{=}{-}0.09$, $p{=}0.848$ (n.s.) & 0.097 (not equiv.) \\
 \bottomrule
 \end{tabular}
 }
@@ -645,7 +671,7 @@ Table~\ref{tab:degradation-holdout} re-evaluates both retrained models on the sa
 
 \begin{table}[H]
 \centering
-\caption{Real low-resolution holdout under degradation-augmented training vs.\ the original bicubic-only recipe (Table~\ref{tab:lr-holdout}), EarVN1.0 (mobilenet\_v2), $n{=}5$ seeds.}
+\caption{Real low-resolution holdout under degradation-augmented training vs.\ the original bicubic-only recipe (Table~\ref{tab:lr-holdout}), EarVN1.0 (mobilenet\_v2), $n{=}5$ seeds. Gender accuracy uses EarVN1.0's folder-range gender convention (Section~\ref{sec:datasets}), not an independently verified attribute.}
 \label{tab:degradation-holdout}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcccc}
@@ -662,7 +688,7 @@ span\_tiny     & 0.1538 $\pm$ 0.0264 & 0.1572 $\pm$ 0.0384  & 0.8312 $\pm$ 0.015
 
 \begin{table}[H]
 \centering
-\caption{Real low-resolution holdout under degradation-augmented training, pairwise comparisons ($d$, $p_{\text{Bonf}}$; family of 3 per metric), $n{=}5$ seeds.}
+\caption{Real low-resolution holdout under degradation-augmented training, pairwise comparisons ($d$, $p_{\text{Bonf}}$; family of 3 per metric), $n{=}5$ seeds. Gender accuracy uses EarVN1.0's folder-range gender convention (Section~\ref{sec:datasets}), not an independently verified attribute.}
 \label{tab:degradation-holdout-pairwise}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcc}
@@ -947,7 +973,7 @@ where $f(\cdot)$ denotes the frozen backbone's penultimate-layer embedding. This
 \label{sec:discussion}
 % ============================================================================
 
-\textbf{Interpreting the trade-off.} The design goal of this work was not maximal downstream accuracy but a specific, pre-defined criterion: preserve the ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} while substantially reducing parameter count and latency, and in particular keep the compression-specific cost (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) small and, ideally, statistically undetectable. On EarVN1.0 this cost is non-significant in 4/5 backbones (Table~\ref{tab:main}) and, on the depth-isolated comparison, in 4/5 backbones as well (Table~\ref{tab:depth}). On AWEx it is non-significant in 5/5 backbones under all three protocols tested -- from-scratch, full-fine-tune transfer, and frozen-backbone transfer (Section~\ref{sec:res-awex}) -- the single most consistent result in the paper. This forms the paper's central empirical claim.
+\textbf{Interpreting the trade-off.} The design goal of this work was not maximal downstream accuracy but a specific, pre-defined criterion: preserve the ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} while substantially reducing parameter count and latency, and in particular keep the compression-specific cost (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) small and, ideally, confirmed negligible rather than merely undetected. On EarVN1.0 this cost is non-significant in 4/5 backbones (Table~\ref{tab:main}), though TOST equivalence testing does not confirm any of those four as negligible at $n=5$; the depth-isolated comparison (Table~\ref{tab:depth}) gives the cleaner answer, non-significant in 4/5 backbones and TOST-confirmed equivalent in 2 of those 4, with the remaining 2 inconclusive rather than settled. On AWEx it is non-significant in 5/5 backbones under all three protocols tested -- from-scratch, full-fine-tune transfer, and frozen-backbone transfer (Section~\ref{sec:res-awex}) -- the single most consistent result in the paper, though the same equivalence caveat applies there pending TOST analysis on that dataset. This forms the paper's central empirical claim, stated at the strength the evidence actually supports: no detected cost almost everywhere, confirmed negligible cost in a subset, and an honestly open question rather than an assumed safety margin in the rest.
 
 \textbf{Why depth reduction is close to accuracy-neutral -- revised after testing it directly.}
 \label{sec:disc-depth}
@@ -978,6 +1004,8 @@ Two further ablations on EarVN1.0 are validated at reduced scope. The loss-compo
 
 Two measurement-level limitations apply throughout. Latency figures (Table~\ref{tab:quality}) come from the development machine rather than a representative resource-constrained device such as a Raspberry Pi or a phone SoC, so they should be read as relative comparisons under controlled conditions rather than deployment-ready benchmarks. PSNR/SSIM/LPIPS (Table~\ref{tab:quality}, Table~\ref{tab:awex-quality}) still come from a single training run per configuration ($n=1$), with no confidence interval. The related question of whether the \emph{downstream} multi-seed results depend on which SR-training seed happened to be used was checked directly, across all five backbones and all three architectures rather than a single screening backbone (Section~\ref{sec:sr-seed-variance}): SR-training-seed variance exceeds the already-reported downstream-recognition-seed variance in 13 of 15 backbone/architecture combinations, confirmed by a crossed mixed-effects model on Table~\ref{tab:main}'s central comparison. This is not specific to span\_baseline -- span\_tiny itself shows a comparable or larger ratio on two of five backbones -- so it is reported as a general property of this pipeline's SR-training stochasticity rather than a caveat attached only to the comparison baseline. It does not overturn any conclusion in this paper, since the main comparisons' point estimates are unaffected, but it does mean the reported downstream-seed standard deviations understate the total uncertainty attributable to SR-training choices, and a reader treating the reported confidence intervals as capturing all sources of variance should read this section's ratios as a correction to that assumption.
 
+Multiple-comparison correction throughout this paper uses Bonferroni~\cite{dunn1961multiple} rather than a less conservative alternative such as Holm-Bonferroni, which controls the same family-wise error rate with uniformly higher power. Bonferroni was retained deliberately: it is simpler to verify by hand from a single multiplier ($p_{\text{Bonf}} = \min(1, p_{\text{raw}} \times n_{\text{comparisons}})$) than a sequential procedure, and, since every reported $p_{\text{Bonf}}$ in this paper is already conservative, switching corrections could in principle move some non-significant comparisons into significance but never the reverse -- this paper's non-significant findings are therefore, if anything, understated rather than overstated by this choice, and its significant findings would remain significant under the less conservative alternative.
+
 Finally, the paper's main claim is validated specifically for the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this scope should be stated plainly rather than assumed to extend further: an auxiliary check on genuinely low-resolution real-world images (Section~\ref{sec:res-main}) shows the opposite ordering, traced to a resolution mismatch between these images (all natively below the SR models' trained input size) and the training-time degradation. This is a boundary condition on where the claim has been shown to hold, not a refutation of it, but it means this paper does not provide evidence that span\_tiny or span\_baseline improves recognition on arbitrary real-world low-resolution ear images outside the synthetic-degradation regime studied here -- the reversal itself is now confirmed at $n=5$ seeds and replicates in direction on two independent tasks (identity and gender accuracy), so it is not attributable to one seed or one task, but the check remains limited to a single backbone (mobilenet\_v2) and a single holdout set (173 images). A direct mitigation, retraining with degradation-augmented data (Section~\ref{sec:degradation-mitigation}), was tested rather than left for future work, and helps span\_tiny specifically (narrowing or reversing its gap to no-SR on both metrics) without disturbing the compression-safety claim, but does not reach significance against no-SR at $n{=}5$ and does not help span\_baseline under the same recipe -- a partial mitigation, reported as such rather than as a closed problem.
 
 % ============================================================================
@@ -985,7 +1013,7 @@ Finally, the paper's main claim is validated specifically for the synthetic bicu
 \label{sec:conclusion}
 % ============================================================================
 
-This paper asked a narrower question than most efficient-SR work: not whether a compressed model is the most accurate option available, but whether compressing SPAN's depth by half still leaves a model worth using ahead of no SR at all, without paying a real accuracy price for the compression itself. Across five recognition backbones and two independent datasets, span\_tiny answers both parts of that question affirmatively, and more strongly than a coarser reading of the numbers alone would suggest. \texttt{span\_tiny} beats \texttt{no-SR} with statistical significance in 5/5 backbones on EarVN1.0; the specific cost of compression (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) is non-significant in 4/5 backbones there and in 5/5 backbones under all three evaluation protocols tested on AWEx (from-scratch, full-fine-tune transfer, frozen-backbone transfer) -- the most consistently replicated finding in the paper. The depth ablation isolating block count alone corroborates this directly: span\_tiny and its uncompressed-depth counterpart, span\_large, are statistically indistinguishable in 4/5 backbones on EarVN1.0 and 5/5 on AWEx. A full depth sweep across every intermediate block count locates the compression boundary itself rather than testing a single cut: on the backbone examined, accuracy is statistically flat from 2 through 6 blocks, and the boundary sits between one and two blocks rather than at span\_tiny's specific choice of three, directly answering how far this architecture can be compressed rather than only whether one particular cut is safe. Against five other lightweight SR architectures, span\_tiny is never significantly beaten on downstream accuracy and significantly outperforms the two weakest of them, despite ranking low on raw PSNR/SSIM -- a concrete demonstration that pixel-fidelity metrics are an imperfect stand-in for the metric this paper actually cares about.
+This paper asked a narrower question than most efficient-SR work: not whether a compressed model is the most accurate option available, but whether compressing SPAN's depth by half still leaves a model worth using ahead of no SR at all, without paying a real accuracy price for the compression itself. Across five recognition backbones and two independent datasets, span\_tiny answers both parts of that question affirmatively, stated at the strength the evidence actually supports -- distinguishing throughout between a cost that was not detected and one that was positively confirmed negligible via equivalence testing (TOST, Section~\ref{sec:stats}), rather than treating the two as interchangeable. \texttt{span\_tiny} beats \texttt{no-SR} with statistical significance in 5/5 backbones on EarVN1.0; the specific cost of compression (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) is non-significant in 4/5 backbones there and in 5/5 backbones under all three evaluation protocols tested on AWEx (from-scratch, full-fine-tune transfer, frozen-backbone transfer) -- the most consistently replicated finding in the paper, though TOST equivalence is not confirmed for the four non-significant EarVN1.0 backbones at $n=5$. The depth ablation isolating block count alone gives the cleaner answer: span\_tiny and its uncompressed-depth counterpart, span\_large, are statistically indistinguishable in 4/5 backbones on EarVN1.0 and 5/5 on AWEx, and TOST confirms genuine equivalence in 2 of the 4 non-significant EarVN1.0 backbones, leaving the other 2 open rather than settled. A full depth sweep across every intermediate block count locates the compression boundary itself rather than testing a single cut: only the 1-block cut produces both a significant and a TOST-confirmed non-equivalent cost, 3 and 5 blocks are TOST-confirmed equivalent to the 6-block reference, and 2 and 4 blocks remain inconclusive rather than assumed safe -- placing the confirmed floor of safe compression, on the backbone examined, at span\_tiny's own 3-block choice rather than lower, and directly answering how far this architecture can be compressed rather than only whether one particular cut is safe. Against five other lightweight SR architectures, span\_tiny is never significantly beaten on downstream accuracy and significantly outperforms the two weakest of them, despite ranking low on raw PSNR/SSIM -- a concrete demonstration that pixel-fidelity metrics are an imperfect stand-in for the metric this paper actually cares about.
 
 The evidence is reported with equal clarity where it runs out or points against an earlier hypothesis. Three further mechanisms proposed to improve on span\_tiny -- a richer distillation loss, a saliency-weighted loss, and learned block pruning -- were each validated to the same statistical standard as the main result and are reported as negative or null, with learned pruning significantly worse than span\_tiny's fixed block selection in every backbone tested. An ablation designed to test this paper's own proposed explanation for why depth reduction is tolerable -- SPAN's parameter-free attention -- returned a result against that explanation, and the account is revised rather than defended. An auxiliary check on genuinely real, low-resolution images reversed the main claim's ordering, and rather than being left unexplained, this was traced to a specific, verifiable cause (a resolution mismatch between these images and the synthetic degradation used in training) and is reported as a boundary condition on the paper's scope; a direct mitigation for this boundary condition, degradation-augmented retraining, was also tested and found to partially and asymmetrically help -- narrowing or reversing span\_tiny's gap to no-SR without disturbing the compression-safety claim, though not to the point of statistical significance and without the same benefit for span\_baseline -- and is reported as a partial result rather than a solved problem. One anomaly remains open: ResNet-18's inconsistent secondary-question evidence on AWEx, across all three protocols, lacks a confirmed explanation. None of this changes the central result, but a reader should be able to see exactly how far the evidence goes, where a hypothesis was tested and did not survive, and where it stops.
 
@@ -1136,6 +1164,11 @@ In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogn
 Cohen, J.:
 Statistical Power Analysis for the Behavioral Sciences, 2nd edn.
 Lawrence Erlbaum Associates, Hillsdale, NJ (1988)
+
+\bibitem{schuirmann1987tost}
+Schuirmann, D.J.:
+A comparison of the two one-sided tests procedure and the power approach for assessing the equivalence of average bioavailability.
+Journal of Pharmacokinetics and Biopharmaceutics \textbf{15}(6), 657--680 (1987)
 
 \bibitem{kingma2015adam}
 Kingma, D.P., Ba, J.:
