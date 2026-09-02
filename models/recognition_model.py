@@ -12,6 +12,45 @@ Backbone có sẵn (đều load được qua torchvision/timm, không cần cài
   - efficientnet_b0   : cân bằng tốt accuracy/hiệu năng, phổ biến trong benchmark biometric
   - ghostnet_100      : dòng kiến trúc chuyên cho lightweight face recognition
                         (nền tảng của GhostFaceNet) — cần cài `timm`
+
+[MỚI — mở rộng 7 backbone mới, ưu tiên chọn kiến trúc NHẸ, mỗi backbone đại
+diện 1 họ kiến trúc khác với 5 backbone gốc ở trên VÀ khác nhau giữa 7
+backbone mới này (tránh trùng họ với mobilenet_v2/v3_small đã có), đã kiểm
+chứng thực nghiệm (dummy forward 128x128 -> feature map 4D hợp lệ) trước khi
+thêm, không đoán tên hàm/tham số:
+  - shufflenet_v2_x1_0 : 2.28M tham số — nhẹ nhất trong 7 backbone mới (trừ
+                        squeezenet1_1), họ channel-shuffle + group convolution
+                        (khác hẳn depthwise-separable của họ MobileNet)
+  - squeezenet1_1      : 1.24M tham số — nhẹ nhất trong TOÀN BỘ 12 backbone
+                        (kể cả 5 backbone gốc), họ Fire-module (squeeze +
+                        expand 1x1/3x3), kiến trúc cổ điển cho edge device
+  - mnasnet1_0         : 4.38M tham số — họ kiến trúc tìm bằng NAS (Neural
+                        Architecture Search) tối ưu latency trên di động,
+                        khác cách tìm kiến trúc của MobileNetV3 (cũng NAS
+                        nhưng search space/reward khác)
+  - mobilenet_v3_large : 5.48M tham số — cùng họ MobileNetV3 với
+                        mobilenet_v3_small đã có, nhưng cấu hình lớn hơn —
+                        cho phép so sánh trực tiếp ảnh hưởng của việc mở
+                        rộng cấu hình TRONG CÙNG 1 họ kiến trúc
+  - regnet_y_400mf     : 4.34M tham số — họ RegNet (thiết kế bằng search
+                        không gian thiết kế mạng, không phải NAS từng
+                        kiến trúc lẻ), có khối Squeeze-and-Excitation
+  - mobileone_s0       : 4.27M tham số (qua timm) — họ reparameterization
+                        (Apple): train với nhiều nhánh song song, gộp lại
+                        thành 1 nhánh conv đơn lúc deploy — cơ chế hoàn toàn
+                        khác 6 backbone mới còn lại, tối ưu riêng cho độ trễ
+                        suy luận trên thiết bị di động
+  - lcnet_100          : 1.67M tham số (qua timm, PP-LCNet của Baidu) — thiết
+                        kế THỦ CÔNG (không phải NAS) tối ưu riêng cho suy luận
+                        trên CPU/thiết bị cấu hình thấp, họ kiến trúc riêng
+                        biệt không trùng với bất kỳ backbone nào khác
+  (Đã cân nhắc ghostnetv2_100 thay cho 1 trong 2 backbone cuối, nhưng loại bỏ
+  vì quá giống ghostnet_100 đã có — cùng cơ chế Ghost module cốt lõi, chỉ
+  thêm attention DFC, không đại diện họ kiến trúc mới.)
+Tất cả 7 đều dưới 5.5M tham số (span_tiny+recognition vẫn nhẹ hơn nhiều so
+với resnet18's 11.7M — backbone "không nhẹ" duy nhất trong 5 backbone gốc,
+giữ nguyên vai trò tham chiếu, không phải mục tiêu mở rộng). mobileone_s0 và
+lcnet_100 cần cài `timm` (đã là dependency có sẵn từ ghostnet_100).
 """
 import torch
 import torch.nn as nn
@@ -30,6 +69,14 @@ SUPPORTED_BACKBONES = [
     "resnet18",
     "efficientnet_b0",
     "ghostnet_100",
+    # [MỚI — 7 backbone mở rộng, ưu tiên nhẹ, xem docstring đầu file]
+    "shufflenet_v2_x1_0",
+    "squeezenet1_1",
+    "mnasnet1_0",
+    "mobilenet_v3_large",
+    "regnet_y_400mf",
+    "mobileone_s0",
+    "lcnet_100",
 ]
 
 # [MỚI — đợt 7, sửa lỗi phát hiện qua code review] Cả 5 backbone trên đều
@@ -79,6 +126,52 @@ def _build_backbone(name: str, pretrained: bool):
                 "Backbone 'ghostnet_100' cần thư viện timm. Cài: "
                 "pip install timm --break-system-packages")
         feature_extractor = timm.create_model("ghostnet_100", pretrained=pretrained,
+                                               num_classes=0, global_pool="")
+
+    elif name == "shufflenet_v2_x1_0":
+        base = tv_models.shufflenet_v2_x1_0(
+            weights=tv_models.ShuffleNet_V2_X1_0_Weights.DEFAULT if pretrained else None)
+        # Không có thuộc tính .features gộp sẵn như MobileNet — ghép thủ công
+        # mọi tầng TRỪ .fc (đã kiểm chứng bằng dummy forward: ra 4D hợp lệ).
+        feature_extractor = nn.Sequential(
+            base.conv1, base.maxpool, base.stage2, base.stage3, base.stage4, base.conv5)
+
+    elif name == "squeezenet1_1":
+        base = tv_models.squeezenet1_1(
+            weights=tv_models.SqueezeNet1_1_Weights.DEFAULT if pretrained else None)
+        feature_extractor = base.features
+
+    elif name == "mnasnet1_0":
+        base = tv_models.mnasnet1_0(
+            weights=tv_models.MNASNet1_0_Weights.DEFAULT if pretrained else None)
+        feature_extractor = base.layers
+
+    elif name == "mobilenet_v3_large":
+        base = tv_models.mobilenet_v3_large(
+            weights=tv_models.MobileNet_V3_Large_Weights.DEFAULT if pretrained else None)
+        feature_extractor = base.features
+
+    elif name == "regnet_y_400mf":
+        base = tv_models.regnet_y_400mf(
+            weights=tv_models.RegNet_Y_400MF_Weights.DEFAULT if pretrained else None)
+        # Không có .features gộp sẵn — ghép .stem + .trunk_output, loại bỏ
+        # .avgpool/.fc (đã kiểm chứng bằng dummy forward: ra 4D hợp lệ).
+        feature_extractor = nn.Sequential(base.stem, base.trunk_output)
+
+    elif name == "mobileone_s0":
+        if not _HAS_TIMM:
+            raise ImportError(
+                "Backbone 'mobileone_s0' cần thư viện timm. Cài: "
+                "pip install timm --break-system-packages")
+        feature_extractor = timm.create_model("mobileone_s0", pretrained=pretrained,
+                                               num_classes=0, global_pool="")
+
+    elif name == "lcnet_100":
+        if not _HAS_TIMM:
+            raise ImportError(
+                "Backbone 'lcnet_100' cần thư viện timm. Cài: "
+                "pip install timm --break-system-packages")
+        feature_extractor = timm.create_model("lcnet_100", pretrained=pretrained,
                                                num_classes=0, global_pool="")
 
     else:
