@@ -50,6 +50,7 @@ RESULTS_ROOT=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['pa
 RESULTS_DIR="${RESULTS_ROOT}/extra_sr_baseline_${ARCH}_distilled"
 NEW_BACKBONES=("shufflenet_v2_x1_0" "squeezenet1_1" "mnasnet1_0" "mobilenet_v3_large" "regnet_y_400mf" "mobileone_s0" "lcnet_100")
 SEEDS=(42 123 2024 44 999)
+NUM_WORKERS="${NUM_WORKERS:-4}"
 
 echo "################################################################"
 echo "# BƯỚC 0 — Kiểm tra tiền đề (arch=$ARCH, config=$CONFIG)         #"
@@ -92,12 +93,13 @@ for BACKBONE in "${NEW_BACKBONES[@]}"; do
         echo "### backbone=$BACKBONE | seed=$SEED | domain=sr_improved_${ARCH}"
         python train_recognition.py --config "$CONFIG" --domain "sr_improved_${ARCH}" \
             --backbone "$BACKBONE" --init_ckpt "$LR_CKPT" \
-            --seed "$SEED" --run_suffix "_seed${SEED}"
+            --seed "$SEED" --run_suffix "_seed${SEED}" \
+            --num_workers "$NUM_WORKERS"
 
         python eval_recognition.py --config "$CONFIG" \
             --ckpt "${RUNS_ROOT}/recognition_sr_improved_${ARCH}_${BACKBONE}_seed${SEED}/best.pt" \
             --backbone "$BACKBONE" --train_domain "sr_improved_${ARCH}" --test_domain "sr_improved_${ARCH}" \
-            --out_json "$OUT_JSON"
+            --out_json "$OUT_JSON" --num_workers "$NUM_WORKERS"
     done
 done
 

@@ -48,6 +48,7 @@ RUNS_DIR="runs_${TARGET}"
 SUFFIX="_finetuned_from_${SOURCE_LABEL}"
 NEW_BACKBONES=("shufflenet_v2_x1_0" "squeezenet1_1" "mnasnet1_0" "mobilenet_v3_large" "regnet_y_400mf" "mobileone_s0" "lcnet_100")
 SEEDS=(42 123 2024 44 999)
+NUM_WORKERS="${NUM_WORKERS:-4}"
 
 echo "################################################################"
 echo "# KIỂM TRA TIỀN ĐỀ"
@@ -111,12 +112,13 @@ for BACKBONE in "${NEW_BACKBONES[@]}"; do
 
             python train_recognition.py --config "$TGT_FT_CONFIG" --domain "$TGT_DOMAIN" --backbone "$BACKBONE" \
                 --init_ckpt_transfer "$SRC_CKPT" \
-                --seed "$SEED" --run_suffix "${SUFFIX}_seed${SEED}"
+                --seed "$SEED" --run_suffix "${SUFFIX}_seed${SEED}" \
+                --num_workers "$NUM_WORKERS"
 
             python eval_recognition.py --config "$TGT_CONFIG" \
                 --ckpt "${RUNS_DIR}/recognition_${TGT_DOMAIN}_${BACKBONE}${SUFFIX}_seed${SEED}/best.pt" \
                 --backbone "$BACKBONE" --train_domain "$TGT_DOMAIN" --test_domain "$TGT_DOMAIN" \
-                --out_json "$OUT_JSON"
+                --out_json "$OUT_JSON" --num_workers "$NUM_WORKERS"
         done
     done
 done

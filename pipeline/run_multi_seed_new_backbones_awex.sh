@@ -36,6 +36,7 @@ SPLITS_DIR="splits_awex"
 RESULTS_DIR="results_awex/multi_seed"
 NEW_BACKBONES=("shufflenet_v2_x1_0" "squeezenet1_1" "mnasnet1_0" "mobilenet_v3_large" "regnet_y_400mf" "mobileone_s0" "lcnet_100")
 SEEDS=(42 123 2024 44 999)
+NUM_WORKERS="${NUM_WORKERS:-4}"
 mkdir -p "$RESULTS_DIR"
 
 echo "================================================================"
@@ -65,7 +66,8 @@ for BACKBONE in "${NEW_BACKBONES[@]}"; do
         echo "################################################################"
         echo "# [Tiền đề] backbone=$BACKBONE | domain=hr (không suffix seed)"
         echo "################################################################"
-        python train_recognition.py --config "$CONFIG" --domain hr --backbone "$BACKBONE"
+        python train_recognition.py --config "$CONFIG" --domain hr --backbone "$BACKBONE" \
+            --num_workers "$NUM_WORKERS"
     fi
 done
 
@@ -81,12 +83,13 @@ for BACKBONE in "${NEW_BACKBONES[@]}"; do
             echo "################################################################"
             python train_recognition.py --config "$CONFIG" --domain lr --backbone "$BACKBONE" \
                 --init_ckpt "$HR_CKPT" \
-                --seed "$SEED" --run_suffix "_seed${SEED}"
+                --seed "$SEED" --run_suffix "_seed${SEED}" \
+                --num_workers "$NUM_WORKERS"
 
             python eval_recognition.py --config "$CONFIG" \
                 --ckpt "${RUNS_DIR}/recognition_lr_${BACKBONE}_seed${SEED}/best.pt" \
                 --backbone "$BACKBONE" --train_domain lr --test_domain lr \
-                --out_json "$LR_JSON"
+                --out_json "$LR_JSON" --num_workers "$NUM_WORKERS"
         fi
 
         for DOMAIN in sr_baseline sr_improved; do
@@ -102,12 +105,13 @@ for BACKBONE in "${NEW_BACKBONES[@]}"; do
 
             python train_recognition.py --config "$CONFIG" --domain "$DOMAIN" --backbone "$BACKBONE" \
                 --init_ckpt "${RUNS_DIR}/recognition_lr_${BACKBONE}_seed${SEED}/best.pt" \
-                --seed "$SEED" --run_suffix "_seed${SEED}"
+                --seed "$SEED" --run_suffix "_seed${SEED}" \
+                --num_workers "$NUM_WORKERS"
 
             python eval_recognition.py --config "$CONFIG" \
                 --ckpt "${RUNS_DIR}/recognition_${DOMAIN}_${BACKBONE}_seed${SEED}/best.pt" \
                 --backbone "$BACKBONE" --train_domain "$DOMAIN" --test_domain "$DOMAIN" \
-                --out_json "$OUT_JSON"
+                --out_json "$OUT_JSON" --num_workers "$NUM_WORKERS"
         done
     done
 done

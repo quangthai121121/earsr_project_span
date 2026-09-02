@@ -33,6 +33,7 @@ CONFIG="${1:-configs/config.yaml}"
 ARCH="${2:-span_tiny}"
 RECOGNITION_SEED=42
 NEW_BACKBONES=("shufflenet_v2_x1_0" "squeezenet1_1" "mnasnet1_0" "mobilenet_v3_large" "regnet_y_400mf" "mobileone_s0" "lcnet_100")
+NUM_WORKERS="${NUM_WORKERS:-4}"
 
 if [ ! -f "$CONFIG" ]; then
     echo "LỖI: không thấy $CONFIG"
@@ -124,12 +125,13 @@ for SEED in "${SR_SEEDS[@]}"; do
         RUN_SUFFIX_REC="_srseed${SEED}"
         python train_recognition.py --config "$CONFIG" --domain "$DOMAIN_NAME" --backbone "$BACKBONE" \
             --init_ckpt "$INIT_CKPT" \
-            --seed "$RECOGNITION_SEED" --run_suffix "$RUN_SUFFIX_REC"
+            --seed "$RECOGNITION_SEED" --run_suffix "$RUN_SUFFIX_REC" \
+            --num_workers "$NUM_WORKERS"
 
         python eval_recognition.py --config "$CONFIG" \
             --ckpt "${RUNS_ROOT}/recognition_${DOMAIN_NAME}_${BACKBONE}${RUN_SUFFIX_REC}/best.pt" \
             --backbone "$BACKBONE" --train_domain "$DOMAIN_NAME" --test_domain "$DOMAIN_NAME" \
-            --out_json "${RESULTS_DIR}/${BACKBONE}_srseed${SEED}.json"
+            --out_json "${RESULTS_DIR}/${BACKBONE}_srseed${SEED}.json" --num_workers "$NUM_WORKERS"
     done
 done
 
