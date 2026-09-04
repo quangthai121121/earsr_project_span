@@ -30,6 +30,7 @@ import re
 import warnings
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
 import yaml
@@ -196,6 +197,67 @@ def main():
     print("\n" + "=" * 70)
     print(result.summary())
     print("=" * 70)
+
+    # [MỚI — trả lời trực tiếp phản biện "p-value ở Table 3 tính trên nguồn
+    # phương sai sai (chỉ downstream-seed, bỏ qua SR-seed vốn lớn hơn nhiều
+    # lần)"] Hệ số chính `condition[T.span_tiny]` KHÔNG phải hiệu ứng trung
+    # bình gộp qua 12 backbone -- vì công thức có tương tác
+    # (condition*backbone), hệ số đó chỉ là hiệu ứng của ĐÚNG backbone tham
+    # chiếu (backbone đầu tiên theo thứ tự alphabet, bị gộp vào Intercept,
+    # không xuất hiện riêng trong danh sách backbone[T.*]). Muốn có phép kiểm
+    # định "tiny vs baseline, gộp cả 12 backbone, tính ĐÚNG cả 2 nguồn phương
+    # sai" cần 1 tổ hợp tuyến tính (linear contrast): hệ số chính + trung bình
+    # cộng của mọi hệ số tương tác condition:backbone, KHÔNG thể suy ra bằng
+    # mắt từ bảng in phía trên -- phải tính qua result.t_test() với ma trận
+    # contrast đúng trên object model đã fit.
+    # [SỬA — bug phát hiện qua test end-to-end trên FILE THẬT, không chỉ bản
+    # test scratch] result.params gồm CẢ hệ số cố định (fixed effects) LẪN
+    # biến phương sai (downstream_seed Var, sr_seed Var) nối ở cuối -- dùng
+    # nó làm contrast cho t_test() sai độ dài (result.t_test() chỉ nhận đúng
+    # k_fe cột). Phải dùng result.fe_params (CHỈ hệ số cố định) để khớp đúng
+    # số cột mà t_test() yêu cầu.
+    param_names = list(result.fe_params.index)
+    main_name = "condition[T.span_tiny]"
+    if main_name not in param_names:
+        print(f"\nCẢNH BÁO: không tìm thấy hệ số '{main_name}' -- bỏ qua phép kiểm định gộp.")
+    else:
+        interaction_prefix = "condition[T.span_tiny]:backbone[T."
+        interaction_idx = [i for i, n in enumerate(param_names) if n.startswith(interaction_prefix)]
+        n_backbones_total = df["backbone"].nunique()
+        # [Guard] số hệ số tương tác PHẢI đúng bằng (số backbone - 1) -- 1
+        # backbone tham chiếu không có hệ số tương tác riêng (gộp vào hệ số
+        # chính). Sai số này thường do công thức model đổi mà quên cập nhật
+        # chỗ này, hoặc do backbone bị lọc thiếu ở bước build_dataset.
+        expected_n_interactions = n_backbones_total - 1
+        if len(interaction_idx) != expected_n_interactions:
+            print(f"\nCẢNH BÁO: kỳ vọng {expected_n_interactions} hệ số tương tác "
+                  f"condition:backbone (= {n_backbones_total} backbone - 1 tham chiếu), "
+                  f"nhưng tìm thấy {len(interaction_idx)} -- BỎ QUA phép kiểm định gộp vì "
+                  f"contrast có thể sai. Kiểm tra lại công thức model / dữ liệu đầu vào.")
+        else:
+            contrast = np.zeros(len(param_names))
+            contrast[param_names.index(main_name)] = 1.0
+            weight = 1.0 / n_backbones_total
+            for i in interaction_idx:
+                contrast[i] = weight
+            pooled = result.t_test(contrast.reshape(1, -1))
+            # [SỬA — bug phát hiện qua test end-to-end] pooled.sd có shape
+            # (1,1) (2 chiều) -- numpy hiện tại KHÔNG cho float() trên mảng
+            # >0 chiều dù chỉ có đúng 1 phần tử (lỗi "only 0-dimensional
+            # arrays can be converted to Python scalars"). Dùng .item() --
+            # hoạt động đúng bất kể effect/sd/pvalue có shape (), (1,), hay
+            # (1,1), miễn đúng 1 phần tử.
+            pooled_est = np.asarray(pooled.effect).item()
+            pooled_se = np.asarray(pooled.sd).item()
+            pooled_p = np.asarray(pooled.pvalue).item()
+            print("\n== Phép kiểm định gộp: span_tiny vs.\\ span_baseline, TRUNG BÌNH qua "
+                  f"cả {n_backbones_total} backbone (tính đúng cả 2 nguồn phương sai) ==")
+            print(f"  Ước lượng hiệu ứng (span_tiny - span_baseline) = {pooled_est:+.4f}")
+            print(f"  Sai số chuẩn (SE)                             = {pooled_se:.4f}")
+            print(f"  p-value                                       = {pooled_p:.4f}")
+            print("  (Đây là phép kiểm định trả lời trực tiếp phản biện: p-value ở Table 3 chỉ")
+            print("  dùng phương sai downstream-seed (cố định SR-seed=42); phép kiểm định này")
+            print("  gộp CẢ HAI nguồn phương sai qua mô hình crossed random-effects ở trên.)")
 
     if conv_warnings:
         print("\n" + "!" * 70)
