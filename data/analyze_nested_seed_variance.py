@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
 import yaml
+from scipy.stats import norm
 
 DOMAIN_TO_CONDITION = {"sr_improved": "span_tiny", "sr_baseline": "span_baseline"}
 
@@ -178,6 +179,14 @@ def main():
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--out_csv", default=None,
                      help="mặc định: <results_root>/nested_seed_grid/mixed_effects_summary.csv")
+    ap.add_argument("--tost_margin", type=float, default=0.01,
+                     help="[MỚI — trả lời phản biện M4] biên tương đương cho TOST trên phép kiểm "
+                          "định gộp (đơn vị accuracy, mặc định 0.01 = 1 điểm %%) -- khớp ĐÚNG giá trị "
+                          "mặc định của data/aggregate_multi_seed_results.py's --equivalence_margin "
+                          "(Section~sec:stats), để phép kiểm định gộp này so sánh được trực tiếp với "
+                          "TOST per-backbone đã có trong Table 3 (tên flag khác nhau có chủ đích -- "
+                          "script đó gọi tost_paired() cho từng backbone riêng, ĐÚNG tên hàm nhưng "
+                          "KHÔNG có flag --tost_margin; chỉ giá trị mặc định 0.01 là dùng chung).")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -258,6 +267,81 @@ def main():
             print("  (Đây là phép kiểm định trả lời trực tiếp phản biện: p-value ở Table 3 chỉ")
             print("  dùng phương sai downstream-seed (cố định SR-seed=42); phép kiểm định này")
             print("  gộp CẢ HAI nguồn phương sai qua mô hình crossed random-effects ở trên.)")
+
+            # [MỚI — trả lời trực tiếp phản biện M4] Không dừng lại ở "p=0.7961,
+            # không có ý nghĩa" -- non-significance KHÔNG phải bằng chứng
+            # equivalence (chính bài báo đã nhấn mạnh điều này ở Section~sec:stats,
+            # nên áp dụng đúng quy tắc đó cho CHÍNH phép kiểm định này thay vì
+            # tự mâu thuẫn). Chạy TOST thật trên contrast đã tính ở trên, dùng
+            # ĐÚNG cùng phân phối (chuẩn/z, không phải t) mà result.t_test() tự
+            # dùng nội bộ -- đã xác nhận qua test end-to-end với dữ liệu giả lập
+            # (fit thật 1 model MixedLM cùng công thức, so p từ .t_test() với
+            # 2*(1-norm.cdf(|t|)): khớp chính xác, xác nhận statsmodels dùng
+            # phân phối chuẩn cho phép kiểm định này, KHÔNG dùng t-distribution).
+            # Dùng lại pooled_est/pooled_se đã có (KHÔNG fit lại model, KHÔNG
+            # tốn thêm thời gian đáng kể) để tính 2 kiểm định 1 phía kiểu
+            # Schuirmann (1987), cùng biên ±tost_margin đã dùng cho mọi TOST
+            # khác trong bài báo.
+            #
+            # LƯU Ý KHÁC BIỆT CÓ CHỦ ĐÍCH với tost_paired() trong
+            # data/aggregate_multi_seed_results.py: hàm đó dùng t-distribution
+            # (stats.t.cdf, df=n-1=4) vì test cặp trên ĐÚNG n=5 seed -- cỡ mẫu
+            # nhỏ, hiệu chỉnh t-distribution là cần thiết. Ở ĐÂY n=600 quan sát
+            # (12 backbone x 25 ô x 2 domain) và bản thân p=0.7961 đã báo cáo
+            # trong bài (tính bằng result.t_test() mặc định) CŨNG dùng phân
+            # phối chuẩn, không phải t -- dùng norm.cdf ở đây giữ TOST nhất
+            # quán với ĐÚNG con số NHST đã có, không tự ý đổi giả định phân
+            # phối giữa 2 phép tính trên CÙNG 1 ước lượng. Khác biệt z-vs-t
+            # giữa 2 script là hợp lý do khác cỡ mẫu (asymptotic OK ở n=600,
+            # cần hiệu chỉnh nhỏ-mẫu ở n=5), không phải sơ suất.
+            margin = args.tost_margin
+            # [MỚI — bổ sung sau review, phát hiện qua test edge-case trực
+            # tiếp, không chỉ đọc code] Ba lỗ hổng chưa được chặn trước khi
+            # thêm guard này: (1) pooled_se=0 (suy biến hoàn toàn) làm
+            # ZeroDivisionError -- crash khó hiểu SAU KHI đã tốn thời gian fit
+            # model; (2) pooled_se=NaN (có thể xảy ra nếu ma trận hiệp phương
+            # sai của contrast bị suy biến ở 1 fit boundary/singular) KHÔNG
+            # crash mà âm thầm in "z=nan, p=nan" -- verdict "KHÔNG xác nhận
+            # tương đương" khi đó ĐÚNG theo nghĩa đen (nan<0.05 = False) nhưng
+            # SAI LÝ DO (phép tính hỏng, không phải test thật sự thất bại);
+            # (3) margin<=0 (nhập sai qua CLI) không được validate, ra kết quả
+            # vô nghĩa mà không cảnh báo. Cùng tinh thần "thà crash to còn hơn
+            # sai âm thầm" đã áp dụng ở eval_recognition.py/train_sr_distill.py
+            # trong dự án -- chặn cả 3 tường minh ở đây thay vì để lan xuống
+            # phép tính rồi mới phát hiện (hoặc không phát hiện) sau đó.
+            if not (margin > 0):
+                raise ValueError(
+                    f"--tost_margin phải > 0 (nhận được {margin}) -- biên tương đương bằng 0 hoặc "
+                    f"âm không có ý nghĩa thống kê cho TOST.")
+            if pooled_se != pooled_se:  # NaN check không cần import thêm math.isnan
+                raise RuntimeError(
+                    "pooled_se = NaN -- ma trận hiệp phương sai của contrast có thể bị suy biến "
+                    "(liên quan cảnh báo boundary/convergence bên dưới, nếu có). KHÔNG tính TOST "
+                    "trên SE không hợp lệ; kiểm tra lại fit trước khi tin bất kỳ số liệu nào từ model này.")
+            if abs(pooled_se) < 1e-12:
+                raise RuntimeError(
+                    f"pooled_se = {pooled_se:.2e} (~0) -- trường hợp suy biến, tương tự MnasNet-1.0's "
+                    f"degenerate row ở Table 12 (std hiệu số =0). Không chia được cho SE~0; nếu điều "
+                    f"này thật sự xảy ra, quyết định equivalence trực tiếp bằng |pooled_est| < margin "
+                    f"thay vì qua z-test, giống cách tost_paired() xử lý trường hợp suy biến.")
+            z_lower = (pooled_est - (-margin)) / pooled_se
+            z_upper = (pooled_est - margin) / pooled_se
+            p_lower = 1.0 - norm.cdf(z_lower)   # H0: hiệu ứng thật <= -margin
+            p_upper = norm.cdf(z_upper)         # H0: hiệu ứng thật >= +margin
+            p_tost = max(p_lower, p_upper)
+            equivalent = p_tost < 0.05
+            print(f"\n== TOST trên phép kiểm định gộp (biên tương đương +/-{margin:.4f}, "
+                  f"tuong duong +/-{margin*100:.2g} diem %) ==")
+            print(f"  H0 (hiệu ứng thật <= -{margin:.4f}): z={z_lower:+.3f}, p={p_lower:.5f}")
+            print(f"  H0 (hiệu ứng thật >= +{margin:.4f}): z={z_upper:+.3f}, p={p_upper:.5f}")
+            print(f"  p_TOST = max(p_lower, p_upper)                = {p_tost:.5f}")
+            print(f"  => {'TƯƠNG ĐƯƠNG được xác nhận' if equivalent else 'KHÔNG xác nhận được tương đương'} "
+                  f"(ngưỡng p_TOST < 0.05, khớp quy ước TOST dùng xuyên suốt bài báo)")
+            if conv_warnings:
+                print("  LƯU Ý QUAN TRỌNG: model này có cảnh báo boundary/convergence (in bên dưới) --")
+                print("  SE=±{:.4f} dùng để tính TOST ở trên lấy từ CHÍNH model đó, nên kết quả TOST".format(pooled_se))
+                print("  này nên được đọc với cùng mức thận trọng đã áp dụng cho tỉ lệ phương sai")
+                print("  26:1 (xác nhận đúng hướng/độ lớn, không phải ước lượng chính xác tuyệt đối).")
 
     if conv_warnings:
         print("\n" + "!" * 70)
