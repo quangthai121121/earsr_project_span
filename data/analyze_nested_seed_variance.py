@@ -179,6 +179,16 @@ def main():
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--out_csv", default=None,
                      help="mặc định: <results_root>/nested_seed_grid/mixed_effects_summary.csv")
+    ap.add_argument("--exclude_backbones", default="",
+                     help="[MỚI — loại MnasNet-1.0 khỏi bài báo] danh sách backbone loại khỏi "
+                          "phân tích gộp, phân tách bởi dấu phẩy (ví dụ: mnasnet1_0). Lọc XẢY RA "
+                          "TRƯỚC khi fit model -- kết quả (tỉ lệ phương sai, TOST gộp) sẽ phản ánh "
+                          "ĐÚNG số backbone còn lại, không phải tính trên đủ backbone rồi bỏ qua "
+                          "kết quả của backbone bị loại. Tên phải khớp CHÍNH XÁC (phân biệt hoa/"
+                          "thường) với tên dùng trong JSON kết quả (vd. 'mnasnet1_0', không phải "
+                          "'MnasNet-1.0' hay 'mnasnet_1_0') -- script sẽ báo lỗi rõ ràng nếu tên "
+                          "không khớp bất kỳ backbone nào trong dữ liệu, thay vì âm thầm không lọc "
+                          "được gì.")
     ap.add_argument("--tost_margin", type=float, default=0.01,
                      help="[MỚI — trả lời phản biện M4] biên tương đương cho TOST trên phép kiểm "
                           "định gộp (đơn vị accuracy, mặc định 0.01 = 1 điểm %%) -- khớp ĐÚNG giá trị "
@@ -198,6 +208,27 @@ def main():
         print("Không tìm thấy dữ liệu nào -- chạy pipeline/run_sr_seed_variance.sh, "
               "run_sr_seed_variance_backbones.sh, và run_nested_seed_grid.sh trước.")
         return
+
+    exclude_list = [b.strip() for b in args.exclude_backbones.split(",") if b.strip()]
+    if exclude_list:
+        available = set(df["backbone"].unique())
+        # [Guard — cùng tinh thần "thà crash to còn hơn lọc sai âm thầm" đã
+        # dùng cho margin/pooled_se ở trên] Tên backbone gõ sai (vd. do khác
+        # quy ước đặt tên giữa bài báo và JSON kết quả) sẽ khớp KHÔNG backbone
+        # nào -- nếu không chặn, script vẫn chạy "thành công" trên đủ dữ liệu
+        # gốc và người dùng tưởng nhầm là đã loại trừ xong.
+        not_found = [b for b in exclude_list if b not in available]
+        if not_found:
+            raise ValueError(
+                f"--exclude_backbones chứa tên không khớp bất kỳ backbone nào trong dữ liệu: "
+                f"{not_found}. Backbone có sẵn: {sorted(available)}. Kiểm tra lại chính tả "
+                f"(phân biệt hoa/thường, dùng đúng tên trong JSON kết quả).")
+        n_before = len(df)
+        df = df[~df["backbone"].isin(exclude_list)].reset_index(drop=True)
+        print(f">>> Đã loại {exclude_list} khỏi phân tích: {n_before} -> {len(df)} quan sát "
+              f"({df['backbone'].nunique()} backbone còn lại).")
+        if df.empty:
+            raise ValueError("Sau khi loại trừ, không còn quan sát nào -- kiểm tra lại --exclude_backbones.")
 
     report_grid_coverage(df)
     print(f"\nTổng số quan sát: {len(df)}")
