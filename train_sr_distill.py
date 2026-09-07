@@ -122,6 +122,7 @@ from utils.early_stopping import (EarlyStopping, save_state_dict as _save_state_
                                    save_last_if_missing as _save_last_if_missing)
 from utils.logger import setup_logger
 from utils.seed import set_seed, seed_worker, seeded_generator
+from utils.frequency_filters_torch import lowpass_filter as _freq_lowpass
 
 
 def build_judges(cfg, device):
@@ -478,6 +479,27 @@ def compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
     loss_pixel = l1(student_out, hr_img)
     loss_distill = l1(student_out, teacher_out)
 
+    # [MỚI — thử nghiệm frequency-weighted loss, hướng novelty mới từ phát
+    # hiện frequency-ablation đã có trong bài (Section~sec:freq-ablation)]
+    # BỔ SUNG bên cạnh loss_pixel đồng đều (không thay thế): phạt riêng sai
+    # khác ở đúng dải tần số THẤP mà thí nghiệm frequency-ablation đã chứng
+    # minh mang phần lớn tín hiệu nhận dạng (mặc định freq_cutoff=0.1, khớp
+    # đúng cutoff dùng trong thí nghiệm đó -- xem utils/frequency_filters_torch.py
+    # để hiểu tại sao cần bản khả vi riêng thay vì dùng lại
+    # utils/frequency_filters.py, vốn chỉ chạy trên PIL Image, không có
+    # gradient). Chi phí = 0 khi lambda_freq=0 (mặc định, tắt hẳn) -- giống
+    # đúng triết lý opt-in của lambda_feat/lambda_saliency/lambda_position ở
+    # trên/dưới.
+    ci_freq = cfg["sr_improve"]
+    lambda_freq = ci_freq.get("lambda_freq", 0.0)
+    if lambda_freq > 0:
+        freq_cutoff = ci_freq.get("freq_cutoff", 0.1)
+        student_low = _freq_lowpass(student_out, freq_cutoff)
+        hr_low = _freq_lowpass(hr_img, freq_cutoff)
+        loss_freq = l1(student_low, hr_low)
+    else:
+        loss_freq = torch.zeros((), device=student_out.device)
+
     # [MỚI] Saliency-weighted pixel loss — BỔ SUNG bên cạnh loss_pixel đồng
     # đều (không thay thế), xem compute_multi_judge_saliency() ở trên.
     if saliency_map is not None:
@@ -593,7 +615,8 @@ def compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
              ci.get("lambda_feat", 0.0) * loss_feat +
              ci.get("lambda_saliency", 0.0) * loss_saliency +
              ci["lambda_identity"] * loss_identity +
-             ci.get("lambda_position", 0.0) * loss_position)
+             ci.get("lambda_position", 0.0) * loss_position +
+             lambda_freq * loss_freq)
 
     return total, {
         "pixel": loss_pixel.item(),
@@ -602,6 +625,7 @@ def compute_total_loss(student_out, hr_img, teacher_out, judges, cfg,
         "saliency": loss_saliency.item() if torch.is_tensor(loss_saliency) else float(loss_saliency),
         "identity": loss_identity.item(),
         "position": loss_position.item() if torch.is_tensor(loss_position) else float(loss_position),
+        "freq": loss_freq.item() if torch.is_tensor(loss_freq) else float(loss_freq),
     }
 
 
@@ -706,7 +730,7 @@ def run_epoch(student, teacher, judges, loader, device_mgr, cfg,
     student.train() if is_train else student.eval()
 
     totals = {"pixel": 0.0, "distill": 0.0, "feat": 0.0, "saliency": 0.0, "identity": 0.0,
-              "position": 0.0, "total": 0.0}
+              "position": 0.0, "freq": 0.0, "total": 0.0}
     n, nan_batches = 0, 0
     model_device = next(student.parameters()).device.type
 
@@ -819,6 +843,16 @@ def main():
                      help="[MỚI] ghi đè sr_improve.lambda_saliency (saliency-weighted identity-"
                           "critical pixel loss, xem compute_multi_judge_saliency) trong config "
                           "(dùng cho ablation)")
+    ap.add_argument("--lambda_freq", type=float, default=None,
+                     help="[MỚI] ghi đè sr_improve.lambda_freq (frequency-weighted lowpass "
+                          "fidelity loss -- BỔ SUNG bên cạnh lambda_pixel, phạt riêng dải tần số "
+                          "thấp mà thí nghiệm frequency-ablation đã chứng minh mang phần lớn tín "
+                          "hiệu nhận dạng, xem utils/frequency_filters_torch.py) trong config "
+                          "(dùng cho ablation, mặc định 0.0 = tắt hẳn)")
+    ap.add_argument("--freq_cutoff", type=float, default=None,
+                     help="[MỚI] ghi đè sr_improve.freq_cutoff (ngưỡng cutoff_frac cho "
+                          "lambda_freq, cùng quy ước với eval_frequency_ablation.py; mặc định "
+                          "0.1 nếu không đặt trong config) -- chỉ có tác dụng khi lambda_freq>0")
     ap.add_argument("--lambda_identity", type=float, default=None,
                      help="ghi đè sr_improve.lambda_identity trong config (dùng cho ablation)")
     ap.add_argument("--teacher_arch", default=None,
@@ -920,6 +954,24 @@ def main():
         ci["lambda_feat"] = args.lambda_feat
     if args.lambda_saliency is not None:
         ci["lambda_saliency"] = args.lambda_saliency
+    if args.lambda_freq is not None:
+        ci["lambda_freq"] = args.lambda_freq
+    if args.freq_cutoff is not None:
+        ci["freq_cutoff"] = args.freq_cutoff
+    # [MỚI — chặn sớm, giống đúng cách check lambda_position/teacher_block_idx
+    # ở dưới] Kiểm tra giá trị ĐÃ RESOLVE ci["freq_cutoff"] (bắt được cả 2
+    # đường: truyền qua --freq_cutoff hoặc sửa thẳng config.yaml), NGAY SAU
+    # khi override xong, TRƯỚC KHI load dataset/teacher/model — nếu không,
+    # freq_cutoff sai (ngoài [0,1]) chỉ lộ ra ở batch training ĐẦU TIÊN (xem
+    # utils/frequency_filters_torch.py::_lowpass_mask), sau khi đã tốn công
+    # load xong toàn bộ.
+    if ci.get("lambda_freq", 0.0) > 0:
+        freq_cutoff_check = ci.get("freq_cutoff", 0.1)
+        if not (0.0 <= freq_cutoff_check <= 1.0):
+            raise ValueError(
+                f"sr_improve.lambda_freq > 0 nhưng freq_cutoff={freq_cutoff_check} nằm ngoài "
+                f"[0, 1] (quy ước cutoff_frac, xem utils/frequency_filters_torch.py) -- sẽ crash "
+                f"ngay batch đầu tiên. Sửa --freq_cutoff hoặc sr_improve.freq_cutoff trong config.")
     if args.lambda_identity is not None:
         ci["lambda_identity"] = args.lambda_identity
     if args.teacher_arch is not None:
@@ -1112,7 +1164,7 @@ def main():
             f"train_total={train_stats['total']:.4f} pixel={train_stats['pixel']:.4f} "
             f"distill={train_stats['distill']:.4f} feat={train_stats['feat']:.4f} "
             f"saliency={train_stats['saliency']:.4f} identity={train_stats['identity']:.4f} "
-            f"position={train_stats['position']:.4f} | "
+            f"position={train_stats['position']:.4f} freq={train_stats['freq']:.4f} | "
             f"VAL_TOTAL={val_stats['total']:.4f}"
         )
 

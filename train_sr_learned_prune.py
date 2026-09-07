@@ -233,8 +233,18 @@ def run_epoch_prune(student, teacher, judges, loader, device_mgr, cfg,
     is_train = optimizer is not None
     student.train() if is_train else student.eval()
 
+    # [SỬA — lỗi phát hiện qua code review, cùng đợt thêm lambda_freq] Thiếu
+    # 2 key "position" và "freq" mà compute_total_loss() (train_sr_distill.py,
+    # DÙNG CHUNG với file này) LUÔN trả về trong `parts` bất kể có dùng cơ chế
+    # đó hay không (giá trị 0.0 khi tắt, nhưng KEY vẫn luôn có mặt) -- vòng lặp
+    # "for k, v in parts.items(): totals[k] += v" bên dưới sẽ KeyError ngay
+    # batch đầu tiên của MỌI lần chạy script này nếu thiếu key tương ứng ở đây.
+    # "position" đã thiếu từ trước (từ khi lambda_position được thêm vào
+    # compute_total_loss, không liên quan trực tiếp đến thay đổi lambda_freq
+    # lần này) -- không phát hiện ra vì script này chưa được chạy lại từ đó.
     totals = {"pixel": 0.0, "distill": 0.0, "feat": 0.0, "saliency": 0.0,
-              "identity": 0.0, "sparsity": 0.0, "binary": 0.0,
+              "identity": 0.0, "position": 0.0, "freq": 0.0,
+              "sparsity": 0.0, "binary": 0.0,
               "quality_total": 0.0, "total": 0.0}
     n, nan_batches = 0, 0
     model_device = next(student.parameters()).device.type

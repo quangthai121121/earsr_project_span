@@ -99,6 +99,18 @@ sr_improve:
   # đặt làm default toàn cục.
   lambda_position: 0.0
 
+  # [MỚI — thử nghiệm frequency-weighted loss, hướng novelty mới] Phạt riêng
+  # sai khác ở dải tần số THẤP (cutoff_frac<=freq_cutoff) giữa SR output và
+  # HR, BỔ SUNG bên cạnh lambda_pixel đồng đều -- bắt nguồn trực tiếp từ phát
+  # hiện frequency-ablation đã có trong bài (tín hiệu nhận dạng tập trung ở
+  # tần số thấp). Xem train_sr_distill.py::compute_total_loss và
+  # utils/frequency_filters_torch.py. Mặc định ĐỂ 0.0 (TẮT), giống mọi cơ chế
+  # MỚI khác ở trên -- PHẢI truyền tường minh qua --lambda_freq khi chạy
+  # ablation (xem pipeline/run_freq_weighted_loss_screening.sh).
+  lambda_freq: 0.0
+  freq_cutoff: 0.1   # chỉ có tác dụng khi lambda_freq>0; cùng quy ước cutoff_frac
+                      # với eval_frequency_ablation.py (0.1 = giữ 10% tần số thấp nhất)
+
   teacher_arch: "span_official"   # học từ SPAN baseline (đã chứng minh chất lượng tốt)
   teacher_ckpt: "runs/sr_span_official/best.pt"
 
