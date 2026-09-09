@@ -85,6 +85,15 @@ def main():
     ap.add_argument("--seed_label", default=None, help="chỉ ghi vào CSV để phân biệt, không ảnh hưởng logic")
     ap.add_argument("--num_workers", type=int, default=4)
     ap.add_argument("--out_csv", required=True)
+    ap.add_argument("--only_cutoff", type=float, default=None,
+                     help="[MỚI — kiểm chứng tổng quát hoá trên SAFMN/SMFANet] Không truyền -> "
+                          "chạy ĐỦ 16 điều kiện như cũ (KHÔNG đổi hành vi mặc định, an toàn cho "
+                          "mọi lời gọi hiện có, kể cả kết quả span_tiny đã dùng trong bài). Truyền "
+                          "1 giá trị (ví dụ 0.1) -> CHỈ chạy đúng 2 điều kiện matched-severity "
+                          "(lowpass VÀ highpass tại cutoff đó) thay vì 16 -- dùng cho bản sàng lọc "
+                          "nhanh trước khi chạy full sweep. Giá trị PHẢI có mặt trong CẢ HAI "
+                          "LOWPASS_CUTOFFS và HIGHPASS_CUTOFFS (xem data/build_frequency_filtered_"
+                          "domains.py) -- nếu không, báo lỗi rõ ràng thay vì âm thầm bỏ qua.")
     args = ap.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -105,6 +114,18 @@ def main():
     if not Path(args.ckpt).is_file():
         raise FileNotFoundError(f"Không tìm thấy checkpoint {args.ckpt}.")
 
+    # [MỚI] Chặn NGAY nếu --only_cutoff không hợp lệ, TRƯỚC KHI load model
+    # (tốn thời gian) -- fail-fast, đúng triết lý xuyên suốt project.
+    lowpass_cutoffs, highpass_cutoffs = LOWPASS_CUTOFFS, HIGHPASS_CUTOFFS
+    if args.only_cutoff is not None:
+        if args.only_cutoff not in LOWPASS_CUTOFFS or args.only_cutoff not in HIGHPASS_CUTOFFS:
+            raise ValueError(
+                f"--only_cutoff {args.only_cutoff} phải có mặt trong CẢ HAI LOWPASS_CUTOFFS "
+                f"({LOWPASS_CUTOFFS}) và HIGHPASS_CUTOFFS ({HIGHPASS_CUTOFFS}) -- domain đã lọc "
+                f"tương ứng phải tồn tại sẵn (build bởi data/build_frequency_filtered_domains.py) "
+                f"để đọc lại, không tự lọc mới ở đây.")
+        lowpass_cutoffs, highpass_cutoffs = [args.only_cutoff], [args.only_cutoff]
+
     model = EarRecognitionNet(
         num_identities=cfg["num_identities"], num_genders=cfg["num_genders"],
         embedding_dim=cfg["recognition"]["embedding_dim"], backbone=args.backbone,
@@ -114,7 +135,7 @@ def main():
     model.eval()
 
     rows = []
-    for mode, cutoffs in [("lowpass", LOWPASS_CUTOFFS), ("highpass", HIGHPASS_CUTOFFS)]:
+    for mode, cutoffs in [("lowpass", lowpass_cutoffs), ("highpass", highpass_cutoffs)]:
         for cutoff in cutoffs:
             acc = evaluate_one_condition(model, freq_ablation_root, splits_json, label_map, image_size,
                                           mode, cutoff, batch_size, args.num_workers, device)
