@@ -34,10 +34,9 @@
 A Statistically-Validated Accuracy--Efficiency Trade-off for Ear Biometrics}
 
 \author{
-  Thai Le Quang$^{1}$, Vinh Truong Hoang$^{1,*}$\\[2mm]
-  \normalsize $^{1}$Faculty of Information Technology, Ho Chi Minh City Open University, Ho Chi Minh City, Vietnam\\
-  \normalsize \texttt{thailq.25ai@ou.edu.vn}, \texttt{vinh.th@ou.edu.vn}\\[2mm]
-  \normalsize $^{*}$Corresponding author: \texttt{vinh.th@ou.edu.vn}
+  Thai Le Quang, Vinh Truong Hoang\thanks{Corresponding author (Vinh Truong Hoang): \texttt{vinh.th@ou.edu.vn}}\\[2mm]
+  \normalsize Faculty of Information Technology, Ho Chi Minh City Open University\\
+  \normalsize \texttt{thailq.25ai@ou.edu.vn}, \texttt{vinh.th@ou.edu.vn}
 }
 \date{}
 
@@ -45,7 +44,7 @@ A Statistically-Validated Accuracy--Efficiency Trade-off for Ear Biometrics}
 \maketitle
 
 \begin{abstract}
-Ear recognition is gaining attention as a complement to face recognition, but ear images are often captured well below the resolution lightweight super-resolution (SR) architectures such as SPAN were designed for. This raises two questions: how far can it be compressed before it stops helping, and how much of the resolution gap does SR close? This paper answers both with \textbf{span\_tiny}, a depth-compressed SPAN variant (3 attention blocks instead of 6, a 46.0\% parameter reduction), validated across eleven backbones under a multi-seed protocol. On the primary dataset (EarVN1.0), span\_tiny and the uncompressed baseline both significantly improve identity accuracy over no-SR in nearly every backbone; the accuracy cost reaches significance in only one of eleven backbones and is negligible overall (equivalence test, $p=0.008$). A direct frequency test explains why: removing the lowest 10\% of the spectrum collapses accuracy to near chance in all eleven backbones, while keeping only that band preserves roughly a quarter of it --- identity-relevant signal survives compression because it lives in coarse, low-frequency structure. Against a true high-resolution ceiling, SR recovers only a fifth to a quarter of the gap, matched almost exactly by the uncompressed baseline. This replicates on AWEx (336 subjects, three protocols, zero of eleven backbones with a cost), and against five other lightweight SR architectures span\_tiny is never beaten, tying the top performers at a fraction of their parameter count. A boundary condition: on real low-resolution images, one backbone (ResNet-18) reverses this ordering, traced to a resolution mismatch with the training-time degradation.
+Ear recognition is gaining attention as a complement to face recognition, but ear images are often captured well below the resolution lightweight super-resolution (SR) architectures such as SPAN were designed for. This raises two questions: how far can it be compressed before it stops helping, and how much of the resolution gap does SR close? This paper answers both with \textbf{span\_tiny}, a depth-compressed SPAN variant (3 attention blocks instead of 6, a 46.0\% parameter reduction), validated across eleven backbones under a multi-seed protocol. On the primary dataset (EarVN1.0), span\_tiny and the uncompressed baseline both significantly improve identity accuracy over no-SR in nearly every backbone; the accuracy cost reaches significance in only one of eleven backbones and is negligible overall (equivalence test, $p=0.008$). A direct frequency test explains why: removing the lowest 10\% of the spectrum collapses accuracy to near chance in all eleven backbones, while keeping only that band preserves roughly a quarter of it -- identity-relevant signal survives compression because it lives in coarse, low-frequency structure. Against a true high-resolution ceiling, SR recovers only a fifth to a quarter of the gap, matched almost exactly by the uncompressed baseline. This replicates on AWEx (336 subjects, three protocols, zero of eleven backbones with a cost), and against five other lightweight SR architectures span\_tiny is never beaten, tying the top performers at a fraction of their parameter count. A boundary condition: on real low-resolution images, one backbone (ResNet-18) reverses this ordering, traced to a resolution mismatch with the training-time degradation.
 
 \vspace{2mm}
 \noindent\textbf{Keywords:} lightweight super-resolution; depth compression; ear recognition; low-resolution biometrics; equivalence testing
@@ -67,15 +66,9 @@ Two gaps motivate this work. First, most lightweight SR papers report PSNR and S
 
 \subsection{Contributions}
 
-This paper's central contribution is \textbf{span\_tiny}, a depth-compressed variant of SPAN (\texttt{n\_blocks} reduced from 6 to 3, \texttt{feat}=48) that cuts parameter count by 46.0\% (0.230M vs.\ 0.4263M) and measured inference latency by 54.8\% (0.256\,ms vs.\ 0.566\,ms, single development GPU, Table~\ref{tab:quality}; not a deployment benchmark, Section~\ref{sec:limitations}); the re-implementation is validated against the original authors' published SPAN-S results before being applied to the new task, matching 99.93\% of the reported benchmark PSNR. Four further results carry most of the paper's evidentiary weight. This paper asks a single, pre-registered question: does depth compression preserve the ordering \texttt{no-SR $<$ span\_tiny $<$ uncompressed baseline}? Multi-seed ($n=5$), multi-backbone (11 recognition architectures: 5 used from the outset, plus 6 added afterward to test generality across architecture families) statistical testing shows that both span\_tiny and the uncompressed baseline beat no-SR significantly in all eleven backbones on the primary dataset, EarVN1.0, while the accuracy cost of compression itself reaches significance in only one. The same compression-safety finding holds on a second, independent dataset (AWEx, 336 subjects) across three separate evaluation protocols (from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer), with no backbone showing a significant accuracy cost under any of the three, evidence of generalization beyond a single dataset or transfer strategy; the secondary question of whether SR helps at all over no-SR is, by contrast, less consistently powered on this smaller dataset. The strongest single piece of evidence for the central claim comes from a depth ablation that isolates block count alone (span\_tiny against span\_large, an otherwise identical, uncompressed-depth counterpart), which shows no statistically significant difference in ten of eleven backbones on EarVN1.0 (the exception, EfficientNet-B0, shows a small but significant cost under one percentage point) and in all eleven on AWEx. The fourth result answers not whether compression is safe but why: a direct frequency-domain ablation (Section~\ref{sec:freq-ablation}) filters the input spectrum and re-evaluates each backbone's already-trained recognition model, no re-training, isolating what the model's own predictions depend on. Removing the lowest 10\% of the spectrum collapses accuracy to 2.9--5.1\% of baseline in all eleven backbones; retaining only that lowest 10\% preserves 22.3--33.6\% of it, with zero exceptions across backbones. This is direct, cross-backbone evidence that the recognition-relevant signal in a low-resolution ear crop is concentrated in coarse, low-frequency structure a shallow network already captures --- a mechanistic account for the compression-safety result above, not merely a further instance of it.
+This paper's central contribution is \textbf{span\_tiny}, a depth-compressed variant of SPAN (\texttt{n\_blocks} reduced from 6 to 3, \texttt{feat}=48) that cuts parameter count by 46.0\% (0.230M vs.\ 0.4263M) and measured inference latency by 54.8\% (0.256\,ms vs.\ 0.566\,ms, single development GPU, Table~\ref{tab:quality}; not a deployment benchmark, Section~\ref{sec:limitations}); the re-implementation is validated against the original authors' published SPAN-S results before being applied to the new task, matching 99.93\% of the reported benchmark PSNR. Four further results carry most of the paper's evidentiary weight. This paper asks a single, pre-registered question: does depth compression preserve the ordering \texttt{no-SR $<$ span\_tiny $<$ uncompressed baseline}? Multi-seed ($n=5$), multi-backbone (11 recognition architectures: 5 used from the outset, plus 6 added afterward to test generality across architecture families) statistical testing shows that both span\_tiny and the uncompressed baseline beat no-SR significantly in all eleven backbones on the primary dataset, EarVN1.0, while the accuracy cost of compression itself reaches significance in only one. The same compression-safety finding holds on a second, independent dataset (AWEx, 336 subjects) across three separate evaluation protocols (from-scratch training, full-fine-tuning transfer from EarVN1.0, and frozen-backbone transfer), with no backbone showing a significant accuracy cost under any of the three, evidence of generalization beyond a single dataset or transfer strategy; the secondary question of whether SR helps at all over no-SR is, by contrast, less consistently powered on this smaller dataset. The strongest single piece of evidence for the central claim comes from a depth ablation that isolates block count alone (span\_tiny against span\_large, an otherwise identical, uncompressed-depth counterpart), which shows no statistically significant difference in ten of eleven backbones on EarVN1.0 (the exception, EfficientNet-B0, shows a small but significant cost under one percentage point) and in all eleven on AWEx. The fourth result answers not whether compression is safe but \emph{why}: a direct frequency-domain ablation (Section~\ref{sec:freq-ablation}) filters the input spectrum and re-evaluates each backbone's already-trained recognition model, no retraining, isolating what the model's own predictions depend on. Removing the lowest 10\% of the spectrum collapses accuracy to 2.9--5.1\% of baseline in all eleven backbones; retaining only that lowest 10\% preserves 22.3--33.6\% of it, with zero exceptions across backbones. This is direct, cross-backbone evidence that the recognition-relevant signal in a low-resolution ear crop is concentrated in coarse, low-frequency structure a shallow network already captures -- a mechanistic account for the compression-safety result above, not merely a further instance of it.
 
-Several secondary results round out the picture without carrying the same weight. An ablation of span\_tiny's loss components (pixel loss, distillation, and an additional identity term, in all four pairwise combinations) finds that the identity term significantly reduces downstream accuracy (consistent with an independent hyperparameter sweep reported in Section~\ref{sec:recipe}) while the distillation term's own contribution remains statistically indistinguishable from pixel-only training. Set against five other lightweight SR architectures (RLFN, RLFN-adapted, ECBSR, SAFMN, SMFANet) trained under an identical distillation recipe, span\_tiny is never significantly beaten on downstream accuracy by any of them: it is statistically tied with the two most accurate alternatives and significantly ahead of the two least accurate, despite ranking low among the six on raw PSNR/SSIM, a sign that this work is competitive on the metric the task actually cares about, not only on efficiency. Three further mechanisms designed to improve on span\_tiny beyond its core block-count reduction (a feature-level distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning) were each validated to the same statistical standard as the main result and found to help not at all: the first two show no detectable effect in either direction, and learned pruning performs significantly worse than span\_tiny's fixed block selection in nearly every backbone at an equal parameter count. An ablation designed to test this paper's own initial candidate explanation for why depth reduction is tolerable (that SPAN's attention mechanism carries no learned parameters) finds no support for it: two architectures with learned attention or modulation, subjected to the same proportional depth cut under the same protocol, tolerate it just as well as span\_tiny does, with no significant difference in any of the 22 backbone--architecture combinations tested (all eleven backbones against both architectures). This rejection is what motivated the direct frequency-domain test of the replacement account described above (the paper's fourth central result), rather than leaving that account as an untested assumption.
-
-\subsection{Paper organization}
-
-Section~\ref{sec:related} reviews related work in ear recognition, efficient super-resolution, SR for downstream recognition, and knowledge distillation. Section~\ref{sec:method} describes the span\_tiny architecture, training recipes, and statistical methodology. Section~\ref{sec:setup} details the experimental setup across both datasets. Section~\ref{sec:results} reports the main and contextual results, a set of three additional mechanisms tested for further improvement and found negative or null (Section~\ref{sec:novelty-ablations}), and three further questions about span\_tiny's specific design choices, all now resolved: a completed attention-parameterization ablation, a completed block-removal position ablation, and a resolved-by-inspection recognition-embedding-distillation question (Section~\ref{sec:extended-ablations}). Section~\ref{sec:discussion} discusses the findings, Section~\ref{sec:limitations} states limitations, and Section~\ref{sec:conclusion} concludes.
-
-Several secondary results round out the picture without carrying the same weight. An ablation of span\_tiny's loss components (pixel loss, distillation, and an additional identity term, in all four pairwise combinations) finds that the identity term significantly \emph{reduces} downstream accuracy (consistent with an independent hyperparameter sweep reported in Section~\ref{sec:recipe}) while the distillation term's own contribution remains statistically indistinguishable from pixel-only training. Set against five other lightweight SR architectures (RLFN, RLFN-adapted, ECBSR, SAFMN, SMFANet) trained under an identical distillation recipe, span\_tiny is never significantly beaten on downstream accuracy by any of them: it is statistically tied with the two most accurate alternatives and significantly ahead of the two least accurate, despite ranking low among the six on raw PSNR/SSIM, a sign that this work is competitive on the metric the task actually cares about, not only on efficiency. Three further mechanisms designed to improve on span\_tiny beyond its core block-count reduction (a feature-level distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning) were each validated to the same statistical standard as the main result and found to help not at all: the first two show no detectable effect in either direction, and learned pruning performs significantly \emph{worse} than span\_tiny's fixed block selection in nearly every backbone at an equal parameter count. Finally, an ablation designed to test this paper's own candidate explanation for why depth reduction is tolerable (that SPAN's attention mechanism carries no learned parameters) finds no support for it: two architectures with learned attention or modulation, subjected to the same proportional depth cut under the same protocol, tolerate it just as well as span\_tiny does, with no significant difference in any of the 22 backbone--architecture combinations tested (all eleven backbones against both architectures).
+Several secondary results round out the picture without carrying the same weight. An ablation of span\_tiny's loss components (pixel loss, distillation, and an additional identity term, in all four pairwise combinations) finds that the identity term significantly \emph{reduces} downstream accuracy (consistent with an independent hyperparameter sweep reported in Section~\ref{sec:recipe}) while the distillation term's own contribution remains statistically indistinguishable from pixel-only training. Set against five other lightweight SR architectures (RLFN, RLFN-adapted, ECBSR, SAFMN, SMFANet) trained under an identical distillation recipe, span\_tiny is never significantly beaten on downstream accuracy by any of them: it is statistically tied with the two most accurate alternatives and significantly ahead of the two least accurate, despite ranking low among the six on raw PSNR/SSIM, a sign that this work is competitive on the metric the task actually cares about, not only on efficiency. Three further mechanisms designed to improve on span\_tiny beyond its core block-count reduction (a feature-level distillation loss, a saliency-weighted identity-critical loss, and learned/differentiable block pruning) were each validated to the same statistical standard as the main result and found to help not at all: the first two show no detectable effect in either direction, and learned pruning performs significantly \emph{worse} than span\_tiny's fixed block selection in nearly every backbone at an equal parameter count. An ablation designed to test this paper's own initial candidate explanation for why depth reduction is tolerable (that SPAN's attention mechanism carries no learned parameters) finds no support for it: two architectures with learned attention or modulation, subjected to the same proportional depth cut under the same protocol, tolerate it just as well as span\_tiny does, with no significant difference in any of the 22 backbone--architecture combinations tested (all eleven backbones against both architectures). This rejection is what motivated the direct frequency-domain test of the replacement account described above (the paper's fourth central result), rather than leaving that account as an untested assumption.
 
 \subsection{Paper organization}
 
@@ -261,7 +254,7 @@ Downstream identity recognition is evaluated on eleven backbone architectures, c
 
 For every comparison between two SR domains (e.g., span\_tiny vs.\ lr), downstream recognition accuracy is measured across $n=5$ random seeds (42, 123, 2024, 44, 999), holding the SR model itself fixed. SR models are trained once per configuration, at a fixed seed of 42, and only the downstream recognition training is repeated across seeds for the main result tables; training a full SR model at every recognition seed was judged computationally infeasible at the scale of this study. This leaves open whether the specific SR checkpoint used could itself be an unmeasured source of variance. Section~\ref{sec:sr-seed-variance} measures this directly for the three core architectures. The paired difference in mean accuracy is reported alongside a paired-sample $t$-test (\texttt{scipy.stats.ttest\_rel}) and a paired effect size (Cohen's $d_z = \text{mean(difference)}/\text{std(difference)}$)~\cite{cohen1988statistical}. Because multiple backbones and multiple pairwise comparisons are tested within each result table, a Bonferroni correction~\cite{dunn1961multiple} is applied across the comparisons within each family. $p_{\text{Bonf}} < 0.05$ is adopted as the threshold for a ``statistically significant'' claim, with $0.05 \leq p_{\text{Bonf}} < 0.10$ distinguished as ``suggestive of a trend'' and never described as significant in this paper.
 
-$n=5$ seeds per condition reflects a deliberate breadth-over-depth trade-off under a single-GPU budget (Section~\ref{sec:impl}): extending coverage to eleven recognition backbones, two independent datasets, and three AWEx transfer protocols already multiplies the total number of training runs into the thousands, and increasing $n$ per cell further would have required narrowing that coverage substantially instead. At this sample size, a non-significant paired $t$-test alone cannot distinguish a true absence of effect from a real effect the test simply lacks the power to detect. Wherever this paper describes a comparison as safe or accuracy-neutral rather than merely non-significant, that claim is instead backed by an equivalence test: a paired two one-sided tests (TOST) procedure~\cite{schuirmann1987tost,lakens2017equivalence}, using a pre-specified equivalence margin of $\pm 1$ percentage point of accuracy, chosen to match the informal threshold (``under one percentage point'') this paper already uses elsewhere to describe a cost as small. TOST tests, in each one-sided direction, whether the true paired difference exceeds the margin; declaring equivalence requires rejecting both one-sided nulls simultaneously ($p_{\text{TOST}} = \max(p_{\text{lower}}, p_{\text{upper}}) < 0.05$). A comparison can therefore fail to reach significance under the $t$-test above and still not be confirmed equivalent under TOST; this combination is reported as inconclusive rather than folded into either a ``significant'' or a ``safe'' verdict.
+$n=5$ seeds per condition reflects a deliberate breadth-over-depth trade-off under a single-GPU budget (Section~\ref{sec:impl}): extending coverage to eleven recognition backbones, two independent datasets, and three AWEx transfer protocols already multiplies the total number of training runs into the thousands, and increasing $n$ per cell further would have required narrowing that coverage substantially instead. This trade-off is not assumed costless: a non-significant paired $t$-test is not, by itself, evidence that two configurations are equivalent, since at $n=5$ seeds with Bonferroni correction, statistical power is low, and failing to reject the null hypothesis of no difference is equally consistent with a true absence of effect and with an underpowered test that simply could not detect a real one. Wherever this paper describes a comparison as safe or accuracy-neutral rather than merely non-significant, that claim is backed by an equivalence test rather than the absence of a significant difference alone: a paired two one-sided tests (TOST) procedure~\cite{schuirmann1987tost,lakens2017equivalence}, using a pre-specified equivalence margin of $\pm 1$ percentage point of accuracy, chosen to match the informal threshold (``under one percentage point'') this paper already uses elsewhere to describe a cost as small. TOST tests, in each one-sided direction, whether the true paired difference exceeds the margin; declaring equivalence requires rejecting both one-sided nulls simultaneously ($p_{\text{TOST}} = \max(p_{\text{lower}}, p_{\text{upper}}) < 0.05$), so a comparison can simultaneously fail to reach significance under the $t$-test above and fail to be confirmed equivalent under TOST; this combination is reported explicitly as inconclusive rather than folded into either a ``significant'' or a ``safe'' verdict.
 
 \subsection{SR-training-seed variance validation}
 \label{sec:sr-seed-variance}
@@ -432,7 +425,7 @@ SqueezeNet-1.1      & 0.5922 & 0.4011 & 0.4416 & 0.4352 & 21.2\% & 17.8\% & $d{=
 
 The gap is large and consistent: on all eleven backbones, the HR ceiling sits roughly 18--28 percentage points above \texttt{lr}, and \texttt{span\_tiny} closes only 12.5--25.9\% of it (mean 20.4\%), \texttt{span\_baseline} closing a similar 15.4--30.1\% (mean 22.6\%) -- the two track each other closely throughout, consistent with the paper's central claim that compression costs little, since both start from the same modest fraction of the available headroom. The hr-vs-span\_tiny gap is significant after Bonferroni correction in 11 of 11 backbones (as is hr-vs-span\_baseline, $d$ ranging from $-5.86$ to $-20.84$), confirming the ceiling is real and not an artifact of measurement noise. The largest effect, ResNet-18 at $d{=}{-}46.83$, is a paired-sample $d$ specifically, not evidence of an unusually reliable or different result: \texttt{hr} and \texttt{span\_tiny} are trained with the same 5 seeds, so seed-driven variation (data split, initialization) moves both similarly, leaving an especially small paired-difference standard deviation for this backbone (0.37 percentage points) relative to the size of the gap itself (17.45 points, 95\% CI $[16.99, 17.91]$) -- the confidence interval is in fact among the tightest in the table, not the widest, which is the more informative way to read this row than the effect size alone.
 
-This result directly answers a question the paper's other comparisons do not: SR recovers a real but modest fraction, roughly a fifth to a quarter, of the accuracy that genuine full resolution would provide, across all eleven backbones tested. This does not bear on the paper's central claim, which concerns the relative cost of \emph{compressing} the SR model, not the absolute gap between any SR reconstruction and true high resolution -- closing that larger gap is a harder problem this paper's compression question does not attempt to solve.
+This result directly answers a question the paper's other comparisons do not: SR recovers a real but modest fraction, roughly a fifth to a quarter, of the accuracy that genuine full resolution would provide, across all eleven backbones tested. It is not evidence against the paper's central claim, which concerns the relative cost of \emph{compressing} the SR model, not the absolute gap between any SR reconstruction and true high resolution -- closing that larger gap is a harder problem this paper's compression question does not attempt to solve.
 
 Figure~\ref{fig:qualitative} shows qualitative examples on real EarVN1.0 test images. Across the full 20-sample export, the per-image PSNR gap (span\_baseline $-$ span\_tiny) ranges from $-0.062$\,dB, with span\_tiny marginally ahead (Figure~\ref{fig:qualitative}a), to $+2.645$\,dB, the largest gap observed (Figure~\ref{fig:qualitative}e). Samples (a)--(e) are selected to span this full range rather than to favor either model. A follow-up export at $n=200$ samples, an order of magnitude larger and independently drawn (not a superset of the original 20), confirms this range is not an artifact of a small, unrepresentative sample: the largest gap unfavorable to span\_tiny across all 200 samples is $+1.19$\,dB, smaller in magnitude than the $+2.645$\,dB case already shown here, and the single largest gap of either sign across the 200 samples in fact favors span\_tiny ($-2.251$\,dB). Two patterns are visible. First, the visual gap between span\_baseline and span\_tiny tracks the PSNR gap: it is imperceptible when the two are close (Figure~\ref{fig:qualitative}a--b) and visible mainly as reduced fine-structure sharpness in the antihelix/concha region when the gap is largest (Figure~\ref{fig:qualitative}e), consistent with a small, non-catastrophic accuracy cost rather than a qualitatively different failure mode. Second, Figure~\ref{fig:qualitative}b illustrates a limitation of pixel-fidelity metrics noted in Section~\ref{sec:related}: the ear itself is largely occluded by hair in this sample, so the near-tied, relatively high PSNR (30.92 vs.\ 30.89\,dB) is driven substantially by accurate reconstruction of the large, low-detail hair and background regions rather than by ear-specific structure. PSNR and downstream identity accuracy are related but not interchangeable signals.
 
@@ -487,55 +480,63 @@ SqueezeNet-1.1      & 0.4352 & 0.4330 & $-$0.0021 & $-$0.48 & 1.0 & \textbf{0.00
 \subsubsection{Locating the compression boundary: a full depth sweep}
 \label{sec:depth-sweep}
 
-The comparison above isolates a single point on the depth axis (3 vs.\ 6 blocks) and therefore cannot say how far compression can be pushed before it costs accuracy, only that this particular cut does not. To answer that question directly, span\_tiny's two intermediate block counts (1, 2, 4, 5) were each trained under the identical pinned recipe used for span\_tiny itself (Section~\ref{sec:recipe}, isolating block count as the only varying factor) and evaluated at $n=5$ seeds on MobileNetV2, the representative backbone used for other screening-scale checks in this study, then extended to four further backbones spanning distinct architecture families (ResNet-18, EfficientNet-B0, GhostNet-100, ShuffleNetV2-1.0x) to test whether a compression boundary identified on a single screening backbone generalizes. Figure~\ref{fig:depth-sweep} plots all five backbones' six-point curves together, Table~\ref{tab:depth-sweep} reports the same values numerically, and Table~\ref{tab:depth-sweep-pairwise} compares each compressed configuration against the uncompressed 6-block reference, backbone by backbone.
+The comparison above isolates a single point on the depth axis (3 vs.\ 6 blocks) and therefore cannot say how far compression can be pushed before it costs accuracy, only that this particular cut does not. To answer that question directly, span\_tiny's two intermediate block counts (1, 2, 4, 5) were each trained under the identical pinned recipe used for span\_tiny itself (Section~\ref{sec:recipe}, isolating block count as the only varying factor) and evaluated at $n=5$ seeds on MobileNetV2, the representative backbone used for other screening-scale checks in this study, then extended to four further backbones spanning distinct architecture families (ResNet-18, EfficientNet-B0, GhostNet-100, ShuffleNetV2-1.0x) to test whether a compression boundary identified on a single screening backbone generalizes. Figure~\ref{fig:depth-sweep} plots MobileNetV2's six-point curve (the original screening backbone), Table~\ref{tab:depth-sweep} reports the same values numerically for all five backbones, and Table~\ref{tab:depth-sweep-pairwise} compares each compressed configuration against the uncompressed 6-block reference, backbone by backbone.
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[x=1.4cm, y=1cm, font=\small]
+    % --- trục toạ độ: x = số khối (1..6), y = accuracy (bậc thang 0.01, hệ số 70) ---
+    % y_px(acc) = (acc - 0.465) * 70 ; điểm dữ liệu và lưới đều dùng chung công thức này
     \def\ymin{0}
-    \def\ymax{8.4}
+    \def\ymax{4.2}
     \def\xmin{-0.6}
     \def\xmax{7.6}
 
-    \foreach \acc/\ypos in {0.46/0.0, 0.48/1.6, 0.50/3.2, 0.52/4.8, 0.54/6.4, 0.56/8.0} {
+    % lưới ngang + nhãn trục y (accuracy 0.47..0.52)
+    \foreach \acc/\ypos in {0.47/0.35, 0.48/1.05, 0.49/1.75, 0.50/2.45, 0.51/3.15, 0.52/3.85} {
         \draw[gray!25] (\xmin,\ypos) -- (\xmax,\ypos);
         \node[anchor=east, gray!70] at (\xmin-0.15,\ypos) {\acc};
     }
 
+    % truc
     \draw[thick] (\xmin,\ymin) -- (\xmax,\ymin);
     \draw[thick] (\xmin,\ymin) -- (\xmin,\ymax);
 
+    % nhan truc x (so khoi 1..6) tai dung vi tri du lieu
     \foreach \n/\xpos in {1/0.0, 2/1.4, 3/2.8, 4/4.2, 5/5.6, 6/7.0} {
         \draw (\xpos,\ymin) -- (\xpos,\ymin-0.08);
         \node[anchor=north] at (\xpos,\ymin-0.12) {\n};
     }
     \node[anchor=north] at (3.5,\ymin-0.65) {Number of SPAB blocks retained};
-    \node[anchor=south, rotate=90] at (\xmin-1.05,4.2) {Downstream identity accuracy};
+    \node[anchor=south, rotate=90] at (\xmin-1.05,2.1) {Downstream identity accuracy};
 
-    \draw[dashed, gray!60!black] (2.8,\ymin) -- (2.8,\ymax);
-    \node[anchor=south, gray!60!black, font=\scriptsize] at (2.8,\ymax+0.05) {span\_tiny (proposed)};
-    \draw[dashed, gray!60!black] (7.0,\ymin) -- (7.0,\ymax);
-    \node[anchor=south, gray!60!black, font=\scriptsize] at (7.0,\ymax+0.05) {span\_large (uncompr.)};
+    % duong tham chieu doc: n=3 (span_tiny, de xuat) va n=6 (span_large, uncompressed)
+    \draw[dashed, blue!60!black] (2.8,\ymin) -- (2.8,\ymax);
+    \node[anchor=south, blue!60!black, font=\scriptsize] at (2.8,\ymax+0.05) {span\_tiny (proposed)};
+    \draw[dashed, teal!70!black] (7.0,\ymin) -- (7.0,\ymax);
+    \node[anchor=south, teal!70!black, font=\scriptsize] at (7.0,\ymax+0.05) {span\_large (uncompr.)};
 
-    \draw[thick, blue!60!black]      (0.0,2.192) -- (1.4,2.856) -- (2.8,3.408) -- (4.2,4.024) -- (5.6,3.728) -- (7.0,3.552);
-    \draw[thick, red!75!black]       (0.0,6.096) -- (1.4,7.480) -- (2.8,7.080) -- (4.2,7.560) -- (5.6,7.632) -- (7.0,7.736);
-    \draw[thick, green!45!black]     (0.0,3.640) -- (1.4,3.864) -- (2.8,4.120) -- (4.2,4.432) -- (5.6,4.528) -- (7.0,4.320);
-    \draw[thick, violet]             (0.0,0.952) -- (1.4,1.448) -- (2.8,1.800) -- (4.2,2.032) -- (5.6,1.960) -- (7.0,2.104);
-    \draw[thick, orange!85!black]    (0.0,1.112) -- (1.4,2.296) -- (2.8,2.624) -- (4.2,2.352) -- (5.6,2.408) -- (7.0,2.584);
+    % duong noi 6 diem
+    \draw[thick] (0.0,1.568) -- (1.4,2.149) -- (2.8,2.632) -- (4.2,3.171) -- (5.6,2.912) -- (7.0,2.758);
 
-    \foreach \x/\y in {0.0/2.192, 1.4/2.856, 2.8/3.408, 4.2/4.024, 5.6/3.728, 7.0/3.552} { \fill[blue!60!black] (\x,\y) circle (1.8pt); }
-    \foreach \x/\y in {0.0/6.096, 1.4/7.480, 2.8/7.080, 4.2/7.560, 5.6/7.632, 7.0/7.736} { \fill[red!75!black] (\x,\y) circle (1.8pt); }
-    \foreach \x/\y in {0.0/3.640, 1.4/3.864, 2.8/4.120, 4.2/4.432, 5.6/4.528, 7.0/4.320} { \fill[green!45!black] (\x,\y) circle (1.8pt); }
-    \foreach \x/\y in {0.0/0.952, 1.4/1.448, 2.8/1.800, 4.2/2.032, 5.6/1.960, 7.0/2.104} { \fill[violet] (\x,\y) circle (1.8pt); }
-    \foreach \x/\y in {0.0/1.112, 1.4/2.296, 2.8/2.624, 4.2/2.352, 5.6/2.408, 7.0/2.584} { \fill[orange!85!black] (\x,\y) circle (1.8pt); }
+    % error bar (+- 1 do lech chuan) cho tung diem, kem "mu" ngang 2 dau
+    \foreach \x/\ylo/\yhi in {0.0/1.393/1.743, 1.4/1.638/2.660, 2.8/2.114/3.150, 4.2/2.548/3.794, 5.6/2.688/3.136, 7.0/2.422/3.094} {
+        \draw (\x,\ylo) -- (\x,\yhi);
+        \draw (\x-0.06,\ylo) -- (\x+0.06,\ylo);
+        \draw (\x-0.06,\yhi) -- (\x+0.06,\yhi);
+    }
 
-    \node[anchor=west, blue!60!black, font=\scriptsize] at (7.15,3.552) {MobileNetV2};
-    \node[anchor=west, red!75!black, font=\scriptsize] at (7.15,7.736) {EfficientNet-B0};
-    \node[anchor=west, green!45!black, font=\scriptsize] at (7.15,4.320) {GhostNet-100};
-    \node[anchor=west, violet, font=\scriptsize] at (7.15,1.75) {ResNet-18};
-    \node[anchor=west, orange!85!black, font=\scriptsize] at (7.15,2.85) {ShuffleNetV2-1.0x};
+    % diem du lieu -- mau theo VERDICT TOST (Table~depth-sweep-pairwise), khong chi theo NHST:
+    % do = 1 khoi (sig. cost, KHONG tuong duong); xanh la = 3,5 khoi (equiv. da xac nhan qua TOST);
+    % cam = 2,4 khoi (n.s. nhung KHONG xac nhan duoc tuong duong -- inconclusive, khac han "an toan")
+    \fill[red!70!black] (0.0,1.568) circle (2.2pt);
+    \fill[orange!85!black] (1.4,2.149) circle (2.2pt);
+    \fill[green!45!black] (2.8,2.632) circle (2.2pt);
+    \fill[orange!85!black] (4.2,3.171) circle (2.2pt);
+    \fill[green!45!black] (5.6,2.912) circle (2.2pt);
+    \fill[black] (7.0,2.758) circle (2.2pt);
 \end{tikzpicture}
-\caption{Downstream identity accuracy as a function of retained SPAB block count, EarVN1.0, $n=5$ seeds, five backbones (mean values; std.\ dev.\ and per-point TOST verdicts in Table~\ref{tab:depth-sweep} and Table~\ref{tab:depth-sweep-pairwise}). Note the non-monotonic dip for EfficientNet-B0 at exactly 3 blocks (span\_tiny's own choice), and the comparatively flat, low-slope curves for ResNet-18 and ShuffleNetV2-1.0x, for which no block count in the 2--5 range is TOST-confirmed equivalent to the 6-block reference.}
+\caption{Downstream identity accuracy (MobileNetV2, EarVN1.0, $n=5$ seeds, error bars $=\pm 1$ std.\ dev.) as a function of retained SPAB block count, colored by verdict against the 6-block reference (Table~\ref{tab:depth-sweep-pairwise}): red (1 block) is a statistically significant, TOST-confirmed non-equivalent cost; green (3, 5 blocks) is TOST-confirmed equivalent within $\pm 1$ percentage point; orange (2, 4 blocks) is non-significant under the paired $t$-test but \emph{not} TOST-confirmed equivalent either, and is reported as inconclusive rather than safe (Section~\ref{sec:stats}).}
 \label{fig:depth-sweep}
 \end{figure}
 
@@ -560,46 +561,44 @@ ShuffleNetV2-1.0x & 0.4739 $\pm$ 0.0058 & 0.4887 $\pm$ 0.0047 & 0.4928 $\pm$ 0.0
 
 \begin{table}[H]
 \centering
-\caption{Verdict summary: each block count vs.\ the 6-block (uncompressed) reference, EarVN1.0, $n=5$ seeds, five backbones. ``equiv.'' is TOST-confirmed equivalence within $\pm 1$ percentage point; ``inconclusive'' is non-significant under the paired $t$-test but not TOST-confirmed equivalent either -- a distinct, weaker claim than ``equiv.'' (Section~\ref{sec:stats}). Full effect sizes and $p$-values in Table~\ref{tab:depth-sweep-pairwise-full} (Supplementary Material).}
+\caption{Each block count vs.\ the 6-block (uncompressed) reference, EarVN1.0, $n=5$ seeds, five backbones. $p_{\text{Bonf}}$ corrected across the 5-comparison family reported by each backbone's own aggregation (Section~\ref{sec:stats}). ``(equiv.)'' indicates TOST-confirmed equivalence within $\pm 1$ percentage point; ``n.s.'' and ``equiv.'' are distinct claims, non-significance alone does not establish equivalence.}
 \label{tab:depth-sweep-pairwise}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
 Backbone & 1 vs.\ 6 & 2 vs.\ 6 & 3 vs.\ 6 & 4 vs.\ 6 & 5 vs.\ 6 \\
 \midrule
-MobileNetV2       & \textbf{sig.\ cost} & inconclusive & equiv.\ & inconclusive & equiv.\ \\
-EfficientNet-B0   & \textbf{sig.\ cost} & inconclusive & \textbf{sig.\ cost} & equiv.\ & equiv.\ \\
-GhostNet-100      & inconclusive & inconclusive & equiv.\ & equiv.\ & equiv.\ \\
-ResNet-18         & inconclusive & inconclusive & inconclusive & inconclusive & inconclusive \\
-ShuffleNetV2-1.0x & \textbf{sig.\ cost} & inconclusive & inconclusive & inconclusive & inconclusive \\
+MobileNetV2       & $d{=}{-}4.59$, \textbf{sig.} & $d{=}{-}0.85$, n.s.\ & $d{=}{-}0.29$, n.s.\ (equiv.) & $d{=}{+}0.61$, n.s.\ & $d{=}{+}1.10$, n.s.\ (equiv.) \\
+EfficientNet-B0   & $d{=}{-}2.54$, \textbf{sig.} & $d{=}{-}0.28$, n.s.\ & $d{=}{-}3.17$, \textbf{sig.} & $d{=}{-}0.71$, n.s.\ (equiv.) & $d{=}{-}0.17$, n.s.\ (equiv.) \\
+GhostNet-100      & $d{=}{-}1.33$, n.s.\ & $d{=}{-}0.63$, n.s.\ & $d{=}{-}1.33$, n.s.\ (equiv.) & $d{=}{+}0.20$, n.s.\ (equiv.) & $d{=}{+}0.36$, n.s.\ (equiv.) \\
+ResNet-18         & $d{=}{-}1.65$, n.s.\ & $d{=}{-}0.63$, n.s.\ & $d{=}{-}0.45$, n.s.\ & $d{=}{-}0.08$, n.s.\ & $d{=}{-}0.19$, n.s.\ \\
+ShuffleNetV2-1.0x & $d{=}{-}2.68$, \textbf{sig.} & $d{=}{-}0.33$, n.s.\ & $d{=}{+}0.03$, n.s.\ & $d{=}{-}0.26$, n.s.\ & $d{=}{-}0.17$, n.s.\ \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
-The curve is not monotonic in the range that matters, and this holds across backbones, not only MobileNetV2. Only the most aggressive cut tested, to a single block, produces a large cost that reaches significance after Bonferroni correction in three of the five backbones (MobileNetV2, $d{=}{-}4.59$; EfficientNet-B0, $d{=}{-}2.54$; ShuffleNetV2-1.0x, $d{=}{-}2.68$; all $p_{\text{Bonf}}{<}0.05$), while GhostNet-100 and ResNet-18 show no significant cost even at this most extreme cut once corrected. EfficientNet-B0's curve is additionally non-monotonic: the 3-block cut (span\_tiny's own choice) shows a significant cost ($d{=}{-}3.17$, $p_{\text{Bonf}}{=}0.0104$) while the \emph{less}-compressed 2-block point does not ($d{=}{-}0.28$, n.s.), and TOST confirms equivalence again at both 4 and 5 blocks. This is not a clean monotonic decline that recovers with more capacity; it is a local dip at exactly span\_tiny's chosen depth for this one backbone, consistent with EfficientNet-B0 already being the sole exception in Table~\ref{tab:depth}'s single-point comparison. GhostNet-100 is the most permissive of the five: no block count tested shows a significant cost, and TOST confirms equivalence to the uncompressed reference from 3 blocks onward. ResNet-18 and ShuffleNetV2-1.0x sit at the opposite end: beyond the single-block extreme (significant for ShuffleNetV2-1.0x only), every intermediate point for both backbones is non-significant \emph{and} not TOST-confirmed equivalent -- the sweep identifies no confirmed floor of safe compression for either backbone at this sample size, only the absence of detected harm, which is a weaker claim. The confirmed floor of safe compression this study can establish is therefore backbone-dependent rather than a single number: 3 blocks for MobileNetV2 and GhostNet-100 (span\_tiny's own choice, TOST-confirmed equivalent for both), an open question across the entire 2--5 block range for ResNet-18 and ShuffleNetV2-1.0x, and a backbone where the 3-block point specifically underperforms relative to both fewer and more blocks for EfficientNet-B0. This does not change the paper's proposed configuration, since span\_tiny's 3-block design has additionally been validated across all eleven backbones and two datasets (Table~\ref{tab:depth}, Section~\ref{sec:res-awex}); it does show that a full depth curve, even extended across five architecturally distinct backbones, does not settle the compression-boundary question in general -- the same $n=5$ statistical-power limitation documented throughout this paper (Section~\ref{sec:limitations}) applies here too, and answering it more completely would require more seeds per backbone rather than more backbones alone.
+The curve is not monotonic in the range that matters, and this holds across backbones, not only MobileNetV2. Only the most aggressive cut tested, to a single block, produces a large cost that reaches significance after Bonferroni correction in three of the five backbones (MobileNetV2, $d{=}{-}4.59$; EfficientNet-B0, $d{=}{-}2.54$; ShuffleNetV2-1.0x, $d{=}{-}2.68$; all $p_{\text{Bonf}}{<}0.05$), while GhostNet-100 and ResNet-18 show no significant cost even at this most extreme cut once corrected. EfficientNet-B0's curve is additionally non-monotonic in a way worth stating plainly rather than smoothing over: the 3-block cut (span\_tiny's own choice) shows a significant cost ($d{=}{-}3.17$, $p_{\text{Bonf}}{=}0.0104$) while the \emph{less}-compressed 2-block point does not ($d{=}{-}0.28$, n.s.), and TOST confirms equivalence again at both 4 and 5 blocks. This is not a clean monotonic decline that recovers with more capacity; it is a local dip at exactly span\_tiny's chosen depth for this one backbone, consistent with EfficientNet-B0 already being the sole exception in Table~\ref{tab:depth}'s single-point comparison. GhostNet-100 is the most permissive of the five: no block count tested shows a significant cost, and TOST confirms equivalence to the uncompressed reference from 3 blocks onward. ResNet-18 and ShuffleNetV2-1.0x sit at the opposite end: beyond the single-block extreme (significant for ShuffleNetV2-1.0x only), every intermediate point for both backbones is non-significant \emph{and} not TOST-confirmed equivalent -- the sweep identifies no confirmed floor of safe compression for either backbone at this sample size, only the absence of detected harm, which is a weaker claim. The confirmed floor of safe compression this study can establish is therefore backbone-dependent rather than a single number: 3 blocks for MobileNetV2 and GhostNet-100 (span\_tiny's own choice, TOST-confirmed equivalent for both), an open question across the entire 2--5 block range for ResNet-18 and ShuffleNetV2-1.0x, and a backbone where the 3-block point specifically underperforms relative to both fewer and more blocks for EfficientNet-B0. This does not change the paper's proposed configuration, since span\_tiny's 3-block design has additionally been validated across all eleven backbones and two datasets (Table~\ref{tab:depth}, Section~\ref{sec:res-awex}); it does show that a full depth curve, even extended across five architecturally distinct backbones, does not settle the compression-boundary question in general -- the same $n=5$ statistical-power limitation documented throughout this paper (Section~\ref{sec:limitations}) applies here too, and answering it more completely would require more seeds per backbone rather than more backbones alone.
 
 \subsection{Ablation: loss components}
 \label{sec:res-loss}
 
 \begin{table}[H]
 \centering
-\caption{Downstream accuracy, all pairwise comparisons among four training-loss configurations, EarVN1.0, $n=5$ seeds, all eleven recognition backbones. Difference convention: ``A vs.\ B'' $=$ B minus A; $p_{\text{Bonf}}$ corrected across all 6 comparisons within each backbone. sig.\ $=p_{\text{Bonf}}{<}0.05$; trend $=0.05{\le}p_{\text{Bonf}}{<}0.10$; n.s.\ $=p_{\text{Bonf}}{\ge}0.10$. ``(equiv.)'' indicates TOST-confirmed equivalence within $\pm 1$ percentage point.}
+\caption{Downstream accuracy, all pairwise comparisons among four training-loss configurations, EarVN1.0, $n=5$ seeds, nine recognition backbones (the three originally used for this ablation plus six added later; two of the eleven main-comparison backbones, GhostNet-100 and MobileNetV3-Small, were never part of this ablation's protocol and are not included here). Difference convention: ``A vs.\ B'' $=$ B minus A; $p_{\text{Bonf}}$ corrected across all 6 comparisons within each backbone. sig.\ $=p_{\text{Bonf}}{<}0.05$; trend $=0.05{\le}p_{\text{Bonf}}{<}0.10$; n.s.\ $=p_{\text{Bonf}}{\ge}0.10$. ``(equiv.)'' indicates TOST-confirmed equivalence within $\pm 1$ percentage point.}
 \label{tab:loss}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcccccc}
 \toprule
 Backbone & full vs.\ id.\ & full vs.\ dist.\ & full vs.\ only & id.\ vs.\ dist.\ & id.\ vs.\ only & dist.\ vs.\ only \\
 \midrule
-EfficientNet-B0     & $d{=}{-}1.01$, n.s.\ & $d{=}{+}0.33$, n.s.\ & $d{=}{+}0.19$, n.s.\ & $d{=}{+}1.79$, trend & $d{=}{+}1.34$, n.s.\ & $d{=}{-}0.04$, n.s.\ (equiv.) \\
-GhostNet-100        & $d{=}{-}0.06$, n.s.\ & $d{=}{+}1.03$, n.s.\ & $d{=}{+}0.83$, n.s.\ & $d{=}{+}0.85$, n.s.\ & $d{=}{+}0.62$, n.s.\ & $d{=}{-}0.16$, n.s.\ (equiv.) \\
-LCNet-100           & $d{=}{+}0.27$, n.s.\ & $d{=}{+}0.59$, n.s.\ & $d{=}{+}1.03$, n.s.\ & $d{=}{+}0.21$, n.s.\ & $d{=}{+}2.18$, \textbf{sig.} & $d{=}{+}0.56$, n.s.\ \\
 MobileNetV2         & $d{=}{-}0.84$, n.s.\ & $d{=}{+}1.93$, trend & $d{=}{+}3.13$, \textbf{sig.} & $d{=}{+}2.85$, \textbf{sig.} & $d{=}{+}2.61$, \textbf{sig.} & $d{=}{-}0.40$, n.s.\ \\
+EfficientNet-B0     & $d{=}{-}1.01$, n.s.\ & $d{=}{+}0.33$, n.s.\ & $d{=}{+}0.19$, n.s.\ & $d{=}{+}1.79$, trend & $d{=}{+}1.34$, n.s.\ & $d{=}{-}0.04$, n.s.\ (equiv.) \\
+ResNet-18           & $d{=}{-}1.06$, n.s.\ & $d{=}{-}0.24$, n.s.\ (equiv.) & $d{=}{-}0.07$, n.s.\ & $d{=}{+}1.18$, n.s.\ & $d{=}{+}1.35$, n.s.\ & $d{=}{+}0.05$, n.s.\ \\
+LCNet-100           & $d{=}{+}0.27$, n.s.\ & $d{=}{+}0.59$, n.s.\ & $d{=}{+}1.03$, n.s.\ & $d{=}{+}0.21$, n.s.\ & $d{=}{+}2.18$, \textbf{sig.} & $d{=}{+}0.56$, n.s.\ \\
 MobileNetV3-Large   & $d{=}{-}0.15$, n.s.\ & $d{=}{-}0.64$, n.s.\ & $d{=}{-}0.25$, n.s.\ & $d{=}{-}0.39$, n.s.\ & $d{=}{-}0.20$, n.s.\ & $d{=}{+}0.36$, n.s.\ \\
-MobileNetV3-Small   & $d{=}{+}0.40$, n.s.\ & $d{=}{+}0.36$, n.s.\ & $d{=}{+}0.31$, n.s.\ & $d{=}{-}0.05$, n.s.\ & $d{=}{-}0.15$, n.s.\ & $d{=}{-}0.14$, n.s.\ \\
 MobileOne-S0        & $d{=}{-}0.51$, n.s.\ & $d{=}{+}0.86$, n.s.\ & $d{=}{-}0.01$, n.s.\ (equiv.) & $d{=}{+}0.81$, n.s.\ & $d{=}{+}0.54$, n.s.\ & $d{=}{-}0.91$, n.s.\ \\
 RegNetY-400MF       & $d{=}{-}0.55$, n.s.\ & $d{=}{+}0.84$, n.s.\ & $d{=}{+}1.12$, n.s.\ & $d{=}{+}1.59$, n.s.\ & $d{=}{+}1.27$, n.s.\ & $d{=}{-}0.08$, n.s.\ (equiv.) \\
-ResNet-18           & $d{=}{-}1.06$, n.s.\ & $d{=}{-}0.24$, n.s.\ (equiv.) & $d{=}{-}0.07$, n.s.\ & $d{=}{+}1.18$, n.s.\ & $d{=}{+}1.35$, n.s.\ & $d{=}{+}0.05$, n.s.\ \\
 ShuffleNetV2-1.0x   & $d{=}{+}0.10$, n.s.\ & $d{=}{+}1.92$, trend & $d{=}{+}2.14$, trend & $d{=}{+}1.63$, n.s.\ & $d{=}{+}0.75$, n.s.\ & $d{=}{-}0.42$, n.s.\ \\
 SqueezeNet-1.1      & $d{=}{-}0.04$, n.s.\ & $d{=}{+}1.00$, n.s.\ & $d{=}{+}1.11$, n.s.\ & $d{=}{+}0.45$, n.s.\ & $d{=}{+}0.64$, n.s.\ & $d{=}{+}0.65$, n.s.\ (equiv.) \\
 \bottomrule
@@ -607,7 +606,7 @@ SqueezeNet-1.1      & $d{=}{-}0.04$, n.s.\ & $d{=}{+}1.00$, n.s.\ & $d{=}{+}1.11
 }
 \end{table}
 
-On MobileNetV2, the six configurations resolve into two statistically-tied clusters: \{pixel+distill, pixel-only\} both significantly or near-significantly outperform \{pixel+distill+identity, pixel+identity\} (3/4 cross-cluster comparisons significant, 1/4 at trend level), while the two within-cluster comparisons are both non-significant. Extending this ablation to ten further backbones shows this pattern is backbone-dependent rather than universal, but not unique to MobileNetV2 either. Two backbones echo the same direction: ShuffleNetV2-1.0x reaches trend level on the same two cross-cluster comparisons (full vs.\ distill, full vs.\ only), and LCNet-100 reaches significance on one (id.\ vs.\ only). The remaining eight backbones (EfficientNet-B0, GhostNet-100, MobileNetV3-Large, MobileNetV3-Small, MobileOne-S0, RegNetY-400MF, ResNet-18, SqueezeNet-1.1) show no comparison reaching even trend level, with six TOST-confirmed equivalences scattered among their non-significant comparisons. The standalone $\lambda_{\text{identity}}$ sweep (Section~\ref{sec:recipe}, MobileNetV2-only) shows the same consistent negative direction found for MobileNetV2 above. Read together, the identity-loss term reliably hurts downstream accuracy on MobileNetV2 and, more weakly, on two of the ten other backbones tested (one at trend level only), and shows no detectable effect on the remaining eight; this is reported as a genuinely backbone-dependent effect rather than either a general property of the identity-loss mechanism or an artifact isolated to a single backbone. By contrast, the distillation term's own marginal contribution (pixel+distill vs.\ pixel-only) remains statistically indistinguishable from pixel-only training on all eleven backbones, and is TOST-confirmed equivalent on four of them (EfficientNet-B0, GhostNet-100, RegNetY-400MF, SqueezeNet-1.1); this specific negative result is unchanged and, if anything, more consistently supported than before.
+On MobileNetV2, the six configurations resolve into two statistically-tied clusters: \{pixel+distill, pixel-only\} both significantly or near-significantly outperform \{pixel+distill+identity, pixel+identity\} (3/4 cross-cluster comparisons significant, 1/4 at trend level), while the two within-cluster comparisons are both non-significant. Extending this ablation to eight further backbones shows this pattern is backbone-dependent rather than universal, but not unique to MobileNetV2 either. Two backbones echo the same direction: ShuffleNetV2-1.0x reaches trend level on the same two cross-cluster comparisons (full vs.\ distill, full vs.\ only), and LCNet-100 reaches significance on one (id.\ vs.\ only). The remaining six backbones (EfficientNet-B0, ResNet-18, MobileNetV3-Large, MobileOne-S0, RegNetY-400MF, SqueezeNet-1.1) show no comparison reaching even trend level, with five TOST-confirmed equivalences scattered among their non-significant comparisons. The standalone $\lambda_{\text{identity}}$ sweep (Section~\ref{sec:recipe}, MobileNetV2-only) shows the same consistent negative direction found for MobileNetV2 above. Read together, the identity-loss term reliably hurts downstream accuracy on MobileNetV2 and, more weakly, on two of the eight other backbones tested (one at trend level only), and shows no detectable effect on the remaining six; this is reported as a genuinely backbone-dependent effect rather than either a general property of the identity-loss mechanism or an artifact isolated to a single backbone. By contrast, the distillation term's own marginal contribution (pixel+distill vs.\ pixel-only) remains statistically indistinguishable from pixel-only training on all nine backbones, and is TOST-confirmed equivalent on three of them (EfficientNet-B0, RegNetY-400MF, SqueezeNet-1.1); this specific negative result is unchanged and, if anything, more consistently supported than before.
 
 \subsection{Contextual comparison with other lightweight SR architectures}
 \label{sec:res-context}
@@ -1096,12 +1095,12 @@ where $f(\cdot)$ denotes the frozen backbone's penultimate-layer embedding. This
 \label{sec:discussion}
 % ============================================================================
 
-The design goal of this work was not maximal downstream accuracy but a specific, pre-defined criterion: preserve the ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} while substantially reducing parameter count and latency, and in particular keep the compression-specific cost (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) small and, ideally, confirmed negligible. On EarVN1.0 this cost is non-significant in 10/11 backbones (Table~\ref{tab:main}), and TOST equivalence testing confirms 1 of those 10 as negligible at $n=5$ (ShuffleNetV2-1.0x); the depth-isolated comparison (Table~\ref{tab:depth}) gives the cleaner answer, non-significant in 10/11 backbones and TOST-confirmed equivalent in 3 of those 10, with the remaining 7 inconclusive rather than settled. On AWEx it is non-significant in 11/11 backbones under all three protocols tested (from-scratch, full-fine-tune transfer, and frozen-backbone transfer; Section~\ref{sec:res-awex}), the single most consistent result in the paper by the non-significance criterion alone; TOST tells a more modest story there, however, confirming genuine equivalence in only 2 of the 33 backbone$\times$protocol combinations (both on the from-scratch track), with the remainder non-significant but not confirmed negligible. This forms the paper's central empirical claim: no detected cost almost everywhere, confirmed negligible cost in a subset, and an open question in the rest at this sample size.
+The design goal of this work was not maximal downstream accuracy but a specific, pre-defined criterion: preserve the ordering \texttt{lr $<$ span\_tiny $<$ span\_baseline} while substantially reducing parameter count and latency, and in particular keep the compression-specific cost (\texttt{span\_tiny} vs.\ \texttt{span\_baseline}) small and, ideally, confirmed negligible. On EarVN1.0 this cost is non-significant in 10/11 backbones (Table~\ref{tab:main}), and TOST equivalence testing confirms 1 of those 10 as negligible at $n=5$ (ShuffleNetV2-1.0x); the depth-isolated comparison (Table~\ref{tab:depth}) gives the cleaner answer, non-significant in 10/11 backbones and TOST-confirmed equivalent in 3 of those 10, with the remaining 7 inconclusive rather than settled. On AWEx it is non-significant in 11/11 backbones under all three protocols tested (from-scratch, full-fine-tune transfer, and frozen-backbone transfer; Section~\ref{sec:res-awex}), the single most consistent result in the paper by the non-significance criterion alone; TOST tells a more modest story there, however, confirming genuine equivalence in only 2 of the 33 backbone$\times$protocol combinations (both on the from-scratch track), with the remainder non-significant but not confirmed negligible. This forms the paper's central empirical claim: no detected cost almost everywhere, confirmed negligible cost in a subset, and an open question in the rest.
 
 \label{sec:disc-depth}
 Section~\ref{sec:arch} proposed that SPAN tolerates depth reduction because its attention mechanism carries no learned parameters: removing SPABs removes attention \emph{computation} but not learned attention \emph{capacity}, since there is none to lose. This account makes a testable directional prediction (an architecture with \emph{learned} attention/modulation should lose more from an equivalent depth cut), and Section~\ref{sec:extended-ablations} tested it directly against SAFMN and SMFANet. The prediction was not confirmed: neither architecture loses significantly more than SPAN does from a proportional depth halving in any of 22 backbone$\times$architecture combinations (all eleven recognition backbones, both SAFMN and SMFANet), and the diff-of-diffs is negative (SPAN losing as much or more) in 12/22. The parameter-free-attention account is therefore not supported by this test and is retracted as the explanation. A more likely account, consistent with both this ablation and the loss-ablation result below, is that at this extreme compression level and input resolution (20$\times$20\,px), the recognition-relevant signal in an ear crop is concentrated in relatively coarse, low-frequency structure that a shallower network already captures adequately, regardless of its attention mechanism's parameterization, making depth reduction broadly tolerable across this class of lightweight SR architectures rather than a property specific to SPAN. Unlike the parameter-free-attention account it replaces, this one was tested directly rather than left as an untested hypothesis (Section~\ref{sec:freq-ablation}): frequency-filtering span\_tiny's SR output and re-evaluating each backbone's already-trained recognition checkpoint shows accuracy collapsing to 2.9--5.1\% of baseline when the lowest 10\% of the spectrum is removed, but retaining 22.3--33.6\% of baseline when only the lowest 10\% is kept, with zero exceptions across all eleven backbones -- direct evidence of what the recognition model depends on, rather than an inference from a rejected alternative. A complementary spectral comparison, however, finds no corresponding difference in frequency content between the SR outputs of compressed and uncompressed models themselves, so this account is supported as a description of the recognition model's own input dependence, not as a demonstrated property of what depth compression removes from the image.
 
-Section~\ref{sec:res-loss} finds two distinct results that should not be conflated: on MobileNetV2, the identity-loss term \emph{significantly reduces} downstream accuracy (3/6 pairwise comparisons significant, 1/6 at trend level, corroborated independently by the $\lambda_{\text{identity}}$ sweep in Section~\ref{sec:recipe} on the same backbone); extending this ablation to ten further backbones (eleven in total) shows the effect is backbone-dependent rather than universal, echoed more weakly (one at trend level only) on two of the ten (ShuffleNetV2-1.0x, LCNet-100), and undetectable on the remaining eight, so it should be read as a real but backbone-dependent finding rather than either a MobileNetV2-specific artifact or a general property of the mechanism. The distillation term's own marginal contribution, by contrast, remains statistically indistinguishable from pixel-only training across all eleven backbones tested, TOST-confirmed equivalent on four of them (EfficientNet-B0, GhostNet-100, RegNetY-400MF, SqueezeNet-1.1). For the latter, null result, three explanations seem plausible: the pixel-reconstruction signal alone may already be close to sufficient at this parameter scale; seed-to-seed variance may exceed the true effect size; or, as Zhang et al.~\cite{zhang2024dukd} argue for SR distillation generally, a teacher's own output is only an approximation of the true HR image, which caps how much signal the distillation term can supply. The data collected here cannot distinguish between these. Neither result undermines the paper's central claim, which concerns architectural depth, not loss-function choice; span\_tiny's training recipe (Track B, pixel+distillation, $\lambda_{\text{identity}}{=}0$) remains justified independently by its role in stabilizing convergence for other architectures in the contextual comparison (Section~\ref{sec:res-context}) and by the identity-loss ablation's own negative finding for that specific term.
+Section~\ref{sec:res-loss} finds two distinct results that should not be conflated: on MobileNetV2, the identity-loss term \emph{significantly reduces} downstream accuracy (3/6 pairwise comparisons significant, 1/6 at trend level, corroborated independently by the $\lambda_{\text{identity}}$ sweep in Section~\ref{sec:recipe} on the same backbone); extending this ablation to eight further backbones (nine in total) shows the effect is backbone-dependent rather than universal, echoed more weakly (one at trend level only) on two of the eight (ShuffleNetV2-1.0x, LCNet-100), and undetectable on the remaining six, so it should be read as a real but backbone-dependent finding rather than either a MobileNetV2-specific artifact or a general property of the mechanism. The distillation term's own marginal contribution, by contrast, remains statistically indistinguishable from pixel-only training across all nine backbones tested, TOST-confirmed equivalent on three of them (EfficientNet-B0, RegNetY-400MF, SqueezeNet-1.1). For the latter, null result, three explanations seem plausible: the pixel-reconstruction signal alone may already be close to sufficient at this parameter scale; seed-to-seed variance may exceed the true effect size; or, as Zhang et al.~\cite{zhang2024dukd} argue for SR distillation generally, a teacher's own output is only an approximation of the true HR image, which caps how much signal the distillation term can supply. The data collected here cannot distinguish between these. Neither result undermines the paper's central claim, which concerns architectural depth, not loss-function choice; span\_tiny's training recipe (Track B, pixel+distillation, $\lambda_{\text{identity}}{=}0$) remains justified independently by its role in stabilizing convergence for other architectures in the contextual comparison (Section~\ref{sec:res-context}) and by the identity-loss ablation's own negative finding for that specific term.
 
 SMFANet failed to converge well under pixel-loss-only supervision (20.906\,dB, Table~\ref{tab:quality}) but recovered strongly under distillation supervision (+5.4\,dB). The marginal contribution of distillation to span\_tiny's own downstream accuracy was not statistically detectable, but this case shows that distillation supervision is not uniformly redundant across architectures at this extreme input resolution. Some architectures appear to depend on it to converge at all.
 
@@ -1126,7 +1125,7 @@ Two measurement-level limitations apply throughout. Latency figures (Table~\ref{
 
 Multiple-comparison correction throughout this paper uses Bonferroni~\cite{dunn1961multiple} rather than a less conservative alternative such as Holm-Bonferroni~\cite{holm1979sequential}, which controls the same family-wise error rate with uniformly higher power. Bonferroni was retained deliberately: it is simpler to verify by hand from a single multiplier ($p_{\text{Bonf}} = \min(1, p_{\text{raw}} \times n_{\text{comparisons}})$) than a sequential procedure, and, since every reported $p_{\text{Bonf}}$ in this paper is already conservative, switching corrections could in principle move some non-significant comparisons into significance but never the reverse. This paper's non-significant findings are therefore, if anything, understated rather than overstated by this choice, and its significant findings would remain significant under the less conservative alternative.
 
-Finally, the paper's main claim is validated specifically for the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this scope is not assumed to extend further: an auxiliary check on genuinely low-resolution real-world images (Section~\ref{sec:res-lr-holdout}) shows the opposite ordering on some recognition backbones, traced to a resolution mismatch between these images (all natively below the SR models' trained input size) and the training-time degradation. This is a boundary condition on where the claim has been shown to hold, not a refutation of it, but it means this paper does not provide evidence that span\_tiny or span\_baseline improves recognition on arbitrary real-world low-resolution ear images outside the synthetic-degradation regime studied here. An initial mobilenet\_v2-only screen was extended to all eleven recognition backbones at $n=5$ seeds each on this same 173-image holdout (Section~\ref{sec:res-lr-holdout}), which showed the reversal is not a general property of this regime: it reaches statistical significance on only one backbone (ResNet-18), is a non-significant nominal reversal on two more, and the remaining backbones show either no reversal or SR nominally \emph{helping} on this same holdout, at trend level for two of them (MobileNetV3-Small, LCNet-100) -- evidence that this boundary condition is backbone-dependent rather than a property of the real-low-resolution images or the SR reconstructions themselves. Gender accuracy on this holdout remains a mobilenet\_v2-only measurement not yet extended to the other ten backbones; since identity and gender labels are derived from the same per-subject image ranges on the same 173 images, this is not independent evidence from the identity-accuracy result above. The degradation-augmented mitigation (Section~\ref{sec:degradation-mitigation}) was subsequently extended to four further backbones (ResNet-18, EfficientNet-B0, GhostNet-100, ShuffleNetV2-1.0x), including the one backbone where the reversal is actually statistically solid: on ResNet-18, the mitigation does not help -- span\_baseline remains significantly worse than no-SR on both identity and gender accuracy under the degradation-augmented recipe, just as under the original recipe -- while two of the other three backbones (GhostNet-100, ShuffleNetV2-1.0x) show no reversal at all under this recipe, with SR helping significantly instead, and the fourth (EfficientNet-B0) shows no significant effect in either direction. The mitigation therefore remains partial and backbone-dependent rather than a general fix, but is no longer an untested question for the specific backbone where the underlying problem is most solidly established; the remaining six backbones are untested.
+Finally, the paper's main claim is validated specifically for the synthetic bicubic-downsampling regime defined in Section~\ref{sec:method}, and this scope should be stated plainly rather than assumed to extend further: an auxiliary check on genuinely low-resolution real-world images (Section~\ref{sec:res-lr-holdout}) shows the opposite ordering on some recognition backbones, traced to a resolution mismatch between these images (all natively below the SR models' trained input size) and the training-time degradation. This is a boundary condition on where the claim has been shown to hold, not a refutation of it, but it means this paper does not provide evidence that span\_tiny or span\_baseline improves recognition on arbitrary real-world low-resolution ear images outside the synthetic-degradation regime studied here. An initial mobilenet\_v2-only screen was extended to all eleven recognition backbones at $n=5$ seeds each on this same 173-image holdout (Section~\ref{sec:res-lr-holdout}), which showed the reversal is not a general property of this regime: it reaches statistical significance on only one backbone (ResNet-18), is a non-significant nominal reversal on two more, and the remaining backbones show either no reversal or SR nominally \emph{helping} on this same holdout, at trend level for two of them (MobileNetV3-Small, LCNet-100) -- evidence that this boundary condition is backbone-dependent rather than a property of the real-low-resolution images or the SR reconstructions themselves. Gender accuracy on this holdout remains a mobilenet\_v2-only measurement not yet extended to the other ten backbones; since identity and gender labels are derived from the same per-subject image ranges on the same 173 images, this is not independent evidence from the identity-accuracy result above. The degradation-augmented mitigation (Section~\ref{sec:degradation-mitigation}) was subsequently extended to four further backbones (ResNet-18, EfficientNet-B0, GhostNet-100, ShuffleNetV2-1.0x), including the one backbone where the reversal is actually statistically solid: on ResNet-18, the mitigation does not help -- span\_baseline remains significantly worse than no-SR on both identity and gender accuracy under the degradation-augmented recipe, just as under the original recipe -- while two of the other three backbones (GhostNet-100, ShuffleNetV2-1.0x) show no reversal at all under this recipe, with SR helping significantly instead, and the fourth (EfficientNet-B0) shows no significant effect in either direction. The mitigation therefore remains partial and backbone-dependent rather than a general fix, but is no longer an untested question for the specific backbone where the underlying problem is most solidly established; the remaining six backbones are untested.
 
 % ============================================================================
 \section{Conclusion}
@@ -1146,20 +1145,19 @@ Extending this work would involve latency measured on an actual edge device rath
 \begin{description}
 \item[Funding] The authors declare that no funding, grants, or other financial support was received for this research.
 \item[Conflict of interest] The authors have no relevant financial or non-financial interests to disclose.
-\item[Ethics approval and consent to participate] This study did not involve the collection of any new data from human subjects. All experiments were conducted on publicly available, previously published datasets (EarVN1.0, AWE/AWEx) that were de-identified by their original authors under their own data-collection protocols; no additional institutional ethics approval was required for this secondary use.
-\item[Consent for publication] Not applicable.
 \item[Data availability] EarVN1.0 is available via Mendeley Data (\url{https://doi.org/10.17632/yws3v3mwx3.4}) under the terms specified by the original authors~\cite{hoang2019earvn}, which reserve all rights to the database and prohibit commercial use or redistribution; access is therefore via the original repository only, not bundled with this paper. Corresponding author Vinh Truong Hoang is the creator of this dataset, noted here for transparency; EarVN1.0 was independently published and publicly available prior to this study, and its use here follows the same access terms available to any researcher. AWE/AWEx access requires a signed request form submitted to the University of Ljubljana ear-recognition research group, for research use only.
-\item[Materials availability] Not applicable.
 \item[Code availability] The code that supports the findings of this study is available from the corresponding author upon reasonable request.
+\item[Ethics approval] This study did not involve the collection of any new data from human subjects. All experiments were conducted on publicly available, previously published datasets (EarVN1.0, AWE/AWEx) that were de-identified by their original authors under their own data-collection protocols; no additional institutional ethics approval was required for this secondary use.
 \end{description}
 
 % ============================================================================
 \appendix
+\section{Supplementary material: additional ablation results}
 \label{sec:supplementary}
 
 The four ablations below test mechanisms considered as candidate improvements to span\_tiny's design but not adopted in the final recipe; each is discussed and interpreted in the main text (Sections~\ref{sec:novelty-ablations}--\ref{sec:extended-ablations}), with only the full per-backbone table moved here to keep the main text within length.
 
-\section*{Appendix A Feature-level distillation (``KD v2'')}
+\subsection{Feature-level distillation (``KD v2'')}
 
 \begin{table}[H]
 \centering
@@ -1184,7 +1182,7 @@ SqueezeNet-1.1      & 0.4352 & 0.4407 & 0.19  & 1.0    \\
 \end{tabular}
 \end{table}
 
-\section*{Appendix B Saliency-weighted identity-critical loss}
+\subsection{Saliency-weighted identity-critical loss}
 
 \begin{table}[H]
 \centering
@@ -1209,7 +1207,7 @@ SqueezeNet-1.1      & 0.4352 & 0.4364 & 0.10  & 1.0    \\
 \end{tabular}
 \end{table}
 
-\section*{Appendix C Learned/differentiable block pruning}
+\subsection{Learned/differentiable block pruning}
 
 \begin{table}[H]
 \centering
@@ -1234,7 +1232,7 @@ SqueezeNet-1.1      & 0.4352 & 0.4032 & $-$3.37 & \textbf{0.0050} \\
 \end{tabular}
 \end{table}
 
-\section*{Appendix D Attention-parameterization ablation}
+\subsection{Attention-parameterization ablation}
 
 \begin{table}[H]
 \centering
@@ -1261,31 +1259,7 @@ SqueezeNet-1.1      & 0.0122  & 0.0013  & 0.0144, $d{=}0.80$, $p{=}1.0$       & 
 }
 \end{table}
 
-\section*{Appendix E Depth sweep: full pairwise comparisons}
-\label{sec:supp-depth-sweep}
-
-Table~\ref{tab:depth-sweep-pairwise} in the main text (Section~\ref{sec:depth-sweep}) reports a verdict summary only. Table~\ref{tab:depth-sweep-pairwise-full} below reports the full effect sizes, Bonferroni-corrected $p$-values, and TOST $p$-values underlying that summary.
-
-\begin{table}[H]
-\centering
-\caption{Each block count vs.\ the 6-block (uncompressed) reference, EarVN1.0, $n=5$ seeds, five backbones -- full statistics for Table~\ref{tab:depth-sweep-pairwise}. $p_{\text{Bonf}}$ corrected across the 5-comparison family reported by each backbone's own aggregation (Section~\ref{sec:stats}).}
-\label{tab:depth-sweep-pairwise-full}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lccccc}
-\toprule
-Backbone & 1 vs.\ 6 & 2 vs.\ 6 & 3 vs.\ 6 & 4 vs.\ 6 & 5 vs.\ 6 \\
-\midrule
-MobileNetV2       & $d{=}{-}4.59$, $p_{\text{Bonf}}{=}0.0025$ & $d{=}{-}0.85$, $p_{\text{Bonf}}{=}0.659$ & $d{=}{-}0.29$, $p_{\text{Bonf}}{=}1.0$ (equiv.) & $d{=}{+}0.61$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{+}1.10$, $p_{\text{Bonf}}{=}0.350$ (equiv.) \\
-EfficientNet-B0   & $d{=}{-}2.54$, $p_{\text{Bonf}}{=}0.0237$ & $d{=}{-}0.28$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{-}3.17$, $p_{\text{Bonf}}{=}0.0104$ & $d{=}{-}0.71$, $p_{\text{Bonf}}{=}0.951$ (equiv.) & $d{=}{-}0.17$, $p_{\text{Bonf}}{=}1.0$ (equiv.) \\
-GhostNet-100      & $d{=}{-}1.33$, $p_{\text{Bonf}}{=}0.206$ & $d{=}{-}0.63$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{-}1.33$, $p_{\text{Bonf}}{=}0.203$ (equiv.) & $d{=}{+}0.20$, $p_{\text{Bonf}}{=}1.0$ (equiv.) & $d{=}{+}0.36$, $p_{\text{Bonf}}{=}1.0$ (equiv.) \\
-ResNet-18         & $d{=}{-}1.65$, $p_{\text{Bonf}}{=}0.106$ & $d{=}{-}0.63$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{-}0.45$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{-}0.08$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{-}0.19$, $p_{\text{Bonf}}{=}1.0$ \\
-ShuffleNetV2-1.0x & $d{=}{-}2.68$, $p_{\text{Bonf}}{=}0.0196$ & $d{=}{-}0.33$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{+}0.03$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{-}0.26$, $p_{\text{Bonf}}{=}1.0$ & $d{=}{-}0.17$, $p_{\text{Bonf}}{=}1.0$ \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}
-
-\section*{Appendix F Rank-5, AUC, and EER for the main comparison}
+\subsection{Rank-5, AUC, and EER for the main comparison}
 \label{sec:supp-biometric-metrics}
 
 Section~\ref{sec:stats} notes that rank-5 accuracy, AUC, and EER are computed and retained alongside rank-1 accuracy for every evaluation in this paper but not presented in the main text, which reports rank-1 identity accuracy throughout to keep the paper's length manageable. Table~\ref{tab:biometric-metrics} reports these three additional metrics for Table~\ref{tab:main}'s central comparison (\texttt{lr}, \texttt{span\_baseline}, \texttt{span\_tiny}; EarVN1.0, $n=5$ seeds, all eleven backbones), as mean (rank-5) or mean$\pm$std (AUC, EER) across seeds. These are reported descriptively, at the same $n=5$ seeds as Table~\ref{tab:main}, rather than re-analyzed with this paper's full paired-test/Bonferroni/TOST battery; the pattern across all three metrics is consistent with Table~\ref{tab:main}'s rank-1 finding throughout (small, inconsistently-signed \texttt{span\_tiny}-vs-\texttt{span\_baseline} differences relative to the \texttt{lr}-vs-SR gap), and no case shows a qualitatively different picture from rank-1 accuracy for any backbone.
@@ -1319,235 +1293,240 @@ SqueezeNet-1.1      & 0.6694 & 0.6980 & 0.6957 & 0.8072$\pm$0.0036 & 0.8189$\pm$
 
 % ============================================================================
 \begin{thebibliography}{99}
-\bibitem{mehta2023ear}
-Mehta, R., Singh, K.:
-2D Ear Recognition Using Data Augmentation and Deep CNN.
-In: Machine Vision and Augmented Intelligence, Springer, Singapore (2023)
-
-\bibitem{dong2016srcnn}
-Dong, C., Loy, C.C., He, K., Tang, X.:
-Image Super-Resolution Using Deep Convolutional Networks.
-IEEE Transactions on Pattern Analysis and Machine Intelligence \textbf{38}(2), 295--307 (2016)
-
-\bibitem{shi2016espcn}
-Shi, W., Caballero, J., Husz\'ar, F., Totz, J., Aitken, A.P., Bishop, R., Rueckert, D., Wang, Z.:
-Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 1874--1883 (2016)
-
-\bibitem{ledig2017srgan}
-Ledig, C., Theis, L., Husz\'ar, F., Caballero, J., Cunningham, A., Acosta, A., Aitken, A., Tejani, A., Totz, J., Wang, Z., Shi, W.:
-Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 4681--4690 (2017)
-
-\bibitem{wan2024span}
-Wan, C., Yu, H., Li, Z., Chen, Y., Zou, Y., Liu, Y., Yin, X., Zuo, K.:
-Swift Parameter-free Attention Network for Efficient Super-Resolution.
-In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE), pp.\ 6246--6256 (2024)
-
-\bibitem{hu2018senet}
-Hu, J., Shen, L., Sun, G.:
-Squeeze-and-Excitation Networks.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 7132--7141 (2018)
-
-\bibitem{kong2022rlfn}
-Kong, F., Li, M., Liu, S., Liu, D., He, J., Bai, Y., Chen, F., Fu, L.:
-Residual Local Feature Network for Efficient Super-Resolution.
-In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE) (2022)
-
-\bibitem{zhang2021ecbsr}
-Zhang, X., Zeng, H., Zhang, L.:
-Edge-oriented Convolution Block for Real-time Super Resolution on Mobile Devices.
-In: Proceedings of the 29th ACM International Conference on Multimedia, pp.\ 4034--4043 (2021)
-
-\bibitem{ding2021repvgg}
-Ding, X., Zhang, X., Ma, N., Han, J., Ding, G., Sun, J.:
-RepVGG: Making VGG-style ConvNets Great Again.
-In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 13733--13742 (2021)
-
-\bibitem{sun2023safmn}
-Sun, L., Dong, J., Tang, J., Pan, J.:
-Spatially-Adaptive Feature Modulation for Efficient Image Super-Resolution.
-In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp.\ 13190--13199 (2023)
-
-\bibitem{zheng2024smfanet}
-Zheng, M., Sun, L., Dong, J., Pan, J.:
-SMFANet: A Lightweight Self-Modulation Feature Aggregation Network for Efficient Image Super-Resolution.
-In: Computer Vision -- ECCV 2024, LNCS vol.\ 15108, Springer, Cham (2024)
-
-\bibitem{ataer2019identity}
-Ataer-Cansizoglu, E., Jones, M., Zhang, Z., Sullivan, A.:
-Verification of Very Low-Resolution Faces Using An Identity-Preserving Deep Face Super-Resolution Network.
-arXiv:1903.10974 (2019)
+% ============================================================================
+% Ordered alphabetically by first author's surname (per journal requirement),
+% not by citation order; \cite{} numbering updates automatically.
 
 \bibitem{alshazly2020unconstrained}
 Alshazly, H., Linse, C., Barth, E., Martinetz, T.:
 Deep Convolutional Neural Networks for Unconstrained Ear Recognition.
 IEEE Access \textbf{8}, 170295--170310 (2020)
 
-\bibitem{lendering2025edgeear}
-Lendering, C., Ribeiro, B.P., Emeršič, Ž., Peer, P.:
-EdgeEar: Efficient and Accurate Ear Recognition for Edge Devices.
-arXiv:2502.07734 (2025)
+\bibitem{ataer2019identity}
+Ataer-Cansizoglu, E., Jones, M., Zhang, Z., Sullivan, A.:
+Verification of Very Low-Resolution Faces Using An Identity-Preserving Deep Face Super-Resolution Network.
+arXiv:1903.10974 (2019)
 
 \bibitem{benzaoui2023survey}
 Benzaoui, A., Khaldi, Y., et al.:
 A Comprehensive Survey on Ear Recognition: Databases, Approaches, Comparative Analysis, and Open Challenges.
 Neurocomputing (2023)
 
-\bibitem{hoang2019earvn}
-Hoang, V.T.:
-EarVN1.0: A new large-scale ear images dataset in the wild.
-Data in Brief \textbf{27}, 104630 (2019). \url{https://doi.org/10.1016/j.dib.2019.104630}
-
-\bibitem{emersic2017ear}
-Emeršič, Ž., Štruc, V., Peer, P.:
-Ear Recognition: More than a Survey.
-Neurocomputing (2017)
-
-\bibitem{wang2016vlrr}
-Wang, Z., Chang, S., Yang, Y., Liu, D., Huang, T.S.:
-Studying Very Low Resolution Recognition Using Deep Networks.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 4792--4800 (2016)
-
-\bibitem{nguyen2011iris}
-Nguyen, K., Fookes, C., Sridharan, S., Denman, S.:
-Quality-Driven Super-Resolution for Less Constrained Iris Recognition at a Distance and on the Move.
-IEEE Transactions on Information Forensics and Security \textbf{6}(4), 1248--1258 (2011)
-
-\bibitem{ribeiro2019iris}
-Ribeiro, E., Uhl, A., Alonso-Fernandez, F.:
-Iris Super-Resolution Using CNNs: Is Photo-Realism Important to Iris Recognition?
-IET Biometrics \textbf{8}(1), 69--78 (2019)
-
-\bibitem{hinton2015distilling}
-Hinton, G., Vinyals, O., Dean, J.:
-Distilling the Knowledge in a Neural Network.
-arXiv:1503.02531 (2015)
-
-\bibitem{romero2015fitnets}
-Romero, A., Ballas, N., Kahou, S.E., Chassang, A., Gatta, C., Bengio, Y.:
-FitNets: Hints for Thin Deep Nets.
-In: Proceedings of the 3rd International Conference on Learning Representations (ICLR) (2015)
-
-\bibitem{lee2020privileged}
-Lee, W., Lee, J., Kim, D., Ham, B.:
-Learning with Privileged Information for Efficient Image Super-Resolution.
-In: Computer Vision -- ECCV 2020, LNCS vol.\ 12369, pp.\ 465--482, Springer, Cham (2020)
-
-\bibitem{zhang2024dukd}
-Zhang, Y., Li, W., Li, S., Hu, J., Chen, H., Wang, H., Tu, Z., Wang, W., Jing, B., Wang, Y.:
-Data Upcycling Knowledge Distillation for Image Super-Resolution.
-arXiv:2309.14162 (2023)
-
-\bibitem{sandler2018mobilenetv2}
-Sandler, M., Howard, A.G., Zhu, M., Zhmoginov, A., Chen, L.-C.:
-MobileNetV2: Inverted Residuals and Linear Bottlenecks.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 4510--4520 (2018)
-
-\bibitem{ma2018shufflenetv2}
-Ma, N., Zhang, X., Zheng, H.-T., Sun, J.:
-ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design.
-In: Computer Vision -- ECCV 2018, LNCS vol.\ 11218, pp.\ 122--138, Springer, Cham (2018)
-
-\bibitem{iandola2016squeezenet}
-Iandola, F.N., Han, S., Moskewicz, M.W., Ashraf, K., Dally, W.J., Keutzer, K.:
-SqueezeNet: AlexNet-level accuracy with 50x fewer parameters and $<$0.5MB model size.
-arXiv:1602.07360 (2016)
-
-\bibitem{tan2019efficientnet}
-Tan, M., Le, Q.:
-EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks.
-In: Proceedings of the 36th International Conference on Machine Learning (ICML), pp.\ 6105--6114 (2019)
-
-\bibitem{howard2019mobilenetv3}
-Howard, A., Sandler, M., Chu, G., Chen, L.-C., Chen, B., Tan, M., Wang, W., Zhu, Y., Pang, R., Vasudevan, V., Le, Q.V., Adam, H.:
-Searching for MobileNetV3.
-In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp.\ 1314--1324 (2019)
-
-\bibitem{han2020ghostnet}
-Han, K., Wang, Y., Tian, Q., Guo, J., Xu, C., Xu, C.:
-GhostNet: More Features from Cheap Operations.
-In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 1580--1589 (2020)
-
-\bibitem{radosavovic2020regnet}
-Radosavovic, I., Kosaraju, R.P., Girshick, R., He, K., Doll\'ar, P.:
-Designing Network Design Spaces.
-In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 10428--10436 (2020)
-
-\bibitem{vasu2023mobileone}
-Vasu, P.K.A., Gabriel, J., Zhu, J., Tuzel, O., Ranjan, A.:
-MobileOne: An Improved One millisecond Mobile Backbone.
-In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 7907--7917 (2023)
+\bibitem{cohen1988statistical}
+Cohen, J.:
+Statistical Power Analysis for the Behavioral Sciences, 2nd edn.
+Lawrence Erlbaum Associates, Hillsdale, NJ (1988)
 
 \bibitem{cui2021lcnet}
 Cui, C., Gao, T., Wei, S., Du, Y., Guo, R., Dong, S., Lu, B., Zhou, Y., Lv, X., Liu, Q., Hu, X., Yu, D., Ma, Y.:
 PP-LCNet: A Lightweight CPU Convolutional Neural Network.
 arXiv:2109.15099 (2021)
 
-\bibitem{he2016resnet}
-He, K., Zhang, X., Ren, S., Sun, J.:
-Deep Residual Learning for Image Recognition.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 770--778 (2016)
+\bibitem{ding2021repvgg}
+Ding, X., Zhang, X., Ma, N., Han, J., Ding, G., Sun, J.:
+RepVGG: Making VGG-style ConvNets Great Again.
+In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 13733--13742 (2021)
 
-\bibitem{cohen1988statistical}
-Cohen, J.:
-Statistical Power Analysis for the Behavioral Sciences, 2nd edn.
-Lawrence Erlbaum Associates, Hillsdale, NJ (1988)
+\bibitem{dong2016srcnn}
+Dong, C., Loy, C.C., He, K., Tang, X.:
+Image Super-Resolution Using Deep Convolutional Networks.
+IEEE Transactions on Pattern Analysis and Machine Intelligence \textbf{38}(2), 295--307 (2016)
 
 \bibitem{dunn1961multiple}
 Dunn, O.J.:
 Multiple Comparisons Among Means.
 Journal of the American Statistical Association \textbf{56}(293), 52--64 (1961)
 
-\bibitem{schuirmann1987tost}
-Schuirmann, D.J.:
-A comparison of the two one-sided tests procedure and the power approach for assessing the equivalence of average bioavailability.
-Journal of Pharmacokinetics and Biopharmaceutics \textbf{15}(6), 657--680 (1987)
+\bibitem{emersic2017ear}
+Emeršič, Ž., Štruc, V., Peer, P.:
+Ear Recognition: More than a Survey.
+Neurocomputing (2017)
 
-\bibitem{lakens2017equivalence}
-Lakens, D.:
-Equivalence Tests: A Practical Primer for t Tests, Correlations, and Meta-Analyses.
-Social Psychological and Personality Science \textbf{8}(4), 355--362 (2017)
+\bibitem{han2020ghostnet}
+Han, K., Wang, Y., Tian, Q., Guo, J., Xu, C., Xu, C.:
+GhostNet: More Features from Cheap Operations.
+In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 1580--1589 (2020)
 
-\bibitem{wang2004ssim}
-Wang, Z., Bovik, A.C., Sheikh, H.R., Simoncelli, E.P.:
-Image Quality Assessment: From Error Visibility to Structural Similarity.
-IEEE Transactions on Image Processing \textbf{13}(4), 600--612 (2004)
+\bibitem{he2016resnet}
+He, K., Zhang, X., Ren, S., Sun, J.:
+Deep Residual Learning for Image Recognition.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 770--778 (2016)
 
-\bibitem{zhang2018lpips}
-Zhang, R., Isola, P., Efros, A.A., Shechtman, E., Wang, O.:
-The Unreasonable Effectiveness of Deep Features as a Perceptual Metric.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 586--595 (2018)
+\bibitem{hinton2015distilling}
+Hinton, G., Vinyals, O., Dean, J.:
+Distilling the Knowledge in a Neural Network.
+arXiv:1503.02531 (2015)
 
-\bibitem{lim2017edsr}
-Lim, B., Son, S., Kim, H., Nah, S., Lee, K.M.:
-Enhanced Deep Residual Networks for Single Image Super-Resolution.
-In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops (CVPRW), pp.\ 1132--1140 (2017)
+\bibitem{hoang2019earvn}
+Hoang, V.T.:
+EarVN1.0: A new large-scale ear images dataset in the wild.
+Data in Brief \textbf{27}, 104630 (2019). \url{https://doi.org/10.1016/j.dib.2019.104630}
+
+\bibitem{holm1979sequential}
+Holm, S.:
+A Simple Sequentially Rejective Multiple Test Procedure.
+Scandinavian Journal of Statistics \textbf{6}(2), 65--70 (1979)
+
+\bibitem{howard2019mobilenetv3}
+Howard, A., Sandler, M., Chu, G., Chen, L.-C., Chen, B., Tan, M., Wang, W., Zhu, Y., Pang, R., Vasudevan, V., Le, Q.V., Adam, H.:
+Searching for MobileNetV3.
+In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp.\ 1314--1324 (2019)
+
+\bibitem{hu2018senet}
+Hu, J., Shen, L., Sun, G.:
+Squeeze-and-Excitation Networks.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 7132--7141 (2018)
+
+\bibitem{iandola2016squeezenet}
+Iandola, F.N., Han, S., Moskewicz, M.W., Ashraf, K., Dally, W.J., Keutzer, K.:
+SqueezeNet: AlexNet-level accuracy with 50x fewer parameters and $<$0.5MB model size.
+arXiv:1602.07360 (2016)
 
 \bibitem{kingma2015adam}
 Kingma, D.P., Ba, J.:
 Adam: A Method for Stochastic Optimization.
 In: Proceedings of the 3rd International Conference on Learning Representations (ICLR) (2015)
 
-\bibitem{zhang2021designing}
-Zhang, K., Liang, J., Van Gool, L., Timofte, R.:
-Designing a Practical Degradation Model for Deep Blind Image Super-Resolution.
-In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp. 4791--4800 (2021)
+\bibitem{kong2022rlfn}
+Kong, F., Li, M., Liu, S., Liu, D., He, J., Bai, Y., Chen, F., Fu, L.:
+Residual Local Feature Network for Efficient Super-Resolution.
+In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE) (2022)
 
-\bibitem{wang2021realesrgan}
-Wang, X., Xie, L., Dong, C., Shan, Y.:
-Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data.
-In: Proceedings of the IEEE/CVF International Conference on Computer Vision Workshops (ICCVW), pp. 1905--1914 (2021)
+\bibitem{lakens2017equivalence}
+Lakens, D.:
+Equivalence Tests: A Practical Primer for t Tests, Correlations, and Meta-Analyses.
+Social Psychological and Personality Science \textbf{8}(4), 355--362 (2017)
+
+\bibitem{ledig2017srgan}
+Ledig, C., Theis, L., Husz\'ar, F., Caballero, J., Cunningham, A., Acosta, A., Aitken, A., Tejani, A., Totz, J., Wang, Z., Shi, W.:
+Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 4681--4690 (2017)
+
+\bibitem{lee2020privileged}
+Lee, W., Lee, J., Kim, D., Ham, B.:
+Learning with Privileged Information for Efficient Image Super-Resolution.
+In: Computer Vision -- ECCV 2020, LNCS vol.\ 12369, pp.\ 465--482, Springer, Cham (2020)
+
+\bibitem{lendering2025edgeear}
+Lendering, C., Ribeiro, B.P., Emeršič, Ž., Peer, P.:
+EdgeEar: Efficient and Accurate Ear Recognition for Edge Devices.
+arXiv:2502.07734 (2025)
+
+\bibitem{lim2017edsr}
+Lim, B., Son, S., Kim, H., Nah, S., Lee, K.M.:
+Enhanced Deep Residual Networks for Single Image Super-Resolution.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops (CVPRW), pp.\ 1132--1140 (2017)
 
 \bibitem{liu2017slimming}
 Liu, Z., Li, J., Shen, Z., Huang, G., Yan, S., Zhang, C.:
 Learning Efficient Convolutional Networks through Network Slimming.
 In: Proceedings of the IEEE International Conference on Computer Vision (ICCV), pp.\ 2755--2763 (2017)
 
-\bibitem{holm1979sequential}
-Holm, S.:
-A Simple Sequentially Rejective Multiple Test Procedure.
-Scandinavian Journal of Statistics \textbf{6}(2), 65--70 (1979)
+\bibitem{ma2018shufflenetv2}
+Ma, N., Zhang, X., Zheng, H.-T., Sun, J.:
+ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design.
+In: Computer Vision -- ECCV 2018, LNCS vol.\ 11218, pp.\ 122--138, Springer, Cham (2018)
+
+\bibitem{mehta2023ear}
+Mehta, R., Singh, K.:
+2D Ear Recognition Using Data Augmentation and Deep CNN.
+In: Machine Vision and Augmented Intelligence, Springer, Singapore (2023)
+
+\bibitem{nguyen2011iris}
+Nguyen, K., Fookes, C., Sridharan, S., Denman, S.:
+Quality-Driven Super-Resolution for Less Constrained Iris Recognition at a Distance and on the Move.
+IEEE Transactions on Information Forensics and Security \textbf{6}(4), 1248--1258 (2011)
+
+\bibitem{radosavovic2020regnet}
+Radosavovic, I., Kosaraju, R.P., Girshick, R., He, K., Doll\'ar, P.:
+Designing Network Design Spaces.
+In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 10428--10436 (2020)
+
+\bibitem{ribeiro2019iris}
+Ribeiro, E., Uhl, A., Alonso-Fernandez, F.:
+Iris Super-Resolution Using CNNs: Is Photo-Realism Important to Iris Recognition?
+IET Biometrics \textbf{8}(1), 69--78 (2019)
+
+\bibitem{romero2015fitnets}
+Romero, A., Ballas, N., Kahou, S.E., Chassang, A., Gatta, C., Bengio, Y.:
+FitNets: Hints for Thin Deep Nets.
+In: Proceedings of the 3rd International Conference on Learning Representations (ICLR) (2015)
+
+\bibitem{sandler2018mobilenetv2}
+Sandler, M., Howard, A.G., Zhu, M., Zhmoginov, A., Chen, L.-C.:
+MobileNetV2: Inverted Residuals and Linear Bottlenecks.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 4510--4520 (2018)
+
+\bibitem{schuirmann1987tost}
+Schuirmann, D.J.:
+A comparison of the two one-sided tests procedure and the power approach for assessing the equivalence of average bioavailability.
+Journal of Pharmacokinetics and Biopharmaceutics \textbf{15}(6), 657--680 (1987)
+
+\bibitem{shi2016espcn}
+Shi, W., Caballero, J., Husz\'ar, F., Totz, J., Aitken, A.P., Bishop, R., Rueckert, D., Wang, Z.:
+Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 1874--1883 (2016)
+
+\bibitem{sun2023safmn}
+Sun, L., Dong, J., Tang, J., Pan, J.:
+Spatially-Adaptive Feature Modulation for Efficient Image Super-Resolution.
+In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp.\ 13190--13199 (2023)
+
+\bibitem{tan2019efficientnet}
+Tan, M., Le, Q.:
+EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks.
+In: Proceedings of the 36th International Conference on Machine Learning (ICML), pp.\ 6105--6114 (2019)
+
+\bibitem{vasu2023mobileone}
+Vasu, P.K.A., Gabriel, J., Zhu, J., Tuzel, O., Ranjan, A.:
+MobileOne: An Improved One millisecond Mobile Backbone.
+In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 7907--7917 (2023)
+
+\bibitem{wan2024span}
+Wan, C., Yu, H., Li, Z., Chen, Y., Zou, Y., Liu, Y., Yin, X., Zuo, K.:
+Swift Parameter-free Attention Network for Efficient Super-Resolution.
+In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE), pp.\ 6246--6256 (2024)
+
+\bibitem{wang2021realesrgan}
+Wang, X., Xie, L., Dong, C., Shan, Y.:
+Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data.
+In: Proceedings of the IEEE/CVF International Conference on Computer Vision Workshops (ICCVW), pp. 1905--1914 (2021)
+
+\bibitem{wang2004ssim}
+Wang, Z., Bovik, A.C., Sheikh, H.R., Simoncelli, E.P.:
+Image Quality Assessment: From Error Visibility to Structural Similarity.
+IEEE Transactions on Image Processing \textbf{13}(4), 600--612 (2004)
+
+\bibitem{wang2016vlrr}
+Wang, Z., Chang, S., Yang, Y., Liu, D., Huang, T.S.:
+Studying Very Low Resolution Recognition Using Deep Networks.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 4792--4800 (2016)
+
+\bibitem{zhang2021designing}
+Zhang, K., Liang, J., Van Gool, L., Timofte, R.:
+Designing a Practical Degradation Model for Deep Blind Image Super-Resolution.
+In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp. 4791--4800 (2021)
+
+\bibitem{zhang2018lpips}
+Zhang, R., Isola, P., Efros, A.A., Shechtman, E., Wang, O.:
+The Unreasonable Effectiveness of Deep Features as a Perceptual Metric.
+In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp.\ 586--595 (2018)
+
+\bibitem{zhang2021ecbsr}
+Zhang, X., Zeng, H., Zhang, L.:
+Edge-oriented Convolution Block for Real-time Super Resolution on Mobile Devices.
+In: Proceedings of the 29th ACM International Conference on Multimedia, pp.\ 4034--4043 (2021)
+
+\bibitem{zhang2024dukd}
+Zhang, Y., Li, W., Li, S., Hu, J., Chen, H., Wang, H., Tu, Z., Wang, W., Jing, B., Wang, Y.:
+Data Upcycling Knowledge Distillation for Image Super-Resolution.
+arXiv:2309.14162 (2023)
+
+\bibitem{zheng2024smfanet}
+Zheng, M., Sun, L., Dong, J., Pan, J.:
+SMFANet: A Lightweight Self-Modulation Feature Aggregation Network for Efficient Image Super-Resolution.
+In: Computer Vision -- ECCV 2024, LNCS vol.\ 15108, Springer, Cham (2024)
+
 \end{thebibliography}
 
 \end{document}
