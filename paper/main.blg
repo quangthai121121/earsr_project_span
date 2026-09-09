@@ -1,0 +1,82 @@
+This is BibTeX, Version 0.99e (TeX Live 2026)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: main.aux
+The style file: sn-vancouver-num.bst
+Reallocated glb_str_ptr (elt_size=4) to 20 items from 10.
+Reallocated global_strs (elt_size=200001) to 20 items from 10.
+Reallocated glb_str_end (elt_size=4) to 20 items from 10.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Database file #1: references.bib
+sn-vancouver-num.bst [2024/07/19 v1.1 Vancouver bibliography style]
+Warning--empty pages in mehta2023ear
+Warning--empty pages in kong2022rlfn
+Warning--empty pages in zheng2024smfanet
+Warning--empty author and editor in ataer2019identity
+Warning--missing publisher in ataer2019identity
+Warning--empty author and editor in lendering2025edgeear
+Warning--missing publisher in lendering2025edgeear
+Warning--empty pages in emersic2023uerc
+Warning--empty author and editor in peddi2025proton
+Warning--missing publisher in peddi2025proton
+Warning--empty author and editor in arun2025vitear
+Warning--missing publisher in arun2025vitear
+Warning--empty author and editor in ozturk2025bilateral
+Warning--missing publisher in ozturk2025bilateral
+Warning--empty pages in mohamed2024earbiometrics
+Warning--empty pages in ren2025ntire
+Warning--empty author and editor in khatami2025ibmdn
+Warning--missing publisher in khatami2025ibmdn
+Warning--empty pages in aalishah2025mambalitesr
+Warning--empty author and editor in hinton2015distilling
+Warning--missing publisher in hinton2015distilling
+Warning--empty pages in romero2015fitnets
+Warning--empty author and editor in zhang2024dukd
+Warning--missing publisher in zhang2024dukd
+Warning--empty pages in jiang2024mtkd
+Warning--empty author and editor in iandola2016squeezenet
+Warning--missing publisher in iandola2016squeezenet
+Warning--empty author and editor in cui2021lcnet
+Warning--missing publisher in cui2021lcnet
+Warning--empty pages in kingma2015adam
+You've used 59 entries,
+            3506 wiz_defined-function locations,
+            1036 strings with 17114 characters,
+and the built_in function-call counts, 94461 in all, are:
+= -- 11346
+> -- 1045
+< -- 28
++ -- 790
+- -- 246
+* -- 7566
+:= -- 10242
+add.period$ -- 252
+call.type$ -- 59
+change.case$ -- 78
+chr.to.int$ -- 6
+cite$ -- 89
+duplicate$ -- 7345
+empty$ -- 9000
+format.name$ -- 367
+if$ -- 22171
+int.to.chr$ -- 0
+int.to.str$ -- 59
+missing$ -- 642
+newline$ -- 321
+num.names$ -- 118
+pop$ -- 1446
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 0
+skip$ -- 1436
+stack$ -- 0
+substring$ -- 16549
+swap$ -- 1651
+text.length$ -- 26
+text.prefix$ -- 0
+top$ -- 1
+type$ -- 0
+warning$ -- 30
+while$ -- 542
+width$ -- 61
+write$ -- 948
+(There were 30 warnings)

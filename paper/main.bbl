@@ -1,0 +1,321 @@
+\begin{thebibliography}{10}
+\providecommand{\doi}[1]{\url{https://doi.org/#1}}
+\bibcommenthead
+
+\bibitem[\protect\citeauthoryear{Mehta and Singh}{2023}]{mehta2023ear}
+Mehta R, Singh K.
+\newblock 2D Ear Recognition Using Data Augmentation and Deep CNN.
+\newblock In: Machine Vision and Augmented Intelligence. Singapore: Springer; 2023. \doi{10.1007/978-981-99-0189-0_36}.
+
+\bibitem[\protect\citeauthoryear{Dong et~al.}{2016}]{dong2016srcnn}
+Dong C, Loy CC, He K, Tang X.
+\newblock Image Super-Resolution Using Deep Convolutional Networks.
+\newblock IEEE Transactions on Pattern Analysis and Machine Intelligence. 2016;38(2):295--307.
+\newblock \doi{10.1109/tpami.2015.2439281}.
+
+\bibitem[\protect\citeauthoryear{Shi et~al.}{2016}]{shi2016espcn}
+Shi W, Caballero J, Husz{\'a}r F, Totz J, Aitken AP, Bishop R, et~al.
+\newblock Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2016. p. 1874--1883.
+\newblock \doi{10.1109/cvpr.2016.207}.
+
+\bibitem[\protect\citeauthoryear{Ledig et~al.}{2017}]{ledig2017srgan}
+Ledig C, Theis L, Husz{\'a}r F, Caballero J, Cunningham A, Acosta A, et~al.
+\newblock Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2017. p. 4681--4690.
+\newblock \doi{10.1109/cvpr.2017.19}.
+
+\bibitem[\protect\citeauthoryear{Wan et~al.}{2024}]{wan2024span}
+Wan C, Yu H, Li Z, Chen Y, Zou Y, Liu Y, et~al.
+\newblock Swift Parameter-free Attention Network for Efficient Super-Resolution.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE). IEEE; 2024. p. 6246--6256.
+\newblock \doi{10.1109/cvprw63382.2024.00628}.
+
+\bibitem[\protect\citeauthoryear{Hu et~al.}{2018}]{hu2018senet}
+Hu J, Shen L, Sun G.
+\newblock Squeeze-and-Excitation Networks.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2018. p. 7132--7141.
+\newblock \doi{10.1109/cvpr.2018.00745}.
+
+\bibitem[\protect\citeauthoryear{Kong et~al.}{2022}]{kong2022rlfn}
+Kong F, Li M, Liu S, Liu D, He J, Bai Y, et~al.
+\newblock Residual Local Feature Network for Efficient Super-Resolution.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE). IEEE; 2022. \doi{10.1109/cvprw56347.2022.00092}.
+
+\bibitem[\protect\citeauthoryear{Zhang et~al.}{2021}]{zhang2021ecbsr}
+Zhang X, Zeng H, Zhang L.
+\newblock Edge-oriented Convolution Block for Real-time Super Resolution on Mobile Devices.
+\newblock In: Proceedings of the 29th ACM International Conference on Multimedia. ACM; 2021. p. 4034--4043.
+\newblock \doi{10.1145/3474085.3475291}.
+
+\bibitem[\protect\citeauthoryear{Ding et~al.}{2021}]{ding2021repvgg}
+Ding X, Zhang X, Ma N, Han J, Ding G, Sun J.
+\newblock {RepVGG}: Making {VGG}-style {ConvNets} Great Again.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2021. p. 13733--13742.
+\newblock \doi{10.1109/cvpr46437.2021.01352}.
+
+\bibitem[\protect\citeauthoryear{Sun et~al.}{2023}]{sun2023safmn}
+Sun L, Dong J, Tang J, Pan J.
+\newblock Spatially-Adaptive Feature Modulation for Efficient Image Super-Resolution.
+\newblock In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV). IEEE; 2023. p. 13190--13199.
+\newblock \doi{10.1109/iccv51070.2023.01213}.
+
+\bibitem[\protect\citeauthoryear{Zheng et~al.}{2024}]{zheng2024smfanet}
+Zheng M, Sun L, Dong J, Pan J.
+\newblock {SMFANet}: A Lightweight Self-Modulation Feature Aggregation Network for Efficient Image Super-Resolution.
+\newblock In: Computer Vision -- ECCV 2024. vol. 15108 of LNCS. Cham: Springer; 2024. \doi{10.1007/978-3-031-72973-7_21}.
+
+\bibitem[\protect\citeauthoryear{Ataer-Cansizoglu et~al.}{2019}]{ataer2019identity}
+Ataer-Cansizoglu E, Jones M, Zhang Z, Sullivan A.: Verification of Very Low-Resolution Faces Using An Identity-Preserving Deep Face Super-Resolution Network.
+\newblock ArXiv:1903.10974.
+
+\bibitem[\protect\citeauthoryear{Alshazly et~al.}{2020}]{alshazly2020unconstrained}
+Alshazly H, Linse C, Barth E, Martinetz T.
+\newblock Deep Convolutional Neural Networks for Unconstrained Ear Recognition.
+\newblock IEEE Access. 2020;8:170295--170310.
+\newblock \doi{10.1109/access.2020.3024116}.
+
+\bibitem[\protect\citeauthoryear{Lendering et~al.}{2025}]{lendering2025edgeear}
+Lendering C, Ribeiro BP, Emer{\v{s}}i{\v{c}} {\v{Z}}, Peer P.: {EdgeEar}: Efficient and Accurate Ear Recognition for Edge Devices.
+\newblock ArXiv:2502.07734.
+
+\bibitem[\protect\citeauthoryear{Emer{\v{s}}i{\v{c}} et~al.}{2023}]{emersic2023uerc}
+Emer{\v{s}}i{\v{c}} {\v{Z}}, et~al.
+\newblock The Unconstrained Ear Recognition Challenge 2023: Maximizing Performance and Minimizing Bias.
+\newblock In: Proceedings of the IEEE International Joint Conference on Biometrics (IJCB). IEEE; 2023. \doi{10.1109/ijcb57857.2023.10449062}.
+
+\bibitem[\protect\citeauthoryear{Benzaoui et~al.}{2023}]{benzaoui2023survey}
+Benzaoui A, Khaldi Y, et~al.
+\newblock A Comprehensive Survey on Ear Recognition: Databases, Approaches, Comparative Analysis, and Open Challenges.
+\newblock Neurocomputing. 2023;\doi{10.1016/j.neucom.2023.03.040}.
+
+\bibitem[\protect\citeauthoryear{Peddi et~al.}{2025}]{peddi2025proton}
+Peddi S, Bathini S, Balasubramanian A, Sarma M, Samanta D.: {ProtoN}: Prototype Node Graph Neural Network for Unconstrained Multi-Impression Ear Recognition.
+\newblock ArXiv:2508.04381.
+
+\bibitem[\protect\citeauthoryear{Arun et~al.}{2025}]{arun2025vitear}
+Arun D, Ozturk K, Bowyer KW, Flynn P.: Improved Ear Verification with Vision Transformers and Overlapping Patches.
+\newblock ArXiv:2503.23275.
+
+\bibitem[\protect\citeauthoryear{Ozturk et~al.}{2025}]{ozturk2025bilateral}
+Ozturk K, Arun D, Bowyer KW, Flynn P.: How Does Bilateral Ear Symmetry Affect Deep Ear Features?
+\newblock ArXiv:2508.04614.
+
+\bibitem[\protect\citeauthoryear{Mohamed et~al.}{2024}]{mohamed2024earbiometrics}
+Mohamed Y, Youssef Z, Heakl A, Zaky A.
+\newblock Advancing Ear Biometrics: Enhancing Accuracy and Robustness through Deep Learning.
+\newblock In: International IEEE Conference on Intelligent Methods, Systems, and Applications (IMSA). IEEE; 2024. \doi{10.1109/imsa61967.2024.10652851}.
+
+\bibitem[\protect\citeauthoryear{Hoang}{2019}]{hoang2019earvn}
+Hoang VT.
+\newblock {EarVN1.0}: A new large-scale ear images dataset in the wild.
+\newblock Data in Brief. 2019;27:104630.
+\newblock \doi{10.1016/j.dib.2019.104630}.
+
+\bibitem[\protect\citeauthoryear{Emer{\v{s}}i{\v{c}} et~al.}{2017}]{emersic2017ear}
+Emer{\v{s}}i{\v{c}} {\v{Z}}, {\v{S}}truc V, Peer P.
+\newblock Ear Recognition: More than a Survey.
+\newblock Neurocomputing. 2017;\doi{10.1016/j.neucom.2016.08.139}.
+
+\bibitem[\protect\citeauthoryear{Ren et~al.}{2024}]{ren2024ntire}
+Ren B, Li Y, Mehta N, Timofte R, et~al.
+\newblock The Ninth {NTIRE} 2024 Efficient Super-Resolution Challenge Report.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE); 2024. p. 6595--6631.
+
+\bibitem[\protect\citeauthoryear{Ren et~al.}{2025}]{ren2025ntire}
+Ren B, Guo H, Sun L, Wu Z, Timofte R, et~al.
+\newblock The Tenth {NTIRE} 2025 Efficient Super-Resolution Challenge Report.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW, NTIRE); 2025. .
+
+\bibitem[\protect\citeauthoryear{Khatami-Rizi and Mahmoudi-Aznaveh}{2025}]{khatami2025ibmdn}
+Khatami-Rizi A, Mahmoudi-Aznaveh A.: Involution and {BSConv} Multi-Depth Distillation Network for Lightweight Image Super-Resolution.
+\newblock ArXiv:2503.14779.
+
+\bibitem[\protect\citeauthoryear{Cao et~al.}{2024}]{cao2024hasn}
+Cao W, Lei X, Shi J, Liang W, Liu J, Bai Z.
+\newblock {HASN}: Hybrid Attention Separable Network for Efficient Image Super-Resolution.
+\newblock The Visual Computer. 2024;\doi{10.1007/s00371-024-03610-0}.
+
+\bibitem[\protect\citeauthoryear{Aalishah et~al.}{2025}]{aalishah2025mambalitesr}
+Aalishah R, Navardi M, Mohsenin T.
+\newblock {MambaLiteSR}: Image Super-Resolution with Low-Rank Mamba using Knowledge Distillation.
+\newblock In: Proceedings of the 26th International Symposium on Quality Electronic Design (ISQED). IEEE; 2025. \doi{10.1109/isqed65160.2025.11014425}.
+
+\bibitem[\protect\citeauthoryear{M{\"o}ller et~al.}{2025}]{moller2025lronly}
+M{\"o}ller B, G{\"o}rnhardt L, Fingscheidt T.
+\newblock A Lightweight Image Super-Resolution Transformer Trained on Low-Resolution Images Only.
+\newblock Procedia Computer Science. 2025;\doi{10.1016/j.procs.2025.07.141}.
+
+\bibitem[\protect\citeauthoryear{Wang et~al.}{2016}]{wang2016vlrr}
+Wang Z, Chang S, Yang Y, Liu D, Huang TS.
+\newblock Studying Very Low Resolution Recognition Using Deep Networks.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2016. p. 4792--4800.
+\newblock \doi{10.1109/cvpr.2016.518}.
+
+\bibitem[\protect\citeauthoryear{Nguyen et~al.}{2011}]{nguyen2011iris}
+Nguyen K, Fookes C, Sridharan S, Denman S.
+\newblock Quality-Driven Super-Resolution for Less Constrained Iris Recognition at a Distance and on the Move.
+\newblock IEEE Transactions on Information Forensics and Security. 2011;6(4):1248--1258.
+\newblock \doi{10.1109/tifs.2011.2159597}.
+
+\bibitem[\protect\citeauthoryear{Ribeiro et~al.}{2019}]{ribeiro2019iris}
+Ribeiro E, Uhl A, Alonso-Fernandez F.
+\newblock Iris Super-Resolution Using {CNNs}: Is Photo-Realism Important to Iris Recognition?
+\newblock IET Biometrics. 2019;8(1):69--78.
+\newblock \doi{10.1049/iet-bmt.2018.5146}.
+
+\bibitem[\protect\citeauthoryear{Hinton et~al.}{2015}]{hinton2015distilling}
+Hinton G, Vinyals O, Dean J.: Distilling the Knowledge in a Neural Network.
+\newblock ArXiv:1503.02531.
+
+\bibitem[\protect\citeauthoryear{Romero et~al.}{2015}]{romero2015fitnets}
+Romero A, Ballas N, Kahou SE, Chassang A, Gatta C, Bengio Y.
+\newblock {FitNets}: Hints for Thin Deep Nets.
+\newblock In: Proceedings of the 3rd International Conference on Learning Representations (ICLR); 2015. .
+
+\bibitem[\protect\citeauthoryear{Lee et~al.}{2020}]{lee2020privileged}
+Lee W, Lee J, Kim D, Ham B.
+\newblock Learning with Privileged Information for Efficient Image Super-Resolution.
+\newblock In: Computer Vision -- ECCV 2020. vol. 12369 of LNCS. Cham: Springer; 2020. p. 465--482.
+\newblock \doi{10.1007/978-3-030-58586-0_28}.
+
+\bibitem[\protect\citeauthoryear{Zhang et~al.}{2023}]{zhang2024dukd}
+Zhang Y, Li W, Li S, Hu J, Chen H, Wang H, et~al.: Data Upcycling Knowledge Distillation for Image Super-Resolution.
+\newblock ArXiv:2309.14162.
+
+\bibitem[\protect\citeauthoryear{Jiang et~al.}{2024}]{jiang2024mtkd}
+Jiang Y, Feng C, Zhang F, Bull D.
+\newblock {MTKD}: Multi-Teacher Knowledge Distillation for Image Super-Resolution.
+\newblock In: Computer Vision -- ECCV 2024. Cham: Springer; 2024. \doi{10.1007/978-3-031-72933-1_21}.
+
+\bibitem[\protect\citeauthoryear{Mansourian et~al.}{2025}]{mansourian2025kdsurvey}
+Mansourian AM, Ahmadi R, Ghafouri M, Babaei AM, Golezani EB, Ghamchi ZY, et~al.
+\newblock A Comprehensive Survey on Knowledge Distillation.
+\newblock Transactions on Machine Learning Research. 2025;.
+
+\bibitem[\protect\citeauthoryear{Sandler et~al.}{2018}]{sandler2018mobilenetv2}
+Sandler M, Howard AG, Zhu M, Zhmoginov A, Chen LC.
+\newblock {MobileNetV2}: Inverted Residuals and Linear Bottlenecks.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2018. p. 4510--4520.
+\newblock \doi{10.1109/cvpr.2018.00474}.
+
+\bibitem[\protect\citeauthoryear{Ma et~al.}{2018}]{ma2018shufflenetv2}
+Ma N, Zhang X, Zheng HT, Sun J.
+\newblock {ShuffleNet V2}: Practical Guidelines for Efficient {CNN} Architecture Design.
+\newblock In: Computer Vision -- ECCV 2018. vol. 11218 of LNCS. Cham: Springer; 2018. p. 122--138.
+\newblock \doi{10.1007/978-3-030-01264-9_8}.
+
+\bibitem[\protect\citeauthoryear{Iandola et~al.}{2016}]{iandola2016squeezenet}
+Iandola FN, Han S, Moskewicz MW, Ashraf K, Dally WJ, Keutzer K.: {SqueezeNet}: {AlexNet}-level accuracy with 50x fewer parameters and $<$0.5{MB} model size.
+\newblock ArXiv:1602.07360.
+
+\bibitem[\protect\citeauthoryear{Tan and Le}{2019}]{tan2019efficientnet}
+Tan M, Le Q.
+\newblock {EfficientNet}: Rethinking Model Scaling for Convolutional Neural Networks.
+\newblock In: Proceedings of the 36th International Conference on Machine Learning (ICML); 2019. p. 6105--6114.
+
+\bibitem[\protect\citeauthoryear{Howard et~al.}{2019}]{howard2019mobilenetv3}
+Howard A, Sandler M, Chu G, Chen LC, Chen B, Tan M, et~al.
+\newblock Searching for {MobileNetV3}.
+\newblock In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV). IEEE; 2019. p. 1314--1324.
+\newblock \doi{10.1109/iccv.2019.00140}.
+
+\bibitem[\protect\citeauthoryear{Han et~al.}{2020}]{han2020ghostnet}
+Han K, Wang Y, Tian Q, Guo J, Xu C, Xu C.
+\newblock {GhostNet}: More Features from Cheap Operations.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2020. p. 1580--1589.
+\newblock \doi{10.1109/cvpr42600.2020.00165}.
+
+\bibitem[\protect\citeauthoryear{Radosavovic et~al.}{2020}]{radosavovic2020regnet}
+Radosavovic I, Kosaraju RP, Girshick R, He K, Doll{\'a}r P.
+\newblock Designing Network Design Spaces.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2020. p. 10428--10436.
+\newblock \doi{10.1109/cvpr42600.2020.01044}.
+
+\bibitem[\protect\citeauthoryear{Vasu et~al.}{2023}]{vasu2023mobileone}
+Vasu PKA, Gabriel J, Zhu J, Tuzel O, Ranjan A.
+\newblock {MobileOne}: An Improved One Millisecond Mobile Backbone.
+\newblock In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2023. p. 7907--7917.
+\newblock \doi{10.1109/cvpr52729.2023.00764}.
+
+\bibitem[\protect\citeauthoryear{Cui et~al.}{2021}]{cui2021lcnet}
+Cui C, Gao T, Wei S, Du Y, Guo R, Dong S, et~al.: {PP-LCNet}: A Lightweight {CPU} Convolutional Neural Network.
+\newblock ArXiv:2109.15099.
+
+\bibitem[\protect\citeauthoryear{He et~al.}{2016}]{he2016resnet}
+He K, Zhang X, Ren S, Sun J.
+\newblock Deep Residual Learning for Image Recognition.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2016. p. 770--778.
+\newblock \doi{10.1109/cvpr.2016.90}.
+
+\bibitem[\protect\citeauthoryear{Cohen}{1988}]{cohen1988statistical}
+Cohen J.
+\newblock Statistical Power Analysis for the Behavioral Sciences.
+\newblock 2nd ed. Hillsdale, NJ: Elsevier; 1988.
+\newblock \doi{10.1016/c2013-0-10517-x}.
+
+\bibitem[\protect\citeauthoryear{Dunn}{1961}]{dunn1961multiple}
+Dunn OJ.
+\newblock Multiple Comparisons Among Means.
+\newblock Journal of the American Statistical Association. 1961;56(293):52--64.
+\newblock \doi{10.1080/01621459.1961.10482090}.
+
+\bibitem[\protect\citeauthoryear{Schuirmann}{1987}]{schuirmann1987tost}
+Schuirmann DJ.
+\newblock A Comparison of the Two One-Sided Tests Procedure and the Power Approach for Assessing the Equivalence of Average Bioavailability.
+\newblock Journal of Pharmacokinetics and Biopharmaceutics. 1987;15(6):657--680.
+\newblock \doi{10.1007/bf01068419}.
+
+\bibitem[\protect\citeauthoryear{Lakens}{2017}]{lakens2017equivalence}
+Lakens D.
+\newblock Equivalence Tests: A Practical Primer for t Tests, Correlations, and Meta-Analyses.
+\newblock Social Psychological and Personality Science. 2017;8(4):355--362.
+\newblock \doi{10.1177/1948550617697177}.
+
+\bibitem[\protect\citeauthoryear{Wang et~al.}{2004}]{wang2004ssim}
+Wang Z, Bovik AC, Sheikh HR, Simoncelli EP.
+\newblock Image Quality Assessment: From Error Visibility to Structural Similarity.
+\newblock IEEE Transactions on Image Processing. 2004;13(4):600--612.
+\newblock \doi{10.1109/tip.2003.819861}.
+
+\bibitem[\protect\citeauthoryear{Zhang et~al.}{2018}]{zhang2018lpips}
+Zhang R, Isola P, Efros AA, Shechtman E, Wang O.
+\newblock The Unreasonable Effectiveness of Deep Features as a Perceptual Metric.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR). IEEE; 2018. p. 586--595.
+\newblock \doi{10.1109/cvpr.2018.00068}.
+
+\bibitem[\protect\citeauthoryear{Lim et~al.}{2017}]{lim2017edsr}
+Lim B, Son S, Kim H, Nah S, Lee KM.
+\newblock Enhanced Deep Residual Networks for Single Image Super-Resolution.
+\newblock In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops (CVPRW). IEEE; 2017. p. 1132--1140.
+\newblock \doi{10.1109/cvprw.2017.151}.
+
+\bibitem[\protect\citeauthoryear{Kingma and Ba}{2015}]{kingma2015adam}
+Kingma DP, Ba J.
+\newblock Adam: A Method for Stochastic Optimization.
+\newblock In: Proceedings of the 3rd International Conference on Learning Representations (ICLR); 2015. .
+
+\bibitem[\protect\citeauthoryear{Zhang et~al.}{2021}]{zhang2021designing}
+Zhang K, Liang J, Van~Gool L, Timofte R.
+\newblock Designing a Practical Degradation Model for Deep Blind Image Super-Resolution.
+\newblock In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV). IEEE; 2021. p. 4791--4800.
+\newblock \doi{10.1109/iccv48922.2021.00475}.
+
+\bibitem[\protect\citeauthoryear{Wang et~al.}{2021}]{wang2021realesrgan}
+Wang X, Xie L, Dong C, Shan Y.
+\newblock {Real-ESRGAN}: Training Real-World Blind Super-Resolution with Pure Synthetic Data.
+\newblock In: Proceedings of the IEEE/CVF International Conference on Computer Vision Workshops (ICCVW). IEEE; 2021. p. 1905--1914.
+\newblock \doi{10.1109/iccvw54120.2021.00217}.
+
+\bibitem[\protect\citeauthoryear{Liu et~al.}{2017}]{liu2017slimming}
+Liu Z, Li J, Shen Z, Huang G, Yan S, Zhang C.
+\newblock Learning Efficient Convolutional Networks through Network Slimming.
+\newblock In: Proceedings of the IEEE International Conference on Computer Vision (ICCV). IEEE; 2017. p. 2755--2763.
+\newblock \doi{10.1109/iccv.2017.298}.
+
+\bibitem[\protect\citeauthoryear{Holm}{1979}]{holm1979sequential}
+Holm S.
+\newblock A Simple Sequentially Rejective Multiple Test Procedure.
+\newblock Scandinavian Journal of Statistics. 1979;6(2):65--70.
+
+\end{thebibliography}
