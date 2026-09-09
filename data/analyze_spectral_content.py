@@ -36,6 +36,17 @@ DOMAINS = {
     "sr_baseline": "span_baseline",
     "sr_improved": "span_tiny",
     "sr_span_large": "span_large",
+    # [MỚI — kiểm chứng Nghi ngờ B: liệu SR output của span_tiny/SAFMN/SMFANet
+    # có "giống nhau về mặt thống kê ảnh" chỉ vì cùng train qua 1 teacher
+    # distillation chung hay không (khác Nghi ngờ A -- backbone tự thiên vị
+    # tần số thấp -- đã bác bỏ bằng control domain "hr" trong
+    # eval_frequency_ablation.py). So PSD trực tiếp giữa 3 kiến trúc trả lời
+    # câu hỏi này bằng số liệu ảnh thật, không suy luận qua PSNR/LPIPS (proxy
+    # gián tiếp, không đo trực tiếp phân bố năng lượng theo tần số).]
+    "sr_improved_safmn": "SAFMN (native depth)",
+    "sr_improved_safmn_half4": "SAFMN (halved depth)",
+    "sr_improved_smfanet": "SMFANet (native depth)",
+    "sr_improved_smfanet_half4": "SMFANet (halved depth)",
 }
 N_BINS = 20
 
@@ -62,14 +73,24 @@ def main():
     if args.max_images is not None:
         test_entries = test_entries[:args.max_images]
 
+    # [SỬA — cùng lớp bug đã phát hiện ở pipeline/run_frequency_ablation_cross_arch.sh]
+    # Bản đầu dùng 1 cờ raise DUY NHẤT cho TẤT CẢ domain -- nếu chỉ 1 trong 9
+    # domain (ví dụ 1 tổ hợp SAFMN/SMFANet chưa build xong) thiếu, toàn bộ
+    # script dừng ngay, kể cả 8 domain còn lại đã sẵn sàng (bao gồm cả
+    # hr/lr/span_tiny/span_baseline/span_large vốn đã có từ đầu dự án).
+    # CẢNH BÁO rồi BỎ QUA đúng domain thiếu, vẫn phân tích domain nào có sẵn.
     missing_domains = [d for d in DOMAINS if not (Path(splits_root) / d).is_dir()]
     if missing_domains:
+        print(f"CẢNH BÁO: thiếu domain(s) {missing_domains} trong {splits_root} -- sẽ BỎ QUA, "
+              f"chỉ phân tích domain còn lại. Chạy pipeline tương ứng rồi chạy lại script này "
+              f"để có đủ domain thiếu.")
+    active_domains = {d: label for d, label in DOMAINS.items() if d not in missing_domains}
+    if not active_domains:
         raise FileNotFoundError(
-            f"Thiếu domain(s) {missing_domains} trong {splits_root} -- chạy pipeline chính "
-            f"(build_lr/build_sr cho span_tiny/span_baseline/span_large) trước.")
+            f"KHÔNG domain nào trong {list(DOMAINS)} tồn tại ở {splits_root} -- không có gì để phân tích.")
 
     rows = []
-    for domain, label in DOMAINS.items():
+    for domain, label in active_domains.items():
         domain_test_dir = Path(splits_root) / domain / "test"
         psd_sum = np.zeros(args.n_bins)
         n_used, n_missing = 0, 0
@@ -127,7 +148,9 @@ def main():
         tiny = np.array(by_domain["sr_improved"])
         low_half = slice(0, args.n_bins // 2)
         high_half = slice(args.n_bins // 2, args.n_bins)
-        for other in ["sr_baseline", "sr_span_large", "hr", "lr"]:
+        for other in ["sr_baseline", "sr_span_large", "hr", "lr",
+                      "sr_improved_safmn", "sr_improved_safmn_half4",
+                      "sr_improved_smfanet", "sr_improved_smfanet_half4"]:
             if other not in by_domain:
                 continue
             other_arr = np.array(by_domain[other])
