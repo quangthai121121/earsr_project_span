@@ -906,6 +906,11 @@ def main():
                           "--student_n_blocks 1 (dùng cho depth sweep, xem "
                           "pipeline/run_depth_sweep.sh). Không truyền -> giữ nguyên hành vi cũ "
                           "(n_blocks mặc định của kiến trúc).")
+    ap.add_argument("--student_bottleneck_channels", type=int, default=None,
+                     help="[MỚI — thử nghiệm kiến trúc mới] ghi đè sr_improve.bottleneck_channels "
+                          "-- CHỈ có tác dụng khi student_arch='span_bottleneck' (bỏ qua với mọi "
+                          "arch khác). Xem models/sr_models.py::SPANDetailBottleneck. Không "
+                          "truyền -> mặc định 16 (xem build_sr_model()).")
     ap.add_argument("--init_ckpt", default=None,
                      help="checkpoint SPAN student có sẵn để khởi tạo trọng số trước khi "
                           "train — dùng cho FINE-TUNE/TRANSFER LEARNING xuyên dataset (ví dụ "
@@ -1088,7 +1093,8 @@ def main():
     # rằng "span_pruned" NHẬN đúng n_blocks truyền vào (kiểm tra
     # len(model.body) khớp chính xác với mọi giá trị n_blocks).
     student = build_sr_model(student_arch, scale, pretrained_path=student_pretrained,
-                              n_blocks=args.student_n_blocks).to(device)
+                              n_blocks=args.student_n_blocks,
+                              bottleneck_channels=args.student_bottleneck_channels).to(device)
 
     # Khởi tạo student từ checkpoint có sẵn — dùng cho fine-tune/transfer learning.
     # An toàn strict=True vì SPAN/span_tiny/span_large không có tầng nào phụ thuộc

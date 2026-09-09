@@ -61,15 +61,14 @@ if [ "$MISSING" -eq 1 ]; then
 fi
 echo "OK — mọi tiền đề đã sẵn sàng."
 
-# format mỗi dòng: lambda_freq (freq_cutoff cố định = $FREQ_CUTOFF cho cả sweep,
+# [SỬA — tương thích bash 3.2, xem giải thích đầy đủ trong
+# pipeline/run_detail_bottleneck_screening.sh] associative array (declare -A)
+# chỉ hỗ trợ bash 4.0+ -- đổi sang 2 mảng thường song song theo INDEX, tương
+# thích bash 3.2 trở lên, không đổi hành vi (đã re-test dry-run sau khi sửa).
+# format: lambda_freq (freq_cutoff cố định = $FREQ_CUTOFF cho cả sweep,
 # khớp đúng cutoff dùng trong thí nghiệm frequency-ablation đã có trong bài)
-declare -A CONFIGS=(
-    [freqloss_baseline]="0.0"   # recipe cũ (đối chứng) — giống pipeline/06_improve_span.sh mặc định
-    [freqloss_low]="0.25"
-    [freqloss_mid]="0.5"
-    [freqloss_high]="1.0"
-)
 CONFIGS_ORDER=(freqloss_baseline freqloss_low freqloss_mid freqloss_high)
+LAMBDA_LIST=(0.0 0.25 0.5 1.0)   # freqloss_baseline = recipe cũ (đối chứng), giống pipeline/06_improve_span.sh mặc định
 
 echo ""
 echo "################################################################"
@@ -77,8 +76,9 @@ echo "# BƯỚC 1 — Train SR (1 lần/cấu hình, seed mặc định config.y
 echo "# giống đúng quy ước 'SR train 1 lần, chỉ multi-seed bước recognition'"
 echo "# đã dùng xuyên suốt project — xem pipeline/run_ablation_multiseed.sh)"
 echo "################################################################"
-for NAME in "${CONFIGS_ORDER[@]}"; do
-    LF="${CONFIGS[$NAME]}"
+for i in "${!CONFIGS_ORDER[@]}"; do
+    NAME="${CONFIGS_ORDER[$i]}"
+    LF="${LAMBDA_LIST[$i]}"
     echo "---- $NAME (lambda_freq=$LF, freq_cutoff=$FREQ_CUTOFF) ----"
 
     # [PIN TƯỜNG MINH] lambda_feat/lambda_saliency/lambda_identity/lambda_position=0

@@ -30,10 +30,16 @@ def main():
                      help="[MỚI] chỉ cần khi --arch span_pruned (checkpoint đã cứng hoá "
                           "từ train_sr_learned_prune.py) — khớp số khối còn lại, xem "
                           "prune_metadata.json ghi kèm checkpoint đó")
+    ap.add_argument("--bottleneck_channels", type=int, default=None,
+                     help="[MỚI] chỉ cần khi --arch span_bottleneck — PHẢI khớp CHÍNH XÁC giá "
+                          "trị --student_bottleneck_channels đã dùng lúc train (train_sr_distill.py), "
+                          "nếu không load_state_dict() sẽ lỗi shape mismatch ngay lập tức (không "
+                          "âm thầm sai số) — xem models/sr_models.py::SPANDetailBottleneck")
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_sr_model(args.arch, args.scale, n_blocks=args.n_blocks).to(device)
+    model = build_sr_model(args.arch, args.scale, n_blocks=args.n_blocks,
+                            bottleneck_channels=args.bottleneck_channels).to(device)
     model.load_state_dict(torch.load(args.sr_ckpt, map_location=device))
     model.eval()
 

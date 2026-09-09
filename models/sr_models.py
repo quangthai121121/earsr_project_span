@@ -81,6 +81,75 @@ class SPAN(nn.Module):
         return torch.clamp(out, 0.0, 1.0)
 
 
+class SPANDetailBottleneck(nn.Module):
+    """
+    [MỚI — thử nghiệm kiến trúc mới, hướng novelty dựa trên phát hiện tần số
+    đã có trong bài, Section~sec:freq-ablation] Biến thể SPAN: giữ NGUYÊN
+    VẸN toàn bộ thân mạng (head + n_blocks khối SPAB + body_tail, ĐÚNG kiến
+    trúc/công thức như class SPAN ở trên, kể cả residual dài
+    `body_tail(feat) + body_in`), CHỈ thêm một bottleneck 1x1 HẸP ngay TRƯỚC
+    lớp upsample cuối cùng -- nơi trực tiếp tổng hợp chi tiết mức pixel (tần
+    số cao) để đưa vào PixelShuffle.
+
+    ĐỘNG LỰC: thí nghiệm frequency-ablation (đã có trong bài, Table~tab:freq-
+    ablation) chứng minh bằng thực nghiệm rằng tín hiệu nhận dạng gần như
+    không phụ thuộc vào chi tiết tần số cao (giữ 10% tần số thấp nhất vẫn
+    giữ được 22--34% accuracy; bỏ 10% đó thì accuracy sập gần về ngẫu
+    nhiên). Nếu đúng, việc thắt cổ chai (bottleneck_channels < feat) ĐÚNG
+    TẠI bước tổng hợp chi tiết cuối cùng sẽ không hại downstream accuracy
+    -- trong khi CẮT THÊM tham số/compute so với SPAN cùng feat/n_blocks
+    (không đổi phần thân, chỉ đổi lớp chiếu cuối). Đây là hướng NGƯỢC với 4
+    thí nghiệm loss-engineering trước đó (KD v2/saliency/pruning/frequency-
+    weighted loss, đều null) -- can thiệp vào KIẾN TRÚC, không phải LOSS.
+
+    TẠI SAO KHÔNG thắt cổ chai NGAY TRONG các khối SPAB (ví dụ giảm dần feat
+    qua từng khối): residual dài `body_tail(feat) + body_in` (xem class SPAN)
+    YÊU CẦU `head` và `body_tail` cùng số kênh -- giảm kênh giữa các khối sẽ
+    PHÁ residual đó (cần thêm projection, làm phức tạp/rủi ro hơn hẳn). Đặt
+    bottleneck SAU body_tail, TRƯỚC upsample, tránh hoàn toàn vấn đề này:
+    residual vẫn hoạt động ĐÚNG NGUYÊN VẸN ở không gian `feat` kênh như SPAN
+    gốc, bottleneck chỉ tác động đến ĐÚNG 1 bước cuối cùng, cô lập rõ biến
+    số cần kiểm định.
+
+    bottleneck_channels PHẢI trong [1, feat] -- bằng feat thì bottleneck
+    không còn ý nghĩa "thắt cổ chai" nữa (dù vẫn hợp lệ về mặt tính toán,
+    chỉ thêm 1 lớp 1x1+GELU dư thừa so với SPAN gốc, dùng làm điểm đối
+    chứng "thêm lớp nhưng không thắt" nếu cần).
+    """
+
+    def __init__(self, scale: int = 4, channels_in: int = 3, feat: int = 48,
+                 n_blocks: int = 3, bottleneck_channels: int = 16):
+        super().__init__()
+        if not (1 <= bottleneck_channels <= feat):
+            raise ValueError(
+                f"bottleneck_channels phải trong [1, feat={feat}], nhận "
+                f"{bottleneck_channels} -- ngoài feat thì đây không còn là 'thắt cổ "
+                f"chai' theo đúng động lực thiết kế (xem docstring lớp này).")
+        self.head = nn.Conv2d(channels_in, feat, kernel_size=3, padding=1)
+        self.body = nn.ModuleList([SPAB(feat) for _ in range(n_blocks)])
+        self.body_tail = nn.Conv2d(feat, feat, kernel_size=3, padding=1)
+        # [MỚI] Bottleneck 1x1 (không phải 3x3): mục tiêu là HẠN CHẾ SỐ CHIỀU
+        # thông tin đi qua (thắt cổ chai capacity), không phải trộn thêm ngữ
+        # cảnh không gian mới -- ngữ cảnh không gian đã được body/body_tail
+        # (kernel 3x3, n_blocks khối) xử lý đầy đủ ở phía trước.
+        self.detail_bottleneck = nn.Conv2d(feat, bottleneck_channels, kernel_size=1)
+        self.bottleneck_act = nn.GELU()
+        self.upsample = nn.Sequential(
+            nn.Conv2d(bottleneck_channels, channels_in * (scale ** 2), kernel_size=3, padding=1),
+            nn.PixelShuffle(scale),
+        )
+
+    def forward(self, x):
+        feat = self.head(x)
+        body_in = feat
+        for block in self.body:
+            feat = block(feat)
+        feat = self.body_tail(feat) + body_in  # long-range residual -- KHÔNG đổi, giữ nguyên đúng SPAN gốc
+        bottleneck = self.bottleneck_act(self.detail_bottleneck(feat))
+        out = self.upsample(bottleneck)
+        return torch.clamp(out, 0.0, 1.0)
+
+
 class SPANLearnedPrune(nn.Module):
     """[MỚI] Biến thể SPAN với GATE HỌC ĐƯỢC cho từng khối SPAB — thay cho
     việc chọn TAY "giữ khối 1-3, bỏ khối 4-6" như span_tiny hiện tại.
@@ -1122,7 +1191,7 @@ class SPANBlockHook:
 
 def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
                     feature_channels: int = None, n_blocks: int = None,
-                    gate_init: float = 3.0) -> nn.Module:
+                    gate_init: float = 3.0, bottleneck_channels: int = None) -> nn.Module:
     """
     arch:
       - "span"          : bản tự viết lại (reimplementation), feat=28, n_blocks=4 —
@@ -1142,6 +1211,15 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
                            train from-scratch ở kích thước tùy ý qua
                            feature_channels. Xem models/span_official_wrapper.py.
       - "span_large", "edsr": như cũ.
+      - "span_bottleneck" : [MỚI] biến thể span_tiny (feat=48, n_blocks=3 mặc
+                    định, ghi đè được qua n_blocks giống các arch khác) với
+                    THÊM bottleneck 1x1 hẹp ngay trước lớp upsample cuối
+                    (xem class SPANDetailBottleneck) -- tham số
+                    bottleneck_channels (mặc định 16, ghi đè qua tham số
+                    cùng tên của hàm này) kiểm soát độ hẹp. Dùng để kiểm
+                    định giả thuyết "thắt cổ chai đúng bước tổng hợp chi
+                    tiết tần số cao không hại downstream accuracy", xem
+                    pipeline/run_detail_bottleneck_screening.sh.
       - "span_learned_prune": [MỚI] biến thể SPAN với gate học được cho từng
                     khối SPAB (xem class SPANLearnedPrune), khởi tạo với ngân
                     sách ĐẦY ĐỦ 6 khối (bằng span_large) — dùng làm điểm khởi
@@ -1203,6 +1281,10 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
     feature_channels: chỉ áp dụng cho arch="span_official". None -> dùng mặc
     định 48 (khớp checkpoint pretrained chuẩn). Đặt khác 48 sẽ KHÔNG load
     được checkpoint pretrained (shape mismatch) -> phải train from-scratch.
+
+    bottleneck_channels: [MỚI] CHỈ áp dụng cho arch="span_bottleneck" (bỏ
+    qua với mọi arch khác). None -> mặc định 16. PHẢI trong [1, feat=48],
+    xem class SPANDetailBottleneck để hiểu ràng buộc.
     """
     arch = arch.lower()
     if arch == "span":
@@ -1212,6 +1294,15 @@ def build_sr_model(arch: str, scale: int, pretrained_path: str = None,
     if arch == "span_large":
         # biến thể lớn hơn — chỉ dùng để so sánh/khảo sát, KHÔNG phải mục tiêu triển khai
         return SPAN(scale=scale, feat=48, n_blocks=6)
+    if arch == "span_bottleneck":
+        # [MỚI — thử nghiệm kiến trúc mới, xem docstring SPANDetailBottleneck]
+        # n_blocks mặc định 3 (KHỚP span_tiny) để cô lập đúng 1 biến số mới
+        # (bottleneck_channels) so với span_tiny -- không trộn với câu hỏi
+        # số khối đã trả lời riêng ở depth-sweep (Section~sec:depth-sweep).
+        return SPANDetailBottleneck(
+            scale=scale, feat=48,
+            n_blocks=n_blocks if n_blocks is not None else 3,
+            bottleneck_channels=bottleneck_channels if bottleneck_channels is not None else 16)
     if arch == "span_learned_prune":
         # [SỬA — lỗi phát hiện qua code review] Trước đây hardcode n_blocks=6,
         # bỏ qua n_blocks_budget/gate_init trong config (sr_learned_prune) —
