@@ -1,14 +1,14 @@
 # Fdb version 4
-["bibtex main"] 1788946774.91334 "main.aux" "main.bbl" "main" 1788946776.17949 0
+["bibtex main"] 1788970560.4704 "main.aux" "main.bbl" "main" 1788970561.70575 0
   "./references.bib" 1788945534.95103 21204 6386b2e64fb64c5a5d40802aebb408de ""
   "./sn-vancouver-num.bst" 1788946587.30995 40753 d0d82f059cc94a5c36f788c0e46f3c1e ""
-  "main.aux" 1788946776.05455 50821 bb75570db0bf6a821167abd784096ffc "pdflatex"
+  "main.aux" 1788970561.58093 51437 21e02d9e340ff5c5f5d30e546f82d52a "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1788946774.94136 "/Users/tql3308/Documents/ncs/paper_source_code/earsr_project_span/paper/main.tex" "main.pdf" "main" 1788946776.17968 0
-  "/Users/tql3308/Documents/ncs/paper_source_code/earsr_project_span/paper/main.tex" 1788946771.87804 220173 8425b68ec9923c27489fc340b592b2d8 ""
+["pdflatex"] 1788970560.50171 "/Users/tql3308/Documents/ncs/paper_source_code/earsr_project_span/paper/main.tex" "main.pdf" "main" 1788970561.70592 0
+  "/Users/tql3308/Documents/ncs/paper_source_code/earsr_project_span/paper/main.tex" 1788970556.30258 193447 e07a0d2f251350d60aa382990a899821 ""
   "/Users/tql3308/Library/texlive/2026basic/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx0800.600pk" 1788028474.46119 19852 b4484ee1a23aad3909e6c6923e0d617a ""
   "/Users/tql3308/Library/texlive/2026basic/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx0900.600pk" 1788936922.54935 22480 bfd7a84a7bab912987024d0acb8b6036 ""
   "/Users/tql3308/Library/texlive/2026basic/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1000.600pk" 1788028479.12599 25396 949c90e8a776aa08351e48a61bde806b ""
@@ -86,7 +86,12 @@
   "/Users/tql3308/Library/texmf/tex/generic/pgf/utilities/pgfrcs.code.tex" 1785698127 4384 731602ddd951db093361acffcdbcf245 ""
   "/Users/tql3308/Library/texmf/tex/generic/pgf/utilities/pgfutil-common.tex" 1785698127 30037 d0cc76bb2296f3b645acb48450809b8c ""
   "/Users/tql3308/Library/texmf/tex/generic/pgf/utilities/pgfutil-latex.def" 1785698127 7119 a5512e2ead32a6dce03f4dc709652c6e ""
+  "/Users/tql3308/Library/texmf/tex/latex/adjustbox/adjcalc.sty" 1666037967 5598 c49b91713cbe5e50a1fabefb733eda0d ""
+  "/Users/tql3308/Library/texmf/tex/latex/adjustbox/adjustbox.sty" 1740604409 56907 b74d2bd6fed8dc761953edb2fbea781b ""
+  "/Users/tql3308/Library/texmf/tex/latex/adjustbox/tc-pdftex.def" 1740604409 4304 461724faa0dfbdec2d80de16c11f407c ""
+  "/Users/tql3308/Library/texmf/tex/latex/adjustbox/trimclip.sty" 1740176375 7245 2bf1779563af51e666da8f26ea1f8455 ""
   "/Users/tql3308/Library/texmf/tex/latex/appendix/appendix.sty" 1581200180 8878 d9f65b39ca82f1d70030390eca653b1c ""
+  "/Users/tql3308/Library/texmf/tex/latex/collectbox/collectbox.sty" 1666037909 9124 59c3b56f1a073de66e3eea35f9c173c8 ""
   "/Users/tql3308/Library/texmf/tex/latex/pgf/basiclayer/pgf.sty" 1601326656 1090 bae35ef70b3168089ef166db3e66f5b2 ""
   "/Users/tql3308/Library/texmf/tex/latex/pgf/basiclayer/pgfcore.sty" 1673816307 373 00b204b1d7d095b892ad31a7494b0373 ""
   "/Users/tql3308/Library/texmf/tex/latex/pgf/compatibility/pgfcomp-version-0-65.sty" 1601326656 21013 f4ff83d25bb56552493b030f27c075ae ""
@@ -173,6 +178,8 @@
   "/usr/local/texlive/2026basic/texmf-dist/tex/generic/pdftexcmds/pdftexcmds.sty" 1593379760 20089 80423eac55aa175305d35b49e04fe23b ""
   "/usr/local/texlive/2026basic/texmf-dist/tex/generic/stringenc/stringenc.sty" 1575152242 21514 b7557edcee22835ef6b03ede1802dad4 ""
   "/usr/local/texlive/2026basic/texmf-dist/tex/generic/uniquecounter/uniquecounter.sty" 1576624663 7008 f92eaa0a3872ed622bbf538217cd2ab7 ""
+  "/usr/local/texlive/2026basic/texmf-dist/tex/generic/xkeyval/xkeyval.tex" 1762376337 19299 c7c03646b32f5a7caaa137673b7e76d2 ""
+  "/usr/local/texlive/2026basic/texmf-dist/tex/generic/xkeyval/xkvutils.tex" 1762376337 7787 7dfc2f158253fc82fd655393220e6620 ""
   "/usr/local/texlive/2026basic/texmf-dist/tex/latex/amscls/amsthm.sty" 1591045760 12594 0d51ac3a545aaaa555021326ff22a6cc ""
   "/usr/local/texlive/2026basic/texmf-dist/tex/latex/amsfonts/amsfonts.sty" 1359763108 5949 3f3fd50a8cc94c3d4cbf4fc66cd3df1c ""
   "/usr/local/texlive/2026basic/texmf-dist/tex/latex/amsfonts/amssymb.sty" 1359763108 13829 94730e64147574077f8ecfea9bb69af4 ""
@@ -221,6 +228,7 @@
   "/usr/local/texlive/2026basic/texmf-dist/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1750533675 9684 a33a14b82ce60d6e77cb9be689d79ee6 ""
   "/usr/local/texlive/2026basic/texmf-dist/tex/latex/url/url.sty" 1388531844 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "/usr/local/texlive/2026basic/texmf-dist/tex/latex/xcolor/xcolor.sty" 1727642399 55384 b454dec21c2d9f45ec0b793f0995b992 ""
+  "/usr/local/texlive/2026basic/texmf-dist/tex/latex/xkeyval/xkeyval.sty" 1762376337 5006 d7e899bb5d9717c7f214e9bc0284de7b ""
   "/usr/local/texlive/2026basic/texmf-dist/web2c/texmf.cnf" 1770478701 43630 e9fa012910491fe5ae08a72c3c2997a7 ""
   "/usr/local/texlive/2026basic/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1784706891 86815 7e5d6e5fc77a5e65d2a0ef3439d525e4 ""
   "/usr/local/texlive/2026basic/texmf-var/web2c/pdftex/pdflatex.fmt" 1784706655 2966192 b5fd3bf9f4049b7a270d0c59c14022dd ""
@@ -236,10 +244,10 @@
   "figures_awex/sample_08.png" 1788103765.88455 37028 ed6704a0ba6472ba1ad8069cd03b84bd ""
   "figures_awex/sample_13.png" 1788103766.32433 42824 3ab1ef465088c796b2da7ceed1c2f83c ""
   "figures_awex/sample_14.png" 1788103767.22732 36360 10ca69ad89f3dbb1fcfc981a21e1e56f ""
-  "main.aux" 1788946776.05455 50821 bb75570db0bf6a821167abd784096ffc "pdflatex"
-  "main.bbl" 1788946774.93884 18294 04973614f1361453164d29d68383f3a3 "bibtex main"
-  "main.out" 1788946776.05629 10968 caf5ee35c801868701c245b74336a7e4 "pdflatex"
-  "main.tex" 1788946771.87804 220173 8425b68ec9923c27489fc340b592b2d8 ""
+  "main.aux" 1788970561.58093 51437 21e02d9e340ff5c5f5d30e546f82d52a "pdflatex"
+  "main.bbl" 1788970560.49936 18294 0d781257bb999fc06c4f52781d47c321 "bibtex main"
+  "main.out" 1788970561.58272 10968 caf5ee35c801868701c245b74336a7e4 "pdflatex"
+  "main.tex" 1788970556.30258 193447 e07a0d2f251350d60aa382990a899821 ""
   "placeins.sty" 1788938630.05693 4087 636308456f60d2b31cbf97867db5708d ""
   "sn-jnl.cls" 1788936471.01522 55857 7d4515312123fd1744517a7415d792ff ""
   (generated)
